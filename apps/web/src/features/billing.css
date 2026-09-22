@@ -1,0 +1,82 @@
+.billing-page {
+  display: grid;
+  gap: 24px;
+}
+.billing-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.billing-metrics article {
+  display: grid;
+  gap: 14px;
+}
+.billing-metrics strong {
+  font-size: clamp(1.7rem, 4vw, 2.8rem);
+  letter-spacing: -0.05em;
+}
+.billing-metrics span {
+  color: #536b66;
+}
+.billing-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.billing-columns label:not(.check-label) {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+}
+.billing-columns .check-label {
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.billing-page .billing-columns label.billing-consent {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-height: 44px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.billing-consent input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin: 2px 0 0;
+}
+.billing-consent > span {
+  min-width: 0;
+}
+.billing-consent a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.billing-history {
+  list-style: none;
+  padding: 0;
+}
+.billing-history li {
+  display: grid;
+  gap: 8px;
+  padding: 18px 0;
+  border-bottom: 1px solid #dce6e2;
+  overflow-wrap: anywhere;
+}
+.billing-history li:last-child {
+  border-bottom: 0;
+}
+.billing-history strong {
+  text-transform: capitalize;
+}
+.billing-history span {
+  color: #536b66;
+}
+@media (max-width: 750px) {
+  .billing-columns,
+  .billing-metrics {
+    grid-template-columns: 1fr;
+  }
+}

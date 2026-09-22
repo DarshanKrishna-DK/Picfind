@@ -1,0 +1,513 @@
+﻿import { randomUUID } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import sharp from 'sharp';
+import { createApp } from '../../apps/api/src/app';
+import { ApiError } from '../../apps/api/src/auth';
+import type {
+  LibraryOptions,
+  LibraryRecord,
+  LibraryStore,
+} from '../../apps/api/src/library';
+import type { FaceMatchingProvider } from '../../packages/shared/src/ports';
+import {
+  processingUsage,
+  reserveProcessing,
+} from '../../apps/api/src/processing-budget';
+import { withAccountFaceCleanup } from '../../apps/api/src/account-face-cleanup';
+import {
+  openSource,
+  sealSource,
+  trustedSourceDownload,
+} from '../../apps/api/src/cloud-sources';
+import {
+  hashPasscode,
+  safeCsv,
+  verifyPasscode,
+} from '../../apps/api/src/event-tools';
+import { estimatePlan, PHOTO_PLANS } from '../../packages/shared/src/plans';
+
+const origin = 'http://localhost:5173';
+const key = 'ab'.repeat(32);
+function fixture(options: Omit<LibraryOptions, 'store'> = {}) {
+  const records = new Map<string, LibraryRecord>();
+  const files = new Map<string, Uint8Array>();
+  const store: LibraryStore = {
+    list: async (owner, kind) =>
+      [...records.values()]
+        .filter((row) => row.ownerId === owner && row.kind === kind)
+        .map((row) => structuredClone(row)),
+    get: async (id) => {
+      const row = records.get(id);
+      if (!row) throw new ApiError(404, 'NOT_FOUND', 'Not found.');
+      return structuredClone(row);
+    },
+    put: async (row) => {
+      records.set(row.id, structuredClone(row));
+    },
+    remove: async (id) => {
+      records.delete(id);
+    },
+    upload: async (id, bytes) => {
+      files.set(id, new Uint8Array(bytes));
+    },
+    file: async (id) => new Response(new Uint8Array(files.get(id) ?? [])),
+    removeFile: async (id) => {
+      files.delete(id);
+    },
+  };
+  const app = createApp(
+    {
+      webOrigin: origin,
+      secureCookies: false,
+      provider: {
+        register: vi.fn(),
+        login: vi.fn(),
+        logout: vi.fn(),
+        getUser: async (secret) => ({
+          id: secret,
+          name: 'Owner',
+          email: 'owner@example.test',
+          emailVerified: true,
+        }),
+      },
+    },
+    { store, ...options },
+  );
+  const event: LibraryRecord = {
+    id: randomUUID(),
+    ownerId: 'owner',
+    kind: 'event',
+    createdAt: new Date().toISOString(),
+    title: 'Test event',
+    visibility: 'link',
+  };
+  const photo: LibraryRecord = {
+    id: randomUUID(),
+    ownerId: 'owner',
+    kind: 'photo',
+    eventId: event.id,
+    createdAt: new Date().toISOString(),
+    filename: 'group.jpg',
+    bytes: 3,
+    width: 32,
+    height: 24,
+  };
+  records.set(event.id, event);
+  records.set(photo.id, photo);
+  files.set(photo.id, new Uint8Array([1, 2, 3]));
+  return { app, store, records, files, event, photo };
+}
+function matcher(): FaceMatchingProvider {
+  return {
+    healthCheck: vi.fn(async () => {}),
+    ensureScope: vi.fn(async () => ({ modelVersion: 'test' })),
+    indexPhoto: vi.fn(async (input) => ({
+      modelVersion: 'test',
+      externalImageId: input.photoId,
+      faceIds: ['face'],
+      unindexedReasons: [],
+    })),
+    search: vi.fn(async () => ({
+      modelVersion: 'test',
+      matches: [],
+      limitReached: false,
+    })),
+    deleteFaces: vi.fn(async () => {}),
+    deleteScope: vi.fn(async () => {}),
+  };
+}
+const cookie = () =>
+  `picfind_dropbox=${sealSource({ owner: 'owner', provider: 'dropbox', expires: Date.now() + 60_000, value: 'fixture-token' }, key)}`;
+const image = () =>
+  sharp({
+    create: { width: 32, height: 24, channels: 3, background: '#376553' },
+  })
+    .jpeg()
+    .toBuffer();
+
+describe('pricing and bounded processing', () => {
+  it('publishes planning prices but never enables checkout', async () => {
+    const { app } = fixture();
+    const response = await request(app).get('/api/plans').expect(200);
+    expect(response.body.plans).toEqual(PHOTO_PLANS);
+    expect(response.body.checkoutAvailable).toBe(false);
+  });
+  it('estimates packs and monthly allowances at boundaries', () => {
+    expect(estimatePlan(20, false).plan.id).toBe('preview');
+    expect(estimatePlan(1001, false).inr).toBe(398);
+    expect(estimatePlan(2500, true).plan.id).toBe('organizer-starter-monthly');
+    expect(estimatePlan(7501, true).inr).toBe(1999);
+    expect(estimatePlan(2501, true).inr).toBe(1999);
+  });
+  it('serializes concurrent budget reservations and refuses the 21st indexing attempt', async () => {
+    const { store } = fixture();
+    await Promise.all(
+      Array.from({ length: 20 }, () =>
+        reserveProcessing(store, 'owner', 'index'),
+      ),
+    );
+    await expect(
+      reserveProcessing(store, 'owner', 'index'),
+    ).rejects.toMatchObject({ status: 429 });
+    expect((await processingUsage(store, 'owner')).indexed).toBe(20);
+    expect((await processingUsage(store, 'other')).indexed).toBe(0);
+  });
+  it('does not index uploaded event photos before organizer consent', async () => {
+    const provider = matcher();
+    const { app, event } = fixture({ faceMatcher: provider });
+    await request(app)
+      .post(`/api/photos?eventId=${event.id}`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .set('Content-Type', 'application/octet-stream')
+      .send(await image())
+      .expect(201);
+    expect(provider.indexPhoto).not.toHaveBeenCalled();
+    await request(app)
+      .post(`/api/events/${event.id}/index-faces`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .expect(403);
+  });
+  it('skips already processed no-face photos rather than paying to retry', async () => {
+    const provider = matcher();
+    const { app, event, photo, records } = fixture({ faceMatcher: provider });
+    records.set(photo.id, { ...photo, indexState: 'empty' });
+    await request(app)
+      .post(`/api/events/${event.id}/index-faces`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .set('X-PicFind-Consent', 'face-matching-v1')
+      .expect(200);
+    expect(provider.indexPhoto).not.toHaveBeenCalled();
+  });
+  it('indexes owned library photos without any Drive connection', async () => {
+    const provider = matcher();
+    const { app, photo, files, records } = fixture({ faceMatcher: provider });
+    const personal = { ...photo };
+    delete personal.eventId;
+    records.set(photo.id, personal);
+    files.set(photo.id, await image());
+    const response = await request(app)
+      .post('/api/discover/scans')
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .send({
+        photoIds: [photo.id],
+        consent: true,
+        policyVersion: 'face-matching-v1',
+      })
+      .expect(201);
+    expect(response.body.scan.indexed).toBe(1);
+    expect(provider.indexPhoto).toHaveBeenCalledOnce();
+  });
+  it('does not copy an event photo into the older personal Discover path', async () => {
+    const provider = matcher();
+    const { app, photo, records } = fixture({ faceMatcher: provider });
+    const response = await request(app)
+      .post('/api/discover/scans')
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .send({
+        photoIds: [photo.id],
+        consent: true,
+        policyVersion: 'face-matching-v1',
+      })
+      .expect(201);
+    expect(response.body.scan.state).toBe('failed');
+    expect(provider.indexPhoto).not.toHaveBeenCalled();
+    expect(
+      [...records.values()].filter((row) => row.kind === 'photo'),
+    ).toHaveLength(1);
+  });
+  it('does not process another account library photo', async () => {
+    const provider = matcher();
+    const { app, photo } = fixture({ faceMatcher: provider });
+    const response = await request(app)
+      .post('/api/discover/scans')
+      .set('Cookie', 'picfind_session=other')
+      .set('Origin', origin)
+      .send({
+        photoIds: [photo.id],
+        consent: true,
+        policyVersion: 'face-matching-v1',
+      })
+      .expect(201);
+    expect(response.body.scan.state).toBe('failed');
+    expect(provider.indexPhoto).not.toHaveBeenCalled();
+  });
+});
+describe('cloud source isolation and read-only imports', () => {
+  it('encrypts tokens and rejects tampered or expired cookies', () => {
+    const sealed = sealSource(
+      {
+        owner: 'owner',
+        provider: 'dropbox',
+        expires: Date.now() + 60_000,
+        value: 'secret',
+      },
+      key,
+    );
+    expect(sealed).not.toContain('secret');
+    expect(openSource(sealed, key)?.value).toBe('secret');
+    expect(openSource(sealed + 'bad', key)).toBeNull();
+    expect(
+      openSource(
+        sealSource(
+          { owner: 'owner', provider: 'box', expires: 1, value: 'secret' },
+          key,
+        ),
+        key,
+      ),
+    ).toBeNull();
+  });
+  it.each([
+    'http://dl.dropboxusercontent.com/photo',
+    'https://localhost/photo',
+    'https://dropboxusercontent.com.attacker.test/photo',
+    'https://user:password@dl.dropboxusercontent.com/photo',
+    'https://dl.dropboxusercontent.com:444/photo',
+  ])('rejects an unsafe storage URL: %s', (url) => {
+    expect(() => trustedSourceDownload('dropbox', url)).toThrow();
+  });
+  it('accepts only a provider storage host', () => {
+    expect(
+      trustedSourceDownload(
+        'dropbox',
+        'https://dl.dropboxusercontent.com/photo',
+      ).hostname,
+    ).toBe('dl.dropboxusercontent.com');
+  });
+  it('requires authentication and reports missing provider setup honestly', async () => {
+    const { app } = fixture();
+    await request(app).get('/api/sources').expect(401);
+    const result = await request(app)
+      .get('/api/sources')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(
+      result.body.sources.every(
+        (source: { configured: boolean }) => !source.configured,
+      ),
+    ).toBe(true);
+    await request(app)
+      .post('/api/sources/dropbox/connect')
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .expect(503);
+  });
+  it('binds source cookies to the signed-in account', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const { app } = fixture({
+      sources: {
+        key,
+        providers: { dropbox: { clientId: 'id', clientSecret: 'secret' } },
+        fetcher,
+      },
+    });
+    await request(app)
+      .get('/api/sources/dropbox/items')
+      .set('Cookie', `picfind_session=other; ${cookie()}`)
+      .expect(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('uses state and PKCE without exposing the client secret', async () => {
+    const { app } = fixture({
+      sources: {
+        key,
+        providers: { dropbox: { clientId: 'id', clientSecret: 'top-secret' } },
+      },
+    });
+    const result = await request(app)
+      .post('/api/sources/dropbox/connect')
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .expect(200);
+    expect(result.body.url).toContain('code_challenge=');
+    expect(result.body.url).not.toContain('top-secret');
+    const callback = await request(app)
+      .get('/api/sources/dropbox/callback?state=wrong&code=fake')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(302);
+    expect(callback.headers.location).toContain('connected=0');
+  });
+  it('imports selected bytes, strips CDN authorization, and makes no cloud writes', async () => {
+    const bytes = await image();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.endsWith('/get_temporary_link')) {
+          expect(init?.method).toBe('POST');
+          return Response.json({
+            metadata: { name: 'fixture.jpg' },
+            link: 'https://dl.dropboxusercontent.com/fixture.jpg',
+          });
+        }
+        expect(url).toBe('https://dl.dropboxusercontent.com/fixture.jpg');
+        expect(init?.headers).toBeUndefined();
+        return new Response(new Uint8Array(bytes));
+      });
+    const { app } = fixture({
+      sources: {
+        key,
+        providers: { dropbox: { clientId: 'id', clientSecret: 'secret' } },
+        fetcher,
+      },
+    });
+    const result = await request(app)
+      .post('/api/imports/source')
+      .set('Cookie', `picfind_session=owner; ${cookie()}`)
+      .set('Origin', origin)
+      .send({ provider: 'dropbox', ids: ['id:test'] })
+      .expect(201);
+    expect(result.body.job.imported).toBe(1);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+});
+describe('gallery protection and client proofing', () => {
+  it('salts passcodes and verifies without storing plaintext', async () => {
+    const hash = await hashPasscode('event-secret');
+    expect(hash).not.toContain('event-secret');
+    expect(await verifyPasscode('event-secret', hash)).toBe(true);
+    expect(await verifyPasscode('wrong', hash)).toBe(false);
+  });
+  it('gates gallery, image bytes and face search; unlock cookies work', async () => {
+    const { app, event, photo, records } = fixture();
+    records.set(event.id, {
+      ...event,
+      passcodeHash: await hashPasscode('secret-pass'),
+    });
+    await request(app)
+      .get(`/api/public/events/${event.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(401);
+    await request(app)
+      .get(`/api/public/events/${event.id}/photos/${photo.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(401);
+    await request(app)
+      .post(`/api/public/events/${event.id}/find`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Origin', origin)
+      .expect(401);
+    await request(app)
+      .post(`/api/public/events/${event.id}/unlock`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Origin', origin)
+      .send({ passcode: 'wrong' })
+      .expect(403);
+    const unlocked = await request(app)
+      .post(`/api/public/events/${event.id}/unlock`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Origin', origin)
+      .send({ passcode: 'secret-pass' })
+      .expect(204);
+    const cookies = [
+      'picfind_session=guest',
+      ...unlocked.headers['set-cookie']!,
+    ];
+    await request(app)
+      .get(`/api/public/events/${event.id}/photos/${photo.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Cookie', cookies)
+      .expect(200);
+    records.set(event.id, {
+      ...event,
+      passcodeHash: await hashPasscode('new-pass'),
+    });
+    await request(app)
+      .get(`/api/public/events/${event.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Cookie', cookies)
+      .expect(401);
+  });
+  it('never exposes a passcode hash through library data', async () => {
+    const { app, event, records } = fixture();
+    records.set(event.id, {
+      ...event,
+      passcodeHash: await hashPasscode('secret-pass'),
+    });
+    const result = await request(app)
+      .get('/api/library')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(result.body.events[0].passcodeHash).toBeUndefined();
+    expect(result.body.events[0].hasPasscode).toBe(true);
+  });
+  it('stores valid selections, rejects foreign photos, and hides submissions from guests', async () => {
+    const { app, event, photo } = fixture();
+    await request(app)
+      .post(`/api/public/events/${event.id}/selections`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Origin', origin)
+      .send({ name: 'Guest', photoIds: [randomUUID()] })
+      .expect(400);
+    await request(app)
+      .post(`/api/public/events/${event.id}/selections`)
+      .set('Cookie', 'picfind_session=guest')
+      .set('Origin', origin)
+      .send({ name: 'Guest', note: 'Album cover', photoIds: [photo.id] })
+      .expect(201);
+    await request(app).get(`/api/events/${event.id}/insights`).expect(401);
+    await request(app)
+      .get(`/api/events/${event.id}/insights`)
+      .set('Cookie', 'picfind_session=other')
+      .expect(404);
+    const result = await request(app)
+      .get(`/api/events/${event.id}/insights`)
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(result.body.submissions).toBe(1);
+    expect(result.body.selections[0].photoIds).toEqual([photo.id]);
+    const library = await request(app)
+      .get('/api/library')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(library.body.jobs).toHaveLength(0);
+  });
+  it('protects CSV consumers from formulas and quotes', () => {
+    expect(safeCsv('=IMPORTDATA("x")')).toBe('"\'=IMPORTDATA(""x"")"');
+  });
+});
+describe('provider erasure and retryability', () => {
+  it('retains event and photos after failed provider cleanup', async () => {
+    const provider = matcher();
+    vi.mocked(provider.deleteScope).mockRejectedValueOnce(new Error('offline'));
+    const { app, event, photo, records } = fixture({ faceMatcher: provider });
+    await request(app)
+      .delete(`/api/events/${event.id}`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .expect(503);
+    expect(records.get(event.id)?.archived).toBe(true);
+    expect(records.has(photo.id)).toBe(true);
+    await request(app)
+      .delete(`/api/events/${event.id}`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .expect(204);
+    expect(records.has(event.id)).toBe(false);
+  });
+  it('retains account cleanup references while a provider is offline', async () => {
+    const { store, photo, records } = fixture();
+    records.set(photo.id, {
+      ...photo,
+      faceIds: ['face'],
+      provider: 'aws-rekognition',
+    });
+    const guarded = withAccountFaceCleanup(store, undefined)!;
+    await expect(guarded.remove(photo.id)).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(records.has(photo.id)).toBe(true);
+    const provider = matcher();
+    await withAccountFaceCleanup(store, provider)!.remove(photo.id);
+    expect(provider.deleteFaces).toHaveBeenCalledWith(
+      { kind: 'event', id: photo.eventId },
+      ['face'],
+    );
+    expect(records.has(photo.id)).toBe(false);
+  });
+});

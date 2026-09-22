@@ -1,0 +1,122 @@
+.folder-sync-panel {
+  --sync-ink: #202427;
+  --sync-muted: #52635e;
+  --sync-line: #d8e5e0;
+  --sync-accent: #006569;
+  min-width: 0;
+  margin-block: 24px;
+  padding: clamp(16px, 3vw, 26px);
+  border: 1px solid var(--sync-line);
+  border-radius: 20px;
+  background: linear-gradient(120deg, #ffffffef, #eef5f5b8);
+  box-shadow: 0 8px 24px #203b3208;
+  color: var(--sync-ink);
+}
+.folder-sync-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.folder-sync-heading > div {
+  min-width: 0;
+}
+.folder-sync-heading > svg {
+  flex-shrink: 0;
+  color: var(--sync-accent);
+}
+.folder-sync-panel h3 {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 0 0 8px;
+}
+.folder-sync-panel p {
+  color: var(--sync-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.folder-sync-list {
+  padding: 0;
+  margin: 20px 0 0;
+  list-style: none;
+}
+.folder-sync-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+  gap: 20px;
+  padding-block: 20px;
+  border-top: 1px solid var(--sync-line);
+}
+.folder-sync-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.folder-sync-state {
+  border-radius: 999px;
+  background: #e5ece9;
+  color: #334d44;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.folder-sync-state.state-active {
+  background: #d7eeea;
+  color: #14554c;
+}
+.folder-sync-state.state-attention {
+  background: #fff0d6;
+  color: #77501e;
+}
+.folder-sync-path {
+  overflow-wrap: anywhere;
+}
+.folder-sync-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.folder-sync-actions small {
+  color: var(--sync-muted);
+  line-height: 1.5;
+}
+.folder-sync-panel .button {
+  min-height: 44px;
+  white-space: normal;
+  max-width: 100%;
+}
+.folder-sync-panel .folder-sync-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 18px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.folder-sync-consent input {
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--sync-accent);
+}
+.folder-sync-panel :focus-visible {
+  outline: 2px solid var(--sync-accent);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .folder-sync-list > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .folder-sync-actions {
+    align-items: flex-start;
+  }
+  .folder-sync-consent {
+    min-height: 44px;
+  }
+}

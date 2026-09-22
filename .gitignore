@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.npm-cache/
+coverage/
+playwright-report/
+test-results/
+benchmark-data/
+apps/web/public/models/
+*.tsbuildinfo
+*.log
+.DS_Store
+Thumbs.db
+
+# Local agent, design, and verification trees stay off GitHub.
+/.agents/
+/.claude/
+/.cursor/
+/docs/
+/artifacts/
+skills-lock.json
+
+# Personal reference photos must stay local.
+*Headshot*

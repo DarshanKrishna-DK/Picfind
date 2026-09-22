@@ -1,0 +1,12 @@
+docs/reference/
+.agents/
+.claude/
+package-lock.json
+.npm-cache/
+apps/web/public/models/
+node_modules/
+dist/
+playwright-report/
+test-results/
+artifacts/
+docs/archive/

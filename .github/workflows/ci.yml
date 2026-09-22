@@ -1,0 +1,87 @@
+name: PicFind quality
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run check
+      - name: Install deployment configuration validators
+        run: |
+          set -euo pipefail
+          policy=/usr/sbin/policy-rc.d
+          saved=$(mktemp -d)
+          had_policy=false
+          if sudo test -e "$policy" || sudo test -L "$policy"; then
+            sudo cp -a "$policy" "$saved/original"
+            had_policy=true
+          fi
+          restore_policy() {
+            sudo rm -f "$policy"
+            if [ "$had_policy" = true ]; then
+              sudo cp -a "$saved/original" "$policy"
+              sudo rm -f "$saved/original"
+            fi
+            rmdir "$saved"
+          }
+          trap restore_policy EXIT
+          sudo rm -f "$policy"
+          printf '#!/bin/sh\nexit 101\n' | sudo tee "$policy" >/dev/null
+          sudo chmod 755 "$policy"
+          sudo apt-get update
+          sudo apt-get install --yes nginx openssl
+      - name: Validate inactive deployment templates
+        run: bash scripts/check-deployment.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-builds-${{ github.sha }}
+          path: |
+            apps/api/dist/
+            apps/web/dist/
+          if-no-files-found: error
+          retention-days: 7
+  browsers:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            project: chromium
+          - browser: firefox
+            project: firefox
+          - browser: webkit
+            project: webkit-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:e2e -- --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-evidence-${{ matrix.project }}
+          path: |
+            artifacts/reports/playwright/
+            artifacts/reports/test-results/
+          retention-days: 7

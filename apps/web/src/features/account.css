@@ -1,0 +1,97 @@
+.studio-shell .settings-panel {
+  max-width: 960px;
+  padding: clamp(20px, 3vw, 32px);
+  margin-block: 0 20px;
+  border: 1px solid #d6e3dc;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #ffffffef, #f0f7f3d9);
+  box-shadow: 0 8px 30px -24px #234b39;
+}
+.studio-shell .settings-panel h2 {
+  margin: 0 0 12px;
+}
+.studio-shell .settings-panel p {
+  max-width: 72ch;
+  line-height: 1.7;
+}
+.studio-shell .settings-panel form,
+.account-dialog form {
+  display: grid;
+  gap: 20px;
+}
+.studio-shell .settings-panel form > .button,
+.account-dialog form > .button {
+  justify-self: start;
+}
+.studio-shell .actions {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.studio-shell .button {
+  min-height: 44px;
+  white-space: normal;
+}
+.studio-shell .section-heading {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.account-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid #cfdfd4;
+  border-radius: 24px;
+  background: #f8fcf9;
+  color: var(--ink);
+  box-shadow: 0 30px 100px #17372b55;
+}
+.account-dialog::backdrop {
+  background: #10291ecc;
+  backdrop-filter: blur(4px);
+}
+.account-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.account-dialog header h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.account-dialog label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.account-dialog input {
+  width: 100%;
+  min-width: 0;
+}
+.account-dialog .button {
+  min-height: 44px;
+}
+.email-confirmation {
+  padding: 18px;
+  border: 1px solid #d1e2d7;
+  border-radius: 16px;
+  background: #edf5ef;
+}
+.email-confirmation p {
+  font-size: 13px;
+  line-height: 1.65;
+}
+@media (max-width: 600px) {
+  .account-dialog .form-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-shell .settings-panel dl > div {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .studio-shell .settings-panel dd {
+    overflow-wrap: anywhere;
+  }
+}

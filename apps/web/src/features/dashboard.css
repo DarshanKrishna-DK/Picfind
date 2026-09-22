@@ -1,0 +1,130 @@
+.dashboard-paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-block: 24px;
+}
+.dashboard-path {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-content: start;
+  gap: 16px;
+  padding: 24px;
+  min-width: 0;
+}
+.dashboard-path > svg {
+  color: #3d7a67;
+  margin-top: 3px;
+}
+.dashboard-path h2 {
+  margin: 0 0 10px;
+  font-size: 23px;
+}
+.dashboard-path p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dashboard-path .button {
+  grid-column: 2;
+  justify-self: start;
+  align-self: end;
+  min-height: 44px;
+  margin-top: 4px;
+}
+.studio-shell .studio-metrics {
+  gap: 14px;
+  margin-block: 24px;
+}
+.studio-shell .metric-card {
+  padding: 20px;
+}
+.studio-shell .metric-card > svg {
+  margin-bottom: 12px;
+}
+.studio-shell .metric-card > span {
+  font-size: 12px;
+}
+.studio-shell .metric-card small {
+  font-size: 11px;
+}
+.dashboard-guide {
+  padding: 18px 24px;
+  margin-bottom: 24px;
+}
+.dashboard-guide summary {
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 28px;
+}
+.dashboard-guide summary span {
+  display: inline-block;
+  margin-left: 16px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.dashboard-guide .studio-onboarding {
+  margin: 24px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  background: none;
+}
+.studio-shell .studio-columns {
+  gap: 20px;
+}
+.studio-shell .studio-recent,
+.studio-shell .studio-readiness {
+  padding: 24px;
+}
+.studio-shell .studio-readiness h2 {
+  font-size: 23px;
+}
+.studio-shell .studio-readiness ul {
+  margin-block: 18px;
+}
+.studio-shell .studio-readiness li,
+.studio-shell .studio-readiness p,
+.studio-shell .studio-empty p {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.studio-shell .section-heading .text-link {
+  min-height: 44px;
+  font-size: 12px;
+}
+.studio-shell .recent-event {
+  padding-block: 16px;
+}
+.studio-shell .recent-event strong {
+  font-size: 14px;
+}
+.studio-shell .recent-event small {
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .dashboard-paths {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .dashboard-path {
+    padding: 20px;
+    gap: 12px;
+  }
+  .dashboard-path .button {
+    grid-column: 1 / -1;
+  }
+  .dashboard-guide {
+    padding: 18px 20px;
+  }
+  .dashboard-guide summary span {
+    margin: 6px 0 0;
+    display: block;
+  }
+  .studio-shell .studio-recent,
+  .studio-shell .studio-readiness {
+    padding: 20px;
+  }
+}

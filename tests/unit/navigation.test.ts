@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest';
+import { studioReturnPath } from '../../packages/shared/src/navigation';
+describe('authentication return destinations', () => {
+  it.each([
+    '/app',
+    '/app/library',
+    '/app/events/new',
+    '/app/events/event-1',
+    '/app/discover/new',
+    '/app/import',
+    '/app/settings',
+    '/app/import?eventId=ad851772-ef2a-46a2-8f66-066975c7b0aa',
+    '/app/billing?context=organizer',
+    '/app/billing?context=personal',
+  ])('retains product route %s', (value) =>
+    expect(studioReturnPath(value)).toBe(value),
+  );
+  it.each([
+    undefined,
+    null,
+    {},
+    '/apple',
+    '//attacker.test',
+    'https://attacker.test',
+    '/app/../outside',
+    '/app/%2f%2fattacker.test',
+    '/app\\attacker',
+    '/app?redirect=https://attacker.test',
+    '/app/\n',
+    '/app/import?eventId=not-an-event',
+    '/app/import?eventId=ad851772-ef2a-46a2-8f66-066975c7b0aa&eventId=other',
+    '/app/import?eventId=ad851772-ef2a-46a2-8f66-066975c7b0aa&redirect=https://attacker.test',
+    '/app/billing?context=admin',
+    '/app/billing?context=organizer&context=personal',
+    '/app/settings?context=organizer',
+    '/app/billing?context=organizer#outside',
+  ])('rejects hostile or unknown destination %s', (value) =>
+    expect(studioReturnPath(value)).toBe('/app'),
+  );
+});
