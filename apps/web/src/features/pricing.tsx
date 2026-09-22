@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowUpRight, Check } from 'lucide-react';
+import { MenuSelect } from '../components/menu-select';
 import {
   catalogPlans,
   estimatePlan,
@@ -50,7 +51,9 @@ export function Pricing({ embedded = false }: { embedded?: boolean }) {
           className="catalog-toggle"
           role="group"
           aria-label="Pricing audience"
+          data-on={scope === 'organizer' ? '1' : '0'}
         >
+          <span className="catalog-toggle-thumb" aria-hidden="true" />
           <button
             type="button"
             aria-pressed={scope === 'personal'}
@@ -68,14 +71,15 @@ export function Pricing({ embedded = false }: { embedded?: boolean }) {
         </div>
         <label className="catalog-currency">
           Display currency
-          <select
-            aria-label="Display currency"
+          <MenuSelect
+            label="Display currency"
             value={currency}
-            onChange={(e) => setCurrency(e.target.value as 'INR' | 'USD')}
-          >
-            <option>INR</option>
-            <option>USD</option>
-          </select>
+            onChange={(next) => setCurrency(next as 'INR' | 'USD')}
+            options={[
+              { value: 'INR', label: 'INR' },
+              { value: 'USD', label: 'USD' },
+            ]}
+          />
         </label>
       </div>
       <div className="catalog-context">
@@ -97,7 +101,9 @@ export function Pricing({ embedded = false }: { embedded?: boolean }) {
               className="catalog-toggle"
               role="group"
               aria-label="Organizer billing period"
+              data-on={period === 'yearly' ? '1' : '0'}
             >
+              <span className="catalog-toggle-thumb" aria-hidden="true" />
               <button
                 type="button"
                 aria-pressed={period === 'monthly'}

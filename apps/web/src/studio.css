@@ -253,10 +253,13 @@ select:focus {
   margin-top: 35px;
 }
 .plan-card {
+  position: relative;
+  overflow: visible;
   border-color: #dae7df;
 }
 .plan-card.featured {
   position: relative;
+  padding-top: 36px;
   background: linear-gradient(145deg, #e8f5ee, #ffffff);
   border-color: #8cb5a3;
   box-shadow: 0 20px 35px -30px #165242;
@@ -266,19 +269,25 @@ select:focus {
   align-items: center;
   width: max-content;
   margin: 0 0 10px;
-  padding: 5px 10px;
+  padding: 7px 14px;
   border-radius: 999px;
   font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: var(--accent);
-  color: #fff;
-  border: 1px solid transparent;
+  background: #ffffff;
+  color: #145955;
+  border: 1px solid #1b6f6a;
+  box-shadow: 0 10px 20px -12px #0c3a3659;
 }
 .plan-card.featured .plan-badge {
-  background: var(--accent);
-  color: #fff;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 .plan-price {
   color: var(--ink);
@@ -947,10 +956,13 @@ select:focus {
 }
 .plan-card.featured,
 .plan-card.featured h2,
-.plan-card.featured p,
+.plan-card.featured h3,
 .plan-card.featured li,
 .plan-card.featured small {
   color: var(--ink);
+}
+.plan-card.featured .plan-badge {
+  color: #145955;
 }
 .plan-card.featured .eyebrow,
 .plan-card.featured .field-help {

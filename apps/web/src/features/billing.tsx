@@ -11,6 +11,7 @@ import {
 import './pricing-catalog.css';
 import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
+import { MenuSelect } from '../components/menu-select';
 import { BillingUsage } from './billing-usage';
 import { SavedPlanStatus } from './plan-status';
 import type {
@@ -300,7 +301,9 @@ export function BillingPage() {
                 className="catalog-toggle"
                 role="group"
                 aria-label="Purchase context"
+                data-on={scope === 'organizer' ? '1' : '0'}
               >
+                <span className="catalog-toggle-thumb" aria-hidden="true" />
                 {(['personal', 'organizer'] as const).map((value) => (
                   <button
                     key={value}
@@ -324,7 +327,9 @@ export function BillingPage() {
                   className="catalog-toggle"
                   role="group"
                   aria-label="Billing period"
+                  data-on={period === 'yearly' ? '1' : '0'}
                 >
+                  <span className="catalog-toggle-thumb" aria-hidden="true" />
                   {(['monthly', 'yearly'] as const).map((value) => (
                     <button
                       key={value}
@@ -351,36 +356,35 @@ export function BillingPage() {
               </p>
               <label>
                 Plan
-                <select
-                  aria-label="Plan"
+                <MenuSelect
+                  label="Plan"
                   value={selected}
                   disabled={busy}
-                  onChange={(e) => {
-                    setSelected(e.target.value as typeof selected);
+                  onChange={(next) => {
+                    setSelected(next as typeof selected);
                     setAccepted(false);
                   }}
-                >
-                  {catalogPlans(scope, period).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                  options={catalogPlans(scope, period).map((item) => ({
+                    value: item.id,
+                    label: item.name,
+                  }))}
+                />
               </label>
               <label>
                 Currency
-                <select
-                  aria-label="Currency"
+                <MenuSelect
+                  label="Currency"
                   value={currency}
                   disabled={busy}
-                  onChange={(e) => {
-                    setCurrency(e.target.value as typeof currency);
+                  onChange={(next) => {
+                    setCurrency(next as typeof currency);
                     setAccepted(false);
                   }}
-                >
-                  <option>INR</option>
-                  <option>USD</option>
-                </select>
+                  options={[
+                    { value: 'INR', label: 'INR' },
+                    { value: 'USD', label: 'USD' },
+                  ]}
+                />
               </label>
               <p className="plan-price">
                 {amount}

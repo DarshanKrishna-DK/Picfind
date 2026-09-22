@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   Check,
   FolderOpen,
-  LockKeyhole,
   QrCode,
   ScanFace,
   Smartphone,
@@ -73,10 +72,6 @@ export function LandingPage() {
               Create an event <ArrowUpRight size={17} />
             </Link>
           </div>
-          <p className="launch-reassurance">
-            <LockKeyhole size={15} /> Read-only Drive access. No automatic
-            exports.
-          </p>
         </div>
         <PhotoDepth />
       </section>

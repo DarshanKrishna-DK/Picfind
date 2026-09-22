@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { ORGANIZER_PLANS } from '../../../../packages/shared/src/plans.js';
 import { PlanConfirmation } from './plan-confirmation';
+import { MenuSelect } from '../components/menu-select';
 
 const planLabel = (id: string) => {
   const name = id.startsWith('organizer-') ? id.split('-')[1]! : id;
@@ -122,32 +123,27 @@ export function PlanPreview({
       </p>
       <label>
         Plan to preview
-        <select
-          aria-label="Plan to preview"
+        <MenuSelect
+          label="Plan to preview"
           value={target}
           disabled={busy}
-          onChange={(event) => {
+          onChange={(next) => {
             generation.current++;
-            setTarget(event.target.value as typeof target);
+            setTarget(next as typeof target);
             setPreview(null);
             setError('');
           }}
-        >
-          {roleCatalogAvailable && (
-            <optgroup label="Organizer plans">
-              {ORGANIZER_PLANS.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {planLabel(plan.id)} -{' '}
-                  {plan.id.endsWith('-yearly') ? 'Yearly' : 'Monthly'}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label="Legacy subscriptions only">
-            <option value="creator">Creator</option>
-            <option value="studio">Studio</option>
-          </optgroup>
-        </select>
+          options={[
+            ...(roleCatalogAvailable
+              ? ORGANIZER_PLANS.map((plan) => ({
+                  value: plan.id,
+                  label: `${planLabel(plan.id)} - ${plan.id.endsWith('-yearly') ? 'Yearly' : 'Monthly'}`,
+                }))
+              : []),
+            { value: 'creator', label: 'Creator (legacy)' },
+            { value: 'studio', label: 'Studio (legacy)' },
+          ]}
+        />
       </label>
       <button
         className="button secondary"

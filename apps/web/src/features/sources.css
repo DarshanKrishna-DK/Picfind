@@ -1,9 +1,14 @@
 .source-panel {
+  width: 100%;
   margin: 24px 0;
   padding: clamp(20px, 4vw, 36px);
   border: 1px solid #dce5e3;
   border-radius: 22px;
-  background: linear-gradient(135deg, #fff, #edf5f2);
+  background: #fff;
+  box-sizing: border-box;
+}
+.source-panel > svg {
+  color: var(--accent);
 }
 .source-panel h2 {
   margin-top: 0;
@@ -67,8 +72,20 @@
   justify-self: start;
 }
 .source-panel .source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   margin-block: 20px;
+}
+.source-panel .source-destination {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
 }
 .source-panel .source-actions .button {
   min-height: 44px;
@@ -130,11 +147,73 @@
   text-align: left;
   overflow-wrap: anywhere;
 }
-.source-list input[type='checkbox'],
+.check-label {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+}
 .check-label input[type='checkbox'] {
   width: 18px;
   height: 18px;
-  flex-shrink: 0;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 18px;
+  accent-color: var(--accent);
+}
+.check-label span {
+  min-width: 0;
+}
+.discover-empty {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+.discover-empty h2 {
+  margin: 0;
+}
+.discover-empty p {
+  margin: 0;
+  max-width: 62ch;
+}
+.discover-empty .button {
+  margin-top: 8px;
+}
+.file-field {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.file-field-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.file-field-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.file-field-row .button {
+  margin: 0;
+  cursor: pointer;
+}
+.file-field-row span {
+  font-size: 13px;
+  font-weight: 450;
+  color: var(--muted);
 }
 .source-list small {
   margin-left: auto;
@@ -173,6 +252,8 @@
   margin: 30px 0 46px;
 }
 .plan-card {
+  position: relative;
+  overflow: visible;
   border: 1px solid #d5e0dc;
   border-radius: 24px;
   padding: 26px 20px;
@@ -181,6 +262,7 @@
 }
 .plan-card.featured {
   position: relative;
+  padding-top: 36px;
   background: linear-gradient(135deg, #173f37, #2a5b4f);
   color: #fff;
 }
@@ -189,19 +271,23 @@
   color: #c4ddd4;
 }
 .plan-card.featured .plan-badge {
-  display: inline-flex;
-  align-items: center;
-  width: max-content;
-  margin: 0 0 10px;
-  padding: 5px 10px;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  padding: 7px 14px;
   border-radius: 999px;
+  border: 1px solid #1b6f6a;
+  background: #ffffff;
+  color: #145955;
   font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: #ffffff24;
-  color: #fff;
-  border: 1px solid #ffffff45;
+  white-space: nowrap;
+  box-shadow: 0 10px 20px -12px #0c3a3659;
 }
 .plan-price {
   font-size: clamp(26px, 3vw, 38px);

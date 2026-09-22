@@ -287,10 +287,10 @@ export function ImportPage() {
       <FolderUpload {...(eventId ? { destinationEventId: eventId } : {})} />
       <CloudSources {...(eventId ? { destinationEventId: eventId } : {})} />
       {!eventId && !capabilities.data?.cloudImports && (
-        <div className="import-panel">
+        <div className="source-panel">
           <FolderOpen size={26} />
+          <h2>From Google Drive</h2>
           <div>
-            <h2>From Google Drive</h2>
             <p>
               Import a single batch from an accessible shared folder. No
               subfolders or additional pages are scanned. Read-only access means

@@ -5,25 +5,20 @@ declare global {
     __discoverUploadSizes: number[];
   }
 }
-test('library source selection can be filtered and selected in one action', async ({
+test('library album photos can be selected and cleared', async ({
   page,
 }) => {
   const state = await fixture(page);
-  await page
-    .getByRole('button', { name: 'Library photos', exact: true })
-    .click();
-  await page.getByLabel('Filter library photos').fill('Source 0');
-  await expect(page.getByLabel('Source 1.jpg', { exact: true })).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Select matching photos', exact: true })
-    .click();
   await expect(page.getByLabel('Source 0.jpg', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Source 1.jpg', { exact: true })).toBeChecked();
   await page
     .getByRole('button', { name: 'Clear selection', exact: true })
     .click();
   await expect(
     page.getByLabel('Source 0.jpg', { exact: true }),
   ).not.toBeChecked();
+  await page.getByRole('button', { name: 'Use this album', exact: true }).click();
+  await expect(page.getByLabel('Source 0.jpg', { exact: true })).toBeChecked();
   expect(state.creates).toBe(0);
   expect(state.searches).toBe(0);
 });
@@ -224,9 +219,6 @@ async function fixture(page: Page) {
   return state;
 }
 async function enqueue(page: Page) {
-  await page
-    .getByRole('button', { name: 'Library photos', exact: true })
-    .click();
   await page.getByLabel('Source 0.jpg', { exact: true }).check();
   await page.getByLabel('Reference selfie', { exact: true }).setInputFiles({
     name: 'synthetic.png',

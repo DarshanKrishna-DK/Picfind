@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseMenu } from './menu';
 
 async function fixture(
   page: Page,
@@ -487,9 +488,7 @@ test('changing the selected plan clears the previous estimate', async ({
   await expect(
     page.getByText('Preview only. No plan change made.', { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole('combobox', { name: 'Plan to preview', exact: true })
-    .selectOption('creator');
+  await chooseMenu(page, 'Plan to preview', 'Creator (legacy)');
   await expect(page.getByText(/Due today:/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview renewal price' }).click();
   await expect(page.getByText(/Creator:.*per month before tax/)).toBeVisible();
@@ -546,24 +545,17 @@ for (const width of [1280, 390]) {
     async ({ page, browserName }) => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
       const f = await fixture(page, 'success', true);
-      const selector = page.getByRole('combobox', {
-        name: 'Plan to preview',
-        exact: true,
-      });
-      await expect(
-        selector.locator('optgroup[label="Organizer plans"] option'),
-      ).toHaveCount(6);
-      await expect(selector.locator('option[value^="personal-"]')).toHaveCount(
-        0,
-      );
-      await selector.selectOption('organizer-pro-yearly');
+      await page.getByRole('button', { name: 'Plan to preview', exact: true }).click();
+      await expect(page.getByRole('option', { name: /Yearly/ })).toHaveCount(3);
+      await expect(page.getByRole('option', { name: /Personal/ })).toHaveCount(0);
+      await page.getByRole('option', { name: 'Pro - Yearly', exact: true }).click();
       await page.getByRole('button', { name: 'Preview renewal price' }).click();
       await expect(page.getByText(/Pro:.*per year\s+before tax/)).toBeVisible();
       await expect(page.getByText(/Due today:/)).toContainText('0.00');
       await expect(
         page.getByText(/Personal photo packs do not add event/),
       ).toBeVisible();
-      await selector.selectOption('organizer-scale-monthly');
+      await chooseMenu(page, 'Plan to preview', 'Scale - Monthly');
       await expect(page.getByText(/Due today:/)).toHaveCount(0);
       await page.getByRole('button', { name: 'Preview renewal price' }).click();
       await expect(

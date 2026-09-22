@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { unzipSync } from 'fflate';
+import { chooseMenu } from './menu';
 
 // Synthetic photos and intercepted APIs only. Never start the API or call AWS.
 async function fixture(page: Page) {
@@ -298,7 +299,7 @@ test('photo viewer supports keyboard navigation and Escape', async ({
 }) => {
   await fixture(page);
   await page.goto('/app/library');
-  await page.getByLabel('Sort photos').selectOption('name');
+  await chooseMenu(page, 'Sort photos', 'Filename');
   await page.getByRole('button', { name: 'Open Ceremony.jpg' }).click();
   const viewer = page.getByRole('dialog');
   await expect(viewer).toBeVisible();
@@ -331,14 +332,14 @@ test('event search and access-state filters use actual event data', async ({
 }) => {
   await fixture(page);
   await page.goto('/app/events');
-  await page.getByLabel('Filter events').selectOption({ label: 'Expired' });
+  await chooseMenu(page, 'Filter events', 'Expired');
   await expect(
     page.getByRole('heading', { name: 'Past conference' }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Garden gathering' }),
   ).toHaveCount(0);
-  await page.getByLabel('Filter events').selectOption({ label: 'All events' });
+  await chooseMenu(page, 'Filter events', 'All events');
   await page.getByLabel('Search events').fill('Private celebration');
   await expect(
     page.getByRole('heading', { name: 'Private celebration' }),

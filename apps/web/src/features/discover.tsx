@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { ScanFace, Trash2 } from 'lucide-react';
+import { MenuSelect } from '../components/menu-select';
 import {
   api,
   type Capabilities,
@@ -26,20 +27,19 @@ export function DiscoverPage() {
       void client.invalidateQueries({ queryKey: ['capabilities'] });
   }, [client, params]);
   const selfie = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<'drive' | 'library'>('drive');
+  const [selfieName, setSelfieName] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState('');
   const [sourceEvent, setSourceEvent] = useState('all');
   const matchingSources = (library.data?.photos ?? []).filter(
     (photo) =>
-      photo.filename
-        .toLocaleLowerCase()
-        .includes(sourceFilter.trim().toLocaleLowerCase()) &&
-      (sourceEvent === 'all' ||
-        (sourceEvent === 'unassigned'
-          ? !photo.eventId
-          : photo.eventId === sourceEvent)),
+      sourceEvent === 'all' ||
+      (sourceEvent === 'unassigned'
+        ? !photo.eventId
+        : photo.eventId === sourceEvent),
   );
+  const libraryPhotoKey = (library.data?.photos ?? [])
+    .map((photo) => `${photo.id}:${photo.eventId ?? ''}`)
+    .join();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState<unknown>(null);
@@ -47,11 +47,9 @@ export function DiscoverPage() {
   const [matches, setMatches] = useState<FaceMatch[]>([]);
   const [searched, setSearched] = useState(false);
   const limit =
-    mode === 'library'
-      ? (capabilities.data?.discoverJobLimit ??
-        capabilities.data?.faceIndexMax ??
-        20)
-      : (capabilities.data?.faceIndexMax ?? 20);
+    capabilities.data?.discoverJobLimit ??
+    capabilities.data?.faceIndexMax ??
+    20;
   const attempt = useRef<{ fingerprint: string; requestId: string } | null>(
     null,
   );
@@ -92,6 +90,17 @@ export function DiscoverPage() {
       void client.invalidateQueries({ queryKey: ['library'] });
     }
   }, [poll.data, scan?.id, client]);
+  useEffect(() => {
+    if (scan) return;
+    const next = (library.data?.photos ?? []).filter(
+      (photo) =>
+        sourceEvent === 'all' ||
+        (sourceEvent === 'unassigned'
+          ? !photo.eventId
+          : photo.eventId === sourceEvent),
+    );
+    setSelected(next.slice(0, limit).map((photo) => photo.id));
+  }, [sourceEvent, limit, scan, libraryPhotoKey]);
   async function start(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (activeAction.current || processingActive || scan?.deleting) return;
@@ -113,7 +122,7 @@ export function DiscoverPage() {
       setError(new Error('Choose a selfie smaller than 8 MB.'));
       return;
     }
-    if (!scan && mode === 'library' && !selected.length) {
+    if (!scan && !selected.length) {
       setError(new Error('Select at least one library photo.'));
       return;
     }
@@ -129,21 +138,16 @@ export function DiscoverPage() {
         setStatus(
           'Preparing your selected collection. This may take a moment.',
         );
-        startingSavedScan =
-          mode === 'library' && capabilities.data?.durableDiscover === true;
+        startingSavedScan = capabilities.data?.durableDiscover === true;
         const fingerprint = JSON.stringify({
-          mode,
           selected: [...selected].sort(),
-          url: form.get('url'),
         });
         if (startingSavedScan && attempt.current?.fingerprint !== fingerprint)
           attempt.current = { fingerprint, requestId: crypto.randomUUID() };
         const result = await api<{ scan: DiscoverScan }>('/discover/scans', {
           method: 'POST',
           body: JSON.stringify({
-            ...(mode === 'drive'
-              ? { url: form.get('url') }
-              : { photoIds: selected }),
+            photoIds: selected,
             ...(startingSavedScan
               ? { requestId: attempt.current!.requestId }
               : {}),
@@ -227,7 +231,6 @@ export function DiscoverPage() {
       setScan(result.scan);
       setMatches(result.matches);
       setSearched(result.matches.length > 0);
-      if (result.scan.resultsRetained === false) setMode('library');
       setStatus(
         result.scan.resultsRetained === false
           ? 'Collection restored. Add a fresh selfie to search when processing is ready; selfies and result lists are not retained.'
@@ -320,32 +323,13 @@ export function DiscoverPage() {
     }
   }
 
-  async function connect() {
-    setBusy(true);
-    setError(null);
-    try {
-      if (capabilities.data?.driveConnected) {
-        await api('/drive', { method: 'DELETE' });
-        await capabilities.refetch();
-      } else {
-        const result = await api<{ url: string }>('/drive/connect', {
-          method: 'POST',
-        });
-        window.location.assign(result.url);
-      }
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <>
       <PageTitle eyebrow="FIND YOUR PHOTOS" title="Your face. Your moments." />
       <p className="page-description">
-        Choose a Drive folder or photos already in your library. Upload a
-        selfie, review your likely matches, and download favorites to your
-        device. Nothing is saved back to a cloud source.
+        Import an album first, then pick it here, add a selfie, and review
+        likely matches. PicFind searches copies in your library, not the
+        original Drive, folder, or cloud account.
       </p>
       {!capabilities.data?.faceMatching && (
         <p className="notice">
@@ -355,27 +339,19 @@ export function DiscoverPage() {
       )}
       <ErrorNote error={capabilities.error ?? library.error} />
       <ErrorNote error={poll.error} />
-      <div className="source-tabs">
-        <button
-          className="button secondary"
-          aria-pressed={mode === 'drive'}
-          disabled={busy || Boolean(scan)}
-          onClick={() => setMode('drive')}
-        >
-          Google Drive folder
-        </button>
-        <button
-          className="button secondary"
-          aria-pressed={mode === 'library'}
-          disabled={busy || Boolean(scan)}
-          onClick={() => setMode('library')}
-        >
-          Library photos
-        </button>
-        <Link className="text-link" to="/app/import">
-          Import from more sources
-        </Link>
-      </div>
+      {!library.data?.photos.length && !scan && (
+        <section className="source-panel discover-empty">
+          <h2>Import photos before you search</h2>
+          <p>
+            Face matching runs on photos already in PicFind. Upload a folder or
+            copy from Google Drive or another cloud account, then return here
+            with a selfie.
+          </p>
+          <Link className="button" to="/app/import">
+            Import photos
+          </Link>
+        </section>
+      )}
       {!!library.data?.scans?.length && !scan && (
         <section className="scan-history">
           <h2>Continue a previous search</h2>
@@ -392,145 +368,117 @@ export function DiscoverPage() {
           ))}
         </section>
       )}
+      {(!!library.data?.photos.length || scan) && (
       <form className="form-panel" onSubmit={(event) => void start(event)}>
-        {mode === 'drive' ? (
-          <>
-            {capabilities.data?.driveOAuth && (
-              <button
-                className="button secondary"
-                type="button"
-                disabled={busy}
-                onClick={() => void connect()}
-              >
-                {capabilities.data.driveConnected
-                  ? 'Disconnect Google Drive'
-                  : 'Connect Google Drive'}
-              </button>
-            )}
-            <label>
-              Google Drive folder link
+        {!!library.data?.photos.length && (
+        <>
+        <div className="source-panel">
+          <label>
+            Imported album
+            <MenuSelect
+              label="Imported album"
+              value={sourceEvent}
+              disabled={busy || Boolean(scan)}
+              onChange={setSourceEvent}
+              options={[
+                { value: 'all', label: 'All imported photos' },
+                { value: 'unassigned', label: 'Personal library' },
+                ...(library.data?.events.map((event) => ({
+                  value: event.id,
+                  label: event.title,
+                })) ?? []),
+              ]}
+            />
+          </label>
+          <p>
+            {selected.length} of {limit} photos from this album will be
+            searched.
+          </p>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={busy || Boolean(scan) || !matchingSources.length}
+            onClick={() =>
+              setSelected(matchingSources.slice(0, limit).map((photo) => photo.id))
+            }
+          >
+            Use this album
+          </button>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={busy || Boolean(scan) || !selected.length}
+            onClick={() => setSelected([])}
+          >
+            Clear selection
+          </button>
+          <p className="field-help">
+            Changing album selects its photos automatically, up to this
+            collection's limit. Import a different source from Import photos.
+          </p>
+          <p>
+            <Link className="text-link" to="/app/import">
+              Import more photos
+            </Link>
+          </p>
+        </div>
+        <div className="source-list">
+          {matchingSources.slice(0, 100).map((photo) => (
+            <label key={photo.id}>
               <input
-                type="url"
-                name="url"
-                required={!scan}
-                disabled={busy || Boolean(scan)}
-                placeholder="https://drive.google.com/drive/folders/..."
-              />
-            </label>
-            <p className="field-help">
-              Only the first {limit} supported photos are processed. No
-              recursive scan or write-back.
-            </p>
-          </>
-        ) : (
-          <>
-            <p>
-              Choose up to {limit} photos. Device, folder and cloud imports all
-              work here.
-            </p>
-            <div className="source-panel">
-              <label>
-                Filter library photos
-                <input
-                  type="search"
-                  value={sourceFilter}
-                  disabled={busy || Boolean(scan)}
-                  onChange={(event) => setSourceFilter(event.target.value)}
-                  placeholder="Search photo names"
-                />
-              </label>
-              <label>
-                Photo collection
-                <select
-                  value={sourceEvent}
-                  disabled={busy || Boolean(scan)}
-                  onChange={(event) => setSourceEvent(event.target.value)}
-                >
-                  <option value="all">All library photos</option>
-                  <option value="unassigned">Not in an event</option>
-                  {library.data?.events.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p>
-                {selected.length} of {limit} selected / {matchingSources.length}{' '}
-                match your filters
-              </p>
-              <button
-                className="button secondary"
-                type="button"
-                disabled={busy || Boolean(scan) || !matchingSources.length}
-                onClick={() =>
-                  setSelected(
-                    matchingSources.slice(0, limit).map((photo) => photo.id),
+                type="checkbox"
+                disabled={
+                  busy ||
+                  Boolean(scan) ||
+                  (!selected.includes(photo.id) && selected.length >= limit)
+                }
+                checked={selected.includes(photo.id)}
+                onChange={(event) =>
+                  setSelected((previous) =>
+                    event.target.checked
+                      ? [...previous, photo.id]
+                      : previous.filter((id) => id !== photo.id),
                   )
                 }
-              >
-                Select matching photos
-              </button>
-              <button
-                className="button secondary"
-                type="button"
-                disabled={busy || Boolean(scan) || !selected.length}
-                onClick={() => setSelected([])}
-              >
-                Clear selection
-              </button>
-              <p className="field-help">
-                Select matching photos replaces your current selection, up to
-                this collection's limit. Only the first 100 matching filenames
-                are displayed; filter by name or event to narrow the list.
-              </p>
-            </div>
-            <div className="source-list">
-              {matchingSources.slice(0, 100).map((photo) => (
-                <label key={photo.id}>
-                  <input
-                    type="checkbox"
-                    disabled={
-                      busy ||
-                      Boolean(scan) ||
-                      (!selected.includes(photo.id) && selected.length >= limit)
-                    }
-                    checked={selected.includes(photo.id)}
-                    onChange={(event) =>
-                      setSelected((previous) =>
-                        event.target.checked
-                          ? [...previous, photo.id]
-                          : previous.filter((id) => id !== photo.id),
-                      )
-                    }
-                  />
-                  {photo.filename}
-                </label>
-              ))}
-            </div>
-            {!library.data?.photos.length && (
-              <Link to="/app/import">Add photos to your library first</Link>
-            )}
-          </>
+              />
+              {photo.filename}
+            </label>
+          ))}
+        </div>
+        </>
         )}
-        <label>
-          Reference selfie
+        <div className="file-field">
+          <span>Reference selfie</span>
           <input
             ref={selfie}
+            id="reference-selfie"
+            className="file-field-input"
             type="file"
             accept="image/jpeg,image/png,image/webp"
             required
             disabled={busy}
+            aria-label="Reference selfie"
+            onChange={(event) =>
+              setSelfieName(event.target.files?.[0]?.name ?? '')
+            }
           />
-        </label>
+          <div className="file-field-row">
+            <label className="button secondary" htmlFor="reference-selfie">
+              Choose photo
+            </label>
+            <span>{selfieName || 'JPEG, PNG or WebP · one clear face'}</span>
+          </div>
+        </div>
         <p className="field-help">
           Use a clear photo containing only your face. Your selfie is used for
           this search and is not saved.
         </p>
         <label className="check-label">
-          <input name="consent" type="checkbox" required disabled={busy} />I
-          understand Amazon Rekognition will process these photos and my selfie,
-          and I have permission to use them for this search.
+          <input name="consent" type="checkbox" required disabled={busy} />
+          <span>
+            I understand Amazon Rekognition will process these photos and my
+            selfie, and I have permission to use them for this search.
+          </span>
         </label>
         <p className="field-help">
           Amazon Rekognition processes the collection and reference photo. Face
@@ -543,8 +491,7 @@ export function DiscoverPage() {
             busy ||
             processingActive ||
             Boolean(scan?.deleting) ||
-            !capabilities.data?.faceMatching ||
-            (!scan && mode === 'drive' && !capabilities.data?.driveConnected)
+            !capabilities.data?.faceMatching
           }
         >
           <ScanFace size={18} />
@@ -559,6 +506,7 @@ export function DiscoverPage() {
         <ErrorNote error={error} />
         <p role="status">{status}</p>
       </form>
+      )}
       {scan?.resultsRetained === false && (
         <section
           className="source-panel"

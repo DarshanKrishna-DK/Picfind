@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -22,6 +23,7 @@ export function Dashboard() {
     queryKey: ['capabilities'],
     queryFn: () => api<Capabilities>('/capabilities'),
   });
+  const [guide, setGuide] = useState<'find' | 'host' | 'guest'>('find');
   if (library.isPending) return <Loading />;
   if (library.error)
     return (
@@ -39,6 +41,59 @@ export function Dashboard() {
   const recent = [...events]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 4);
+  const guides = {
+    find: {
+      title: 'Find photos from an album',
+      steps: [
+        {
+          title: 'Bring the album into PicFind',
+          text: 'Open Import photos. Upload a folder, or connect Google Drive / Dropbox and copy photos into your personal library.',
+          to: '/app/import',
+        },
+        {
+          title: 'Search with your selfie',
+          text: 'Open Find my photos, pick the imported album, add a clear selfie, and review likely matches. Download the ones you want.',
+          to: '/app/discover/new',
+        },
+      ],
+    },
+    host: {
+      title: 'Upload media and share with participants',
+      steps: [
+        {
+          title: 'Create the event',
+          text: 'Name the occasion and set when the gallery should expire. You get a private link and QR immediately.',
+          to: '/app/events/new',
+        },
+        {
+          title: 'Add this event’s photos',
+          text: 'Upload from your device or import from a connected cloud account. Everything stays in this event, not your personal library.',
+          to: recent[0] ? `/app/events/${recent[0].id}` : '/app/import',
+        },
+        {
+          title: 'Share the QR or link',
+          text: 'Guests sign in, open the secret link, then browse, download, or search with a selfie. They do not pay.',
+          to: recent[0] ? `/app/events/${recent[0].id}` : '/app/events',
+        },
+      ],
+    },
+    guest: {
+      title: 'Join an event as a participant',
+      steps: [
+        {
+          title: 'Open the organizer’s QR or link',
+          text: 'There is no public event list. Scan the QR or paste the secret link the organizer sent you.',
+          to: '/sign-in',
+        },
+        {
+          title: 'Sign in, then browse or search',
+          text: 'After sign-in you land on that event gallery. Download photos yourself or upload a selfie to find your matches.',
+          to: '/sign-in',
+        },
+      ],
+    },
+  } as const;
+  const activeGuide = guides[guide];
   const steps = [
     {
       title: 'Create a private event',
@@ -179,6 +234,50 @@ export function Dashboard() {
               </li>
             ))}
           </ol>
+        </div>
+      </details>
+      <details className="dashboard-guide glass-panel">
+        <summary>User guide</summary>
+        <div className="user-guide">
+          <div className="user-guide-tabs" role="tablist" aria-label="Use cases">
+            {(
+              [
+                ['find', 'Find photos from an album'],
+                ['host', 'Share an event gallery'],
+                ['guest', 'Join as a participant'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={guide === id}
+                onClick={() => setGuide(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="studio-onboarding" role="tabpanel">
+            <div>
+              <p className="eyebrow">HOW THIS WORKS</p>
+              <h2>{activeGuide.title}</h2>
+            </div>
+            <ol>
+              {activeGuide.steps.map((step, index) => (
+                <li key={step.title}>
+                  <span className="step-number">0{index + 1}</span>
+                  <div>
+                    <Link to={step.to}>
+                      {step.title}
+                      <ArrowUpRight size={15} />
+                    </Link>
+                    <p>{step.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
       </details>
       <section className="studio-columns">

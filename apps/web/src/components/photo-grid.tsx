@@ -13,6 +13,7 @@ import {
 import { api, fileUrl, type Photo } from '../api';
 import { collectPhotoFiles, createGalleryArchive } from '../gallery-downloads';
 import { Empty, ErrorNote } from './ui';
+import { MenuSelect } from './menu-select';
 
 export function PhotoGrid({
   photos,
@@ -195,16 +196,19 @@ export function PhotoGrid({
         </label>
         <label className="sort-select">
           <SlidersHorizontal size={16} />
-          <select
-            aria-label="Sort photos"
+          <MenuSelect
+            label="Sort photos"
             value={sort}
-            onChange={(event) => setSort(event.target.value)}
-          >
-            {preserveOrder && <option value="source">Result order</option>}
-            <option value="newest">Recently added</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">Filename</option>
-          </select>
+            onChange={setSort}
+            options={[
+              ...(preserveOrder
+                ? [{ value: 'source', label: 'Result order' }]
+                : []),
+              { value: 'newest', label: 'Recently added' },
+              { value: 'oldest', label: 'Oldest first' },
+              { value: 'name', label: 'Filename' },
+            ]}
+          />
         </label>
         <button
           className="button secondary compact"

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { unzipSync } from 'fflate';
+import { chooseMenu } from './menu';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
 async function fixture(page: Page) {
@@ -202,26 +203,22 @@ test('event folders, search and visibility filters survive reload', async ({
   await page.goto('/app/events');
   const cards = page.locator('.event-card');
   await expect(cards).toHaveCount(3);
-  await page
-    .getByRole('combobox', { name: 'Event folder', exact: true })
-    .selectOption('folder:Weddings 2026');
+  await chooseMenu(page, 'Event folder', 'Weddings 2026');
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('Garden wedding');
   await page.reload();
-  await expect(
-    page.getByRole('combobox', { name: 'Event folder', exact: true }),
-  ).toHaveValue('folder:Weddings 2026');
+  await expect(page.getByRole('button', { name: 'Event folder', exact: true })).toHaveText(
+    'Weddings 2026',
+  );
   await expect(cards).toHaveCount(1);
   await page.getByLabel('Search events').fill('not present');
   await expect(page.getByText('No events match these filters.')).toBeVisible();
   await page.getByRole('button', { name: 'Reset filters' }).click();
-  await page
-    .getByRole('combobox', { name: 'Filter events', exact: true })
-    .selectOption('Archived');
+  await chooseMenu(page, 'Filter events', 'Archived');
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('Old conference');
   await page.getByRole('button', { name: 'Reset filters' }).click();
-  await page.getByLabel('Sort events').selectOption('name');
+  await chooseMenu(page, 'Sort events', 'Event name');
   await expect(cards.first()).toContainText('Campus gathering');
 });
 
@@ -251,9 +248,7 @@ test('favorites reviews persist and can be found by status or guest', async ({
   const { eventId, selection, state } = await fixture(page);
   await page.goto(`/app/events/${eventId}`);
   const card = page.getByRole('article', { name: 'Selection from Asha' });
-  await card
-    .getByRole('combobox', { name: 'Review status', exact: true })
-    .selectOption('completed');
+  await chooseMenu(page, 'Review status', 'Completed');
   await card
     .getByLabel('Private review note')
     .fill('Album edits delivered in person.');
@@ -263,11 +258,11 @@ test('favorites reviews persist and can be found by status or guest', async ({
   ).toBeVisible();
   await expect(card.locator('.review-badge')).toHaveText('Completed');
   expect(selection.reviewVersion).toBe(1);
-  await page.getByLabel('Filter selection status').selectOption('new');
+  await chooseMenu(page, 'Filter selection status', 'New');
   await expect(
     page.getByText('No requests match these filters.'),
   ).toBeVisible();
-  await page.getByLabel('Filter selection status').selectOption('completed');
+  await chooseMenu(page, 'Filter selection status', 'Completed');
   await page.getByLabel('Search selections').fill('asha');
   await expect(card).toBeVisible();
   await page.reload();
@@ -297,9 +292,7 @@ test('a competing review preserves the draft until explicit reload', async ({
   await expect(card.getByLabel('Private review note')).toHaveValue(
     'Updated in another tab',
   );
-  await card
-    .getByRole('combobox', { name: 'Review status', exact: true })
-    .selectOption('completed');
+  await chooseMenu(page, 'Review status', 'Completed');
   await card.getByRole('button', { name: 'Save review', exact: true }).click();
   await expect(
     card.getByText('Review saved. No message was sent to the guest.'),

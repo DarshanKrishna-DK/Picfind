@@ -66,10 +66,38 @@
   font-weight: 400;
   color: var(--muted);
 }
-.dashboard-guide .studio-onboarding {
-  margin: 24px 0 0;
-  padding-top: 20px;
+.user-guide {
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid var(--border);
+}
+.user-guide-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.user-guide-tabs button {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #c9dbd3;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.user-guide-tabs button[aria-selected='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.user-guide .studio-onboarding {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 0;
   background: none;
 }
 .studio-shell .studio-columns {

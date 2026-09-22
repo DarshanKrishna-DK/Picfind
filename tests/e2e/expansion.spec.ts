@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import { chooseMenu } from './menu';
 
 async function fixture(page: Page) {
   const jpeg = await sharp({
@@ -209,9 +210,7 @@ test('pricing switches currency and estimates packs without offering checkout', 
   ).toBeVisible();
   await page.getByLabel('Photos to process').fill('1001');
   await expect(page.getByRole('status')).toContainText('398');
-  await page
-    .getByLabel('Display currency', { exact: true })
-    .selectOption('USD');
+  await chooseMenu(page, 'Display currency', 'USD');
   await expect(page.getByRole('status')).toContainText('$5');
   await page.getByLabel('Photos to process').fill('2500');
   await page
@@ -251,9 +250,6 @@ test('Discover searches library photos and reuses the collection on repeat searc
 }) => {
   const { state, jpeg } = await fixture(page);
   await page.goto('/app/discover/new');
-  await page
-    .getByRole('button', { name: 'Library photos', exact: true })
-    .click();
   await page.getByLabel('Cloud photo.jpg', { exact: true }).check();
   await page.getByLabel('Reference selfie').setInputFiles({
     name: 'fixture.jpg',

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseMenu } from './menu';
 
 const summary = {
   environment: 'test_mode',
@@ -253,9 +254,7 @@ test('subscription cancellation needs deliberate confirmation and preserves the 
   await page
     .getByRole('button', { name: 'Organizer plans', exact: true })
     .click();
-  await page
-    .getByLabel('Plan', { exact: true })
-    .selectOption('organizer-starter-monthly');
+  await chooseMenu(page, 'Plan', 'Starter');
   await page.getByRole('checkbox').check();
   await expect(
     page.getByRole('button', { name: 'Continue to secure checkout' }),
@@ -422,9 +421,7 @@ test('billing shows actual returned balances and never treats a checkout return 
   await page
     .getByRole('button', { name: 'Organizer plans', exact: true })
     .click();
-  await page
-    .getByLabel('Plan', { exact: true })
-    .selectOption('organizer-starter-monthly');
+  await chooseMenu(page, 'Plan', 'Starter');
   await expect(page.getByRole('checkbox')).not.toBeChecked();
   await expect(page.getByText(/Renews monthly until cancelled/)).toBeVisible();
 });

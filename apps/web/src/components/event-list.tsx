@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarDays, Plus, Search } from 'lucide-react';
 import { fileUrl, type GalleryEvent } from '../api';
 import { useLibrary } from '../hooks';
 import { Empty, ErrorNote, Loading, PageTitle } from './ui';
+import { MenuSelect } from './menu-select';
 import '../features/organizer.css';
 
 export function eventStatus(event: GalleryEvent, now = Date.now()) {
@@ -98,45 +99,43 @@ export function EventList() {
         </label>
         <label>
           Event folder
-          <select
-            aria-label="Event folder"
+          <MenuSelect
+            label="Event folder"
             value={folder}
-            onChange={(event) => filter('folder', event.target.value)}
-          >
-            <option value="">All folders</option>
-            <option value="unfiled">Unfiled</option>
-            {folders.map((name) => (
-              <option key={name} value={`folder:${name}`}>
-                {name}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => filter('folder', next)}
+            options={[
+              { value: '', label: 'All folders' },
+              { value: 'unfiled', label: 'Unfiled' },
+              ...folders.map((name) => ({
+                value: `folder:${name}`,
+                label: name,
+              })),
+            ]}
+          />
         </label>
         <label>
           Visibility
-          <select
-            aria-label="Filter events"
+          <MenuSelect
+            label="Filter events"
             value={status}
-            onChange={(event) => filter('status', event.target.value)}
-          >
-            {['All events', 'Private', 'Shared', 'Expired', 'Archived'].map(
-              (value) => (
-                <option key={value}>{value}</option>
-              ),
+            onChange={(next) => filter('status', next)}
+            options={['All events', 'Private', 'Shared', 'Expired', 'Archived'].map(
+              (value) => ({ value, label: value }),
             )}
-          </select>
+          />
         </label>
         <label>
           Sort events
-          <select
-            aria-label="Sort events"
+          <MenuSelect
+            label="Sort events"
             value={sort}
-            onChange={(event) => filter('sort', event.target.value)}
-          >
-            <option value="newest">Recently created</option>
-            <option value="name">Event name</option>
-            <option value="date">Event date, newest first</option>
-          </select>
+            onChange={(next) => filter('sort', next)}
+            options={[
+              { value: 'newest', label: 'Recently created' },
+              { value: 'name', label: 'Event name' },
+              { value: 'date', label: 'Event date, newest first' },
+            ]}
+          />
         </label>
         <div className="event-filter-summary">
           <span role="status">

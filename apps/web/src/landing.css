@@ -51,13 +51,6 @@
   align-items: center;
   gap: 20px;
 }
-.launch-reassurance {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  margin: 24px 0 0;
-}
 .photo-depth {
   position: relative;
   isolation: isolate;
@@ -142,8 +135,8 @@
   align-items: center;
   position: absolute;
   z-index: 3;
-  left: -18px;
-  bottom: 22px;
+  left: -16px;
+  bottom: 92px;
   padding: 17px 23px;
   color: #24656a;
   border: 1px solid #ffffff;
@@ -532,8 +525,8 @@
     padding: 28px 16px 8px 8px;
   }
   .depth-chip {
-    left: -8px;
-    bottom: 16px;
+    left: 8px;
+    bottom: 64px;
     padding: 12px 17px;
   }
   .photo-depth figcaption {

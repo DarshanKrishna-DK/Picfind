@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Download, X } from 'lucide-react';
 import { api, fileUrl, HttpError, saveFile } from '../api';
 import { ErrorNote } from '../components/ui';
+import { MenuSelect } from '../components/menu-select';
 import { collectPhotoFiles, createGalleryArchive } from '../gallery-downloads';
 import {
   SELECTION_STATUSES,
@@ -74,17 +75,18 @@ export function SelectionInbox({
         </label>
         <label>
           Filter selection status
-          <select
+          <MenuSelect
+            label="Filter selection status"
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
-          >
-            <option value="all">All requests</option>
-            {SELECTION_STATUSES.map((value) => (
-              <option value={value} key={value}>
-                {labels[value]}
-              </option>
-            ))}
-          </select>
+            onChange={setStatus}
+            options={[
+              { value: 'all', label: 'All requests' },
+              ...SELECTION_STATUSES.map((value) => ({
+                value,
+                label: labels[value],
+              })),
+            ]}
+          />
         </label>
       </div>
       <p role="status">
@@ -297,19 +299,16 @@ function SelectionCard({
         <div className="selection-review-fields">
           <label>
             Review status
-            <select
+            <MenuSelect
+              label="Review status"
               value={status}
               disabled={busy}
-              onChange={(event) =>
-                setStatus(event.target.value as SelectionStatus)
-              }
-            >
-              {SELECTION_STATUSES.map((value) => (
-                <option value={value} key={value}>
-                  {labels[value]}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => setStatus(next as SelectionStatus)}
+              options={SELECTION_STATUSES.map((value) => ({
+                value,
+                label: labels[value],
+              }))}
+            />
           </label>
           <label>
             Private review note
