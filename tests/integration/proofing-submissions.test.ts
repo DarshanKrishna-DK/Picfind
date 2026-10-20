@@ -349,6 +349,51 @@ describe('final proofing submissions', () => {
     f.records.get(input.id)!.proofingSubmission!.favoriteIds = ['bad'];
     await f.read(f.root).expect(503);
   });
+  it('does not default a malformed stored round to an editable first round', async () => {
+    const f = await fixture();
+    Object.assign(f.record(), { proofingRound: null });
+    await f.read(f.root).expect(503);
+    await f.submit().expect(503);
+    await f.save(f.photos[0]!.id, 'favorite', 0).expect(503);
+  });
+  it.each(['client', 'owner'])(
+    'rejects a changing collection during a %s history read',
+    async (actor) => {
+      const f = await fixture(),
+        input = f.input();
+      await f.save(f.photos[0]!.id, 'favorite', 0).expect(200);
+      await f.submit({ ...input, decisionVersion: 1 }).expect(200);
+      const list = f.store.list;
+      f.store.list = async (owner, kind) => {
+        const result = await list(owner, kind);
+        if (kind === 'photo') {
+          f.collection.selectedIds = [f.photos[1]!.id];
+          f.collection.collectionVersion! += 1;
+        }
+        return result;
+      };
+      const response = await f
+        .read(actor === 'client' ? f.root : f.ownerRoot, actor)
+        .expect(409);
+      expect(response.body.error.code).toBe('SUBMISSION_CHANGED');
+      expect(JSON.stringify(response.body)).not.toContain('same.jpg');
+    },
+  );
+  it('rejects a submission changed outside the process lock during a history read', async () => {
+    const f = await fixture();
+    const list = f.store.list;
+    f.store.list = async (owner, kind) => {
+      const result = await list(owner, kind);
+      if (kind === 'photo')
+        Object.assign(f.record(), {
+          proofingDecisionVersion: 1,
+          proofingDecisions: [],
+          proofingDecisionUpdatedAt: new Date().toISOString(),
+        });
+      return result;
+    };
+    await f.read(f.root).expect(409);
+  });
   it('enforces round and payload capacity without losing the current state', async () => {
     const f = await fixture(),
       input = f.input();

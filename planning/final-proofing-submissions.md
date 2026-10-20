@@ -49,6 +49,8 @@ Use the existing owner process lock for decision writes, submission and
 reopening. This is not a distributed compare-and-swap guarantee. Exact retries
 return the saved outcome; conflicting UUID reuse or stale versions fail.
 Reopening invalidates stale draft writes by incrementing the decision version.
+History reads reauthorize and reject detectable collection or submission version
+changes during projection. This check does not add a distributed transaction.
 
 Verify real API authorization, persistence, locked edits, stale versions,
 idempotent retries, unavailable photos, corruption, the payload/round caps and

@@ -97,6 +97,22 @@ export function createProofingSubmissions(
       Boolean(collection.selectedIds?.includes(photo.id))
     );
   }
+  function requireUnchanged(
+    initial: Awaited<ReturnType<typeof ownerGrant>>,
+    latest: Awaited<ReturnType<typeof ownerGrant>>,
+  ) {
+    if (
+      collectionVersion(initial.collection) !==
+        collectionVersion(latest.collection) ||
+      readProofingDecisions(initial.invitation).version !==
+        readProofingDecisions(latest.invitation).version ||
+      JSON.stringify(submissionState(initial.invitation)) !==
+        JSON.stringify(submissionState(latest.invitation)) ||
+      initial.invitation.proofingReopenReason !==
+        latest.invitation.proofingReopenReason
+    )
+      throw conflict();
+  }
   async function present(
     grant: Awaited<ReturnType<typeof ownerGrant>>,
   ): Promise<ProofingSubmissionState> {
@@ -178,7 +194,7 @@ export function createProofingSubmissions(
       async () => {
         const grant = await access(id, actor);
         const result = await present(grant);
-        await access(id, actor);
+        requireUnchanged(grant, await access(id, actor));
         return { ...result, canReopen: false };
       },
     );
@@ -187,8 +203,9 @@ export function createProofingSubmissions(
   router.get(ownerRoot, async (req, res) => {
     const actor = await actorOf(req);
     const result = await withAccountLock(actor, async () => {
-      const result = await present(await ownerGrant(req, actor));
-      await ownerGrant(req, actor);
+      const grant = await ownerGrant(req, actor);
+      const result = await present(grant);
+      requireUnchanged(grant, await ownerGrant(req, actor));
       return result;
     });
     res.json(result);

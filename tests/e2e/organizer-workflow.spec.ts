@@ -204,6 +204,9 @@ test('final proofing submission locks saved choices, retries safely and preserve
   ).toBeVisible();
   page.once('dialog', (dialog) => void dialog.accept());
   await panel.getByRole('button', { name: 'Submit final favorites' }).click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[0]!.id).toMatch(/^[0-9a-f-]{36}$/);
+  expect(requests[1]!.id).toBe(requests[0]!.id);
   expect(requests[1]).toEqual(requests[0]);
   await expect(
     panel.getByText('This round is submitted and locked.'),

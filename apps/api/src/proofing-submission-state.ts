@@ -44,7 +44,7 @@ export function readSubmission(value: unknown) {
   return parsed.data;
 }
 export function submissionState(row: LibraryRecord) {
-  const round = row.proofingRound ?? 1;
+  const round = row.proofingRound === undefined ? 1 : row.proofingRound;
   if (!Number.isInteger(round) || round < 1 || round > 20)
     return submissionMetadataInvalid();
   const current =
