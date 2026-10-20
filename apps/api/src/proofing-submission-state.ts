@@ -75,3 +75,42 @@ export function checkSubmissionPayload(row: LibraryRecord) {
       'This invitation has reached its metadata capacity. Ask the photographer for a new invitation.',
     );
 }
+
+/** Validate retained rounds before projecting history or comparing snapshots. */
+export function readSubmissionHistory(
+  invitation: LibraryRecord,
+  jobs: LibraryRecord[],
+) {
+  const state = submissionState(invitation);
+  const rows = jobs.filter(
+    (row) =>
+      row.ownerId === invitation.ownerId &&
+      row.eventId === invitation.eventId &&
+      row.purpose === 'proofing-submission' &&
+      row.submissionInvitationId === invitation.id,
+  );
+  if (rows.length > 20 || rows.some((row) => row.deletionStartedAt))
+    return submissionMetadataInvalid();
+  const archives = rows.map((row) => {
+    const item = readSubmission(row.proofingSubmission);
+    if (row.kind !== 'job' || item.id !== row.id || item.round > state.round)
+      return submissionMetadataInvalid();
+    return item;
+  });
+  const rounds = new Set<number>();
+  for (const item of archives) {
+    if (rounds.has(item.round)) return submissionMetadataInvalid();
+    rounds.add(item.round);
+    if (
+      item.round === state.round &&
+      (!state.current || JSON.stringify(item) !== JSON.stringify(state.current))
+    )
+      return submissionMetadataInvalid();
+  }
+  return {
+    ...state,
+    history: archives
+      .filter((item) => item.id !== state.current?.id)
+      .sort((a, b) => b.round - a.round),
+  };
+}

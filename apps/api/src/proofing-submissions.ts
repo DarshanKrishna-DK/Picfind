@@ -18,6 +18,7 @@ import {
   proofingText,
   proofingVersion,
   readSubmission,
+  readSubmissionHistory,
   submissionMetadataInvalid,
   submissionState,
 } from './proofing-submission-state.js';
@@ -122,35 +123,12 @@ export function createProofingSubmissions(
     grant: Awaited<ReturnType<typeof ownerGrant>>,
   ): Promise<ProofingSubmissionState> {
     const { invitation, collection, event } = grant;
-    const state = submissionState(invitation);
+    const state = readSubmissionHistory(
+      invitation,
+      await store().list(invitation.ownerId, 'job'),
+    );
     const saved = readProofingDecisions(invitation);
     const policy = readProofingPolicy(collection);
-    const rows = (await store().list(invitation.ownerId, 'job')).filter(
-      (row) =>
-        row.ownerId === invitation.ownerId &&
-        row.eventId === invitation.eventId &&
-        row.purpose === 'proofing-submission' &&
-        row.submissionInvitationId === invitation.id,
-    );
-    if (rows.length > 20 || rows.some((row) => row.deletionStartedAt))
-      return submissionMetadataInvalid();
-    const archives = rows.map((row) => {
-      const submission = readSubmission(row.proofingSubmission);
-      if (submission.id !== row.id || submission.round > state.round)
-        return submissionMetadataInvalid();
-      return submission;
-    });
-    const rounds = new Set<number>();
-    for (const item of archives) {
-      if (rounds.has(item.round)) return submissionMetadataInvalid();
-      rounds.add(item.round);
-      if (
-        item.round === state.round &&
-        (!state.current ||
-          JSON.stringify(item) !== JSON.stringify(state.current))
-      )
-        return submissionMetadataInvalid();
-    }
     const photos = await store().list(invitation.ownerId, 'photo');
     const byId = new Map(
       photos
@@ -181,10 +159,7 @@ export function createProofingSubmissions(
       decisionVersion: saved.version,
       collectionVersion: collectionVersion(collection),
       current: state.current ? project(state.current) : null,
-      history: archives
-        .filter((item) => item.id !== state.current?.id)
-        .sort((a, b) => b.round - a.round)
-        .map(project),
+      history: state.history.map(project),
       reopenReason: invitation.proofingReopenReason ?? null,
       canReopen: Boolean(
         state.current && state.round < 20 && active(invitation, event),
