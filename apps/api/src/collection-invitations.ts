@@ -6,6 +6,7 @@ import { ApiError, type AuthOptions } from './auth.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
+import { createProofingDecisions } from './proofing-decisions.js';
 import {
   COLLECTION_INVITATION_LIMIT,
   type CollectionInvitation,
@@ -291,6 +292,9 @@ export function createCollectionInvitations(
         await authorizedPhoto();
       });
     },
+  );
+  router.use(
+    createProofingDecisions({ store, actorOf, access, ownerCollection }),
   );
   return router;
 }
