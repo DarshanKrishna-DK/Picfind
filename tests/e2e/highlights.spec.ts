@@ -45,7 +45,11 @@ async function fixture(page: Page) {
   await page.route('**/api/**', async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
-    if (path === '/api/auth/session')
+    if (path === '/api/auth/session') {
+      if (request.method() === 'POST') {
+        state.signedIn = true;
+        return route.fulfill({ status: 204 });
+      }
       return route.fulfill({
         json: {
           user: state.signedIn
@@ -58,6 +62,9 @@ async function fixture(page: Page) {
             : null,
         },
       });
+    }
+    if (path === '/api/account/capabilities')
+      return route.fulfill({ json: { google: false, recovery: false } });
     if (path === '/api/library')
       return route.fulfill({
         json: { photos, events: [event], jobs: [], scans: [], photoLimit: 100 },
@@ -287,11 +294,18 @@ test('preserves a conflicting draft, blocks saving and clears denied reloads', a
     page.getByText('Highlights are unavailable.', { exact: true }),
   ).toBeVisible();
 });
-test('keeps a valid highlights destination through the sign-in link', async ({
+test('returns to the selected highlights after signing in and refreshing session state', async ({
   page,
 }) => {
-  const { state } = await fixture(page);
+  const { state, photos } = await fixture(page);
   state.signedIn = false;
+  state.highlights = {
+    ...emptyHighlights(),
+    title: 'Signed-in selection',
+    photoIds: [photos[0]!.id],
+    published: true,
+    version: 1,
+  };
   await page.goto(`/highlights/${eventId}`);
   await expect(
     page.getByRole('link', { name: 'Sign in to view highlights' }),
@@ -302,4 +316,20 @@ test('keeps a valid highlights destination through the sign-in link', async ({
   await expect(page.getByRole('button', { name: /download all/i })).toHaveCount(
     0,
   );
+  await page.getByRole('link', { name: 'Sign in to view highlights' }).click();
+  await page
+    .getByLabel('Email address', { exact: true })
+    .fill('owner@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/highlights/${eventId}$`));
+  await expect(
+    page.getByRole('heading', { name: 'Signed-in selection' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'Unselected.jpg', exact: true }),
+  ).toHaveCount(0);
 });

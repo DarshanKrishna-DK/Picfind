@@ -304,6 +304,16 @@ describe('explicit curated highlights and scoped delivery', () => {
     await f.save().expect(503);
     expect(f.store.put).not.toHaveBeenCalled();
   });
+  it('never treats stored version zero as the absent editable draft', async () => {
+    const f = fixture();
+    await f.save({ published: true }).expect(200);
+    f.stored().highlights!.version = 0;
+    await f.read().expect(503);
+    await f.read(f.publicUrl, 'guest').expect(503);
+    await f.save({ title: 'Attempted replacement', version: 0 }).expect(503);
+    expect(f.store.put).toHaveBeenCalledTimes(1);
+    expect(f.stored().highlights!.title).toBe(f.fields.title);
+  });
   it.each(['withdrawn', 'removed', 'owner changed'])(
     'denies %s highlights after image bytes are loaded',
     async (change) => {
