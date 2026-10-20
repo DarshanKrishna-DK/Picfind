@@ -707,9 +707,12 @@ export function createLibraryRouter(
       store().list(user, 'photo'),
       store().list(user, 'job'),
     ]);
-    const libraryPhotos = photos.filter(
-      (photo) => !photo.scanId && photoAvailable(photo),
-    );
+    const libraryPhotos = photos
+      .filter(
+        (photo) =>
+          !photo.scanId && !photo.deletionStartedAt && photoAvailable(photo),
+      )
+      .map((photo) => ({ ...photo, filename: photo.filename ?? 'photo.jpg' }));
     const imports = jobs.filter(
       (job) => !job.purpose || job.purpose === 'import',
     );

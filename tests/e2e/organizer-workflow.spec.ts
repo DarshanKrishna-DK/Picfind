@@ -324,6 +324,13 @@ test('named collections persist, recover conflicts, remove unavailable photos an
   await editor
     .getByLabel('Collection name', { exact: true })
     .fill('My revision');
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await panel
+    .getByRole('button', { name: 'New collection', exact: true })
+    .click();
+  await expect(
+    editor.getByLabel('Collection name', { exact: true }),
+  ).toHaveValue('My revision');
   conflict = true;
   await editor
     .getByRole('button', { name: 'Save collection', exact: true })
@@ -381,6 +388,99 @@ test('named collections persist, recover conflicts, remove unavailable photos an
   await expect(
     page.getByRole('button', { name: 'Open Ceremony.jpg' }),
   ).toBeVisible();
+});
+
+test('collections reach duplicate filenames beyond page one and protect pending saves', async ({
+  page,
+}) => {
+  const { eventId, photos } = await fixture(page);
+  const source = photos[0]!;
+  photos.splice(
+    0,
+    photos.length,
+    ...Array.from({ length: 105 }, (_, index) => ({
+      ...source,
+      id: `photo-${index}`,
+      filename: 'Same.jpg',
+    })),
+  );
+  let release!: () => void;
+  let started!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let collection: ProofingCollection | null = null;
+  await page.route(
+    `**/api/events/${eventId}/proofing-collections**`,
+    async (route) => {
+      if (route.request().method() === 'GET')
+        return route.fulfill({
+          json: { collections: collection ? [collection] : [], limit: 50 },
+        });
+      const body = route.request().postDataJSON();
+      started();
+      await pending;
+      expect(body.photoIds).toEqual(['photo-104']);
+      collection = {
+        id: 'saved-page-two',
+        title: body.title,
+        version: 1,
+        createdAt: '2026-10-20T12:00:00.000Z',
+        updatedAt: '2026-10-20T12:00:00.000Z',
+        photoIds: body.photoIds,
+        photos: [{ id: 'photo-104', filename: 'Same.jpg' }],
+        unavailableCount: 0,
+      };
+      return route.fulfill({ status: 201, json: { collection } });
+    },
+  );
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Proofing collections' });
+  await panel
+    .getByRole('button', { name: 'New collection', exact: true })
+    .click();
+  const editor = panel.getByRole('form', { name: 'Collection editor' });
+  await editor.getByLabel('Collection name', { exact: true }).fill('Page two');
+  await expect(editor.getByLabel('Same.jpg', { exact: true })).toHaveCount(100);
+  await editor.getByRole('button', { name: 'Next photo page' }).click();
+  await expect(editor.getByLabel('Same.jpg', { exact: true })).toHaveCount(5);
+  await editor.getByLabel('Same.jpg', { exact: true }).last().check();
+  await editor
+    .getByRole('button', { name: 'Save collection', exact: true })
+    .click();
+  await requested;
+  try {
+    await expect(
+      panel.getByRole('button', { name: 'New collection', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      panel.getByRole('button', { name: 'Refresh collections', exact: true }),
+    ).toBeDisabled();
+  } finally {
+    release();
+  }
+  await expect(
+    panel.getByRole('heading', { name: 'Page two', exact: true }),
+  ).toBeVisible();
+  await panel
+    .getByRole('button', { name: 'Edit Page two', exact: true })
+    .click();
+  await editor.getByLabel('Show selected photos only').check();
+  await expect(editor.getByLabel('Same.jpg', { exact: true })).toHaveCount(1);
+  await expect(editor.getByLabel('Same.jpg', { exact: true })).toBeChecked();
+  // Deselecting removes this row from the selected-only view.
+  await editor.getByLabel('Same.jpg', { exact: true }).click();
+  await expect(editor.getByLabel('Same.jpg', { exact: true })).toHaveCount(0);
+  await expect(
+    editor.getByText('0 / 100 photos selected', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor.getByRole('button', { name: 'Save collection', exact: true }),
+  ).toBeDisabled();
 });
 
 test('event folders, search and visibility filters survive reload', async ({

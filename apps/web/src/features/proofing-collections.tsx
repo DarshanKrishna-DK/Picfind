@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, fileUrl, HttpError, type Photo } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
@@ -27,8 +27,19 @@ export function ProofingCollections({
   const [editing, setEditing] = useState<ProofingCollection | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [editorRevision, setEditorRevision] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState('');
+  function discardDraft() {
+    if (
+      busy ||
+      (dirty && !window.confirm('Discard unsaved collection changes?'))
+    )
+      return false;
+    setDirty(false);
+    return true;
+  }
   async function remove(collection: ProofingCollection) {
     if (
       busy ||
@@ -45,7 +56,10 @@ export function ProofingCollections({
         method: 'DELETE',
         body: JSON.stringify({ version: collection.version }),
       });
-      if (editing?.id === collection.id) setEditing(null);
+      if (editing?.id === collection.id) {
+        setEditing(null);
+        setDirty(false);
+      }
       setMessage(
         'Collection deleted. Photos and guest requests are unchanged.',
       );
@@ -72,6 +86,8 @@ export function ProofingCollections({
             query.data.collections.length >= query.data.limit
           }
           onClick={() => {
+            if (!discardDraft()) return;
+            setEditorRevision((current) => current + 1);
             setEditing(null);
             setCreating(true);
             setMessage('');
@@ -96,15 +112,19 @@ export function ProofingCollections({
       <p role="status">{message}</p>
       {(creating || editing) && (
         <CollectionEditor
-          key={editing?.id ?? 'new'}
+          key={`${editing?.id ?? 'new'}:${editorRevision}`}
           root={root}
           photos={photos}
           initial={editing}
+          onBusyChange={setBusy}
+          onDirtyChange={setDirty}
           onCancel={() => {
+            if (!discardDraft()) return;
             setEditing(null);
             setCreating(false);
           }}
           onSaved={() => {
+            setDirty(false);
             setEditing(null);
             setCreating(false);
             setMessage('Collection saved.');
@@ -135,6 +155,8 @@ export function ProofingCollections({
                     className="button secondary"
                     disabled={busy}
                     onClick={() => {
+                      if (!discardDraft()) return;
+                      setEditorRevision((current) => current + 1);
                       setCreating(false);
                       setEditing(collection);
                       setMessage('');
@@ -168,30 +190,52 @@ function CollectionEditor({
   initial,
   onCancel,
   onSaved,
+  onBusyChange,
+  onDirtyChange,
 }: {
   root: string;
   photos: Photo[];
   initial: ProofingCollection | null;
   onCancel: () => void;
   onSaved: () => void;
+  onBusyChange: (busy: boolean) => void;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const client = useQueryClient();
   const [title, setTitle] = useState(initial?.title ?? '');
   const [ids, setIds] = useState(initial?.photoIds ?? []);
   const [version, setVersion] = useState(initial?.version ?? 1);
   const [search, setSearch] = useState('');
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const [page, setPage] = useState(0);
+  const [baseline, setBaseline] = useState({
+    title: initial?.title ?? '',
+    photoIds: initial?.photoIds ?? [],
+  });
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const dirty =
+    title !== baseline.title ||
+    ids.length !== baseline.photoIds.length ||
+    ids.some((id) => !baseline.photoIds.includes(id));
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const available = new Set(photos.map((photo) => photo.id));
   const unavailable = ids.filter((id) => !available.has(id));
-  const candidates = photos.filter((photo) =>
-    photo.filename.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+  const candidates = photos.filter(
+    (photo) =>
+      (!selectedOnly || ids.includes(photo.id)) &&
+      (photo.filename ?? 'photo.jpg')
+        .toLocaleLowerCase()
+        .includes(search.toLocaleLowerCase()),
   );
+  const pages = Math.max(1, Math.ceil(candidates.length / 100));
+  const currentPage = Math.min(page, pages - 1);
   async function save(event: FormEvent) {
     event.preventDefault();
     if (busy || conflict) return;
     setBusy(true);
+    onBusyChange(true);
     setError(null);
     try {
       await api(initial ? `${root}/${initial.id}` : root, {
@@ -214,11 +258,13 @@ function CollectionEditor({
         void client.invalidateQueries({ queryKey: ['library'] });
     } finally {
       setBusy(false);
+      onBusyChange(false);
     }
   }
   async function reload() {
     if (!initial || busy) return;
     setBusy(true);
+    onBusyChange(true);
     setError(null);
     try {
       const result = await api<{ collection: ProofingCollection }>(
@@ -227,11 +273,16 @@ function CollectionEditor({
       setTitle(result.collection.title);
       setIds(result.collection.photoIds);
       setVersion(result.collection.version);
+      setBaseline({
+        title: result.collection.title,
+        photoIds: result.collection.photoIds,
+      });
       setConflict(false);
     } catch (failure) {
       setError(failure);
     } finally {
       setBusy(false);
+      onBusyChange(false);
     }
   }
   return (
@@ -257,8 +308,23 @@ function CollectionEditor({
           type="search"
           value={search}
           disabled={busy}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
         />
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={selectedOnly}
+          disabled={busy}
+          onChange={(event) => {
+            setSelectedOnly(event.target.checked);
+            setPage(0);
+          }}
+        />
+        Show selected photos only
       </label>
       <p>
         {ids.length} / {PROOFING_COLLECTION_PHOTO_LIMIT} photos selected
@@ -278,40 +344,59 @@ function CollectionEditor({
       )}
       <fieldset disabled={busy} className="proofing-photo-options">
         <legend>Photos for this collection</legend>
-        {candidates.slice(0, 100).map((photo) => (
-          <label key={photo.id} className="proofing-photo-choice">
-            <input
-              type="checkbox"
-              checked={ids.includes(photo.id)}
-              disabled={
-                !ids.includes(photo.id) &&
-                ids.length >= PROOFING_COLLECTION_PHOTO_LIMIT
-              }
-              onChange={() =>
-                setIds(
-                  ids.includes(photo.id)
-                    ? ids.filter((id) => id !== photo.id)
-                    : [...ids, photo.id],
-                )
-              }
-            />
-            <img
-              src={fileUrl(photo.id)}
-              alt=""
-              loading="lazy"
-              width={80}
-              height={60}
-            />
-            <span>{photo.filename}</span>
-          </label>
-        ))}
+        {candidates
+          .slice(currentPage * 100, (currentPage + 1) * 100)
+          .map((photo) => (
+            <label key={photo.id} className="proofing-photo-choice">
+              <input
+                type="checkbox"
+                checked={ids.includes(photo.id)}
+                disabled={
+                  !ids.includes(photo.id) &&
+                  ids.length >= PROOFING_COLLECTION_PHOTO_LIMIT
+                }
+                onChange={() =>
+                  setIds((current) =>
+                    current.includes(photo.id)
+                      ? current.filter((id) => id !== photo.id)
+                      : current.length >= PROOFING_COLLECTION_PHOTO_LIMIT
+                        ? current
+                        : [...current, photo.id],
+                  )
+                }
+              />
+              <img
+                src={fileUrl(photo.id)}
+                alt=""
+                loading="lazy"
+                width={80}
+                height={60}
+              />
+              <span>{photo.filename ?? 'photo.jpg'}</span>
+            </label>
+          ))}
       </fieldset>
-      {candidates.length > 100 && (
-        <p>
-          Showing the first 100 matches. Refine the filename filter to find
-          other photos.
-        </p>
-      )}
+      <div className="actions" aria-label="Photo pages">
+        <button
+          type="button"
+          className="button secondary"
+          disabled={busy || currentPage === 0}
+          onClick={() => setPage(currentPage - 1)}
+        >
+          Previous photo page
+        </button>
+        <span>
+          Photo page {currentPage + 1} of {pages}
+        </span>
+        <button
+          type="button"
+          className="button secondary"
+          disabled={busy || currentPage + 1 >= pages}
+          onClick={() => setPage(currentPage + 1)}
+        >
+          Next photo page
+        </button>
+      </div>
       <div className="actions">
         <button
           className="button"

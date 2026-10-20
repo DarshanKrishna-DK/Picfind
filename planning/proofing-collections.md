@@ -23,6 +23,9 @@ set. Deleting a collection erases only its metadata.
 
 The owner event page adds a Collections tab. It supports reload, filename search,
 create, edit, conflict reload and confirmed deletion. Search shows at most 100
-candidate photos at a time; refining the filename filter reaches other photos.
+candidate photos per page with next/previous navigation and a selected-only filter.
+Switching editors asks before discarding a dirty draft. Save/reload disables
+collection switching until the request completes. Malformed stored versions fail
+with an explicit metadata-repair error rather than returning an undefined version.
 Client invitations, per-client decisions and submitted/locked revisions remain
 separate future workflows. These private sets do not grant guest access.

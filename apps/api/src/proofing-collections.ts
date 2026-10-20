@@ -28,12 +28,26 @@ function parseId(id: unknown) {
   return result.data;
 }
 function checkVersion(row: LibraryRecord, expected: number) {
+  storedVersion(row);
   if (row.collectionVersion !== expected)
     throw new ApiError(
       409,
       'COLLECTION_CHANGED',
       'This collection changed in another tab. Load its latest version before changing it.',
     );
+}
+function storedVersion(row: LibraryRecord): number {
+  if (
+    !Number.isSafeInteger(row.collectionVersion) ||
+    !row.collectionVersion ||
+    row.collectionVersion < 1
+  )
+    throw new ApiError(
+      503,
+      'COLLECTION_METADATA_INVALID',
+      'This collection needs metadata repair before it can be changed.',
+    );
+  return row.collectionVersion;
 }
 
 export function createProofingCollections(
@@ -87,7 +101,7 @@ export function createProofingCollections(
     return {
       id: row.id,
       title: row.title ?? '',
-      version: row.collectionVersion!,
+      version: storedVersion(row),
       createdAt: row.createdAt,
       updatedAt: row.collectionUpdatedAt ?? row.createdAt,
       photoIds,

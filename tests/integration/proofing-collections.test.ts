@@ -99,6 +99,39 @@ function fixture() {
 }
 
 describe('private named proofing collections', () => {
+  it('normalizes missing filenames and hides deleting photos in the owner picker source', async () => {
+    const f = fixture();
+    delete f.photos[0]!.filename;
+    f.photos[1]!.deletionStartedAt = new Date().toISOString();
+    const result = await request(f.app)
+      .get('/api/library')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(result.body.photos).toHaveLength(1);
+    expect(result.body.photos[0].filename).toBe('photo.jpg');
+    expect(result.body.storedPhotoCount).toBe(2);
+  });
+  it.each([undefined, 0, -1, 0.5, Number.NaN])(
+    'rejects malformed stored versions: %s',
+    async (version) => {
+      const f = fixture();
+      const created = (await f.create().expect(201)).body.collection;
+      const row = f.records.get(created.id)!;
+      if (version === undefined) delete row.collectionVersion;
+      else row.collectionVersion = version;
+      const result = await f.read(`${f.root}/${created.id}`).expect(503);
+      expect(result.body.error.code).toBe('COLLECTION_METADATA_INVALID');
+      await f
+        .patch(created.id, {
+          title: 'Overwrite',
+          photoIds: [f.photos[0]!.id],
+          version: 1,
+        })
+        .expect(503);
+      await f.remove(created.id, 1).expect(503);
+      expect(f.records.get(created.id)?.title).toBe('Album round');
+    },
+  );
   it('creates, reloads, updates and deletes a set without changing photos or guest submissions', async () => {
     const f = fixture();
     const ids = f.photos.map((p) => p.id);
