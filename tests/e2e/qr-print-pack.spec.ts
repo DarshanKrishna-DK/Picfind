@@ -4,6 +4,7 @@ import { unzipSync } from 'fflate';
 import sharp from 'sharp';
 import jsQR from 'jsqr';
 import { prepareQrPack } from '../../apps/web/src/qr-pack';
+import { blankInvitationPage } from '../../packages/shared/src/event-invitation-page';
 
 const eventId = 'a15cfe6e-2ff0-4564-b83d-047d0eb2e673';
 async function fixture(page: Page) {
@@ -32,6 +33,12 @@ async function fixture(page: Page) {
     hold: false,
     downloads: 0,
     writes: [] as string[],
+    invitationReads: 0,
+    invitationPublished: true,
+    withdrawInvitationAt: 0,
+    invitationAccount: 'owner',
+    invitationEditable: true,
+    invitationHeaders: [] as string[],
   };
   page.on('download', () => state.downloads++);
   await page.route('**/api/**', async (route) => {
@@ -100,6 +107,30 @@ async function fixture(page: Page) {
           },
         },
       });
+    if (path === `/api/events/${eventId}/invitation-page`) {
+      state.invitationReads++;
+      state.invitationHeaders.push(
+        request.headers()['x-picfind-invitation-actor'] ?? '',
+      );
+      if (state.invitationReads === state.withdrawInvitationAt)
+        state.invitationPublished = false;
+      const fields = { ...blankInvitationPage(), date: '2026-12-31' };
+      return route.fulfill({
+        json: {
+          eventId,
+          accountId: state.invitationAccount,
+          editable: state.invitationEditable,
+          page: {
+            draft: { ...fields, heading: 'Private unsaved invitation draft' },
+            published: state.invitationPublished
+              ? { fields, revision: 1, publishedAt: event.createdAt }
+              : null,
+            version: 1,
+            updatedAt: event.createdAt,
+          },
+        },
+      });
+    }
     return route.fulfill({
       status: 404,
       json: { error: { message: 'Synthetic unavailable route.' } },
@@ -112,6 +143,91 @@ async function fixture(page: Page) {
   ).toBeVisible();
   return state;
 }
+test('prints an invitation QR for a private gallery without copying private draft details', async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.event.visibility = 'private';
+  await page
+    .getByRole('combobox', { name: 'QR destination', exact: true })
+    .selectOption('invitation');
+  await expect(
+    page.getByRole('textbox', { name: 'Printed heading', exact: true }),
+  ).toHaveValue('You are invited');
+  const files = await downloadPack(page),
+    html = new TextDecoder().decode(files['print.html']);
+  expect(await decodedPng(files['qr.png']!)).toBe(
+    `http://127.0.0.1:5173/invite/${eventId}`,
+  );
+  expect(html).not.toContain('Private unsaved invitation draft');
+  expect(html).not.toContain('Sign in to view photos.');
+  expect(state.invitationReads).toBe(2);
+  expect(state.invitationHeaders).toEqual(['owner', 'owner']);
+  expect(state.writes).toEqual([]);
+});
+test('keeps custom print copy when changing to invitation sharing', async ({
+  page,
+}) => {
+  await fixture(page);
+  await page
+    .getByRole('textbox', { name: 'Printed heading', exact: true })
+    .fill('Our custom card');
+  await page
+    .getByRole('textbox', { name: 'Printed instruction', exact: true })
+    .fill('Our custom instruction');
+  await page
+    .getByRole('combobox', { name: 'QR destination', exact: true })
+    .selectOption('invitation');
+  await expect(
+    page.getByRole('textbox', { name: 'Printed heading', exact: true }),
+  ).toHaveValue('Our custom card');
+  await expect(
+    page.getByRole('textbox', { name: 'Printed instruction', exact: true }),
+  ).toHaveValue('Our custom instruction');
+});
+test('blocks an invitation QR if publication is withdrawn before the final check', async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.withdrawInvitationAt = 2;
+  await page
+    .getByRole('combobox', { name: 'QR destination', exact: true })
+    .selectOption('invitation');
+  await page.getByRole('button', { name: 'Generate print pack' }).click();
+  await expect(
+    page.getByText(
+      /Publish an invitation on an active event owned by this account/,
+    ),
+  ).toBeVisible();
+  expect(state.downloads).toBe(0);
+  await expect(
+    page.getByRole('img', { name: 'Generated QR preview' }),
+  ).toHaveCount(0);
+});
+test('rejects invitation metadata for a changed account or closed event', async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await page
+    .getByRole('combobox', { name: 'QR destination', exact: true })
+    .selectOption('invitation');
+  state.invitationAccount = 'another-owner';
+  await page.getByRole('button', { name: 'Generate print pack' }).click();
+  await expect(
+    page.getByText(
+      /Publish an invitation on an active event owned by this account/,
+    ),
+  ).toBeVisible();
+  state.invitationAccount = 'owner';
+  state.invitationEditable = false;
+  await page.getByRole('button', { name: 'Generate print pack' }).click();
+  await expect(
+    page.getByText(
+      /Publish an invitation on an active event owned by this account/,
+    ),
+  ).toBeVisible();
+  expect(state.downloads).toBe(0);
+});
 async function downloadPack(page: Page) {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Generate print pack' }).click();

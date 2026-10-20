@@ -27,6 +27,7 @@ describe('portable printable QR packs', () => {
   it.each([
     ['https://picfind.example.test', 'event'],
     ['https://picfind.example.test', 'highlights'],
+    ['https://picfind.example.test', 'invitation'],
     ['http://127.0.0.1:5173', 'highlights'],
     [
       `https://${'a'.repeat(60)}.${'b'.repeat(60)}.${'c'.repeat(60)}.test`,
@@ -40,7 +41,12 @@ describe('portable printable QR packs', () => {
         { ...fields, destination },
         new AbortController().signal,
       );
-      const target = `${origin}/${destination === 'event' ? 'e' : 'highlights'}/${fields.eventId}`;
+      const routes = {
+        event: 'e',
+        highlights: 'highlights',
+        invitation: 'invite',
+      };
+      const target = `${origin}/${routes[destination]}/${fields.eventId}`;
       expect(await decode(pack.files['qr.png'])).toBe(target);
       expect(await decode(pack.files['qr.svg'])).toBe(target);
       expect(Object.keys(pack.files).sort()).toEqual([
@@ -83,6 +89,21 @@ describe('portable printable QR packs', () => {
       ).toContain(target);
     },
   );
+  it('prints public invitation access guidance without promising gallery access', async () => {
+    const pack = await prepareQrPack(
+      'https://picfind.example.test',
+      { ...fields, destination: 'invitation' },
+      new AbortController().signal,
+    );
+    const html = new TextDecoder().decode(pack.files['print.html']),
+      instructions = new TextDecoder().decode(pack.files['instructions.txt']);
+    expect(html).toContain('QR code for the published invitation');
+    expect(html).toContain('Open the public invitation.');
+    expect(html).toContain('does not grant access to event photos.');
+    expect(html).not.toContain('Sign in to view photos.');
+    expect(instructions).toContain('The invitation is public.');
+    expect(instructions).not.toContain('Guests must sign in.');
+  });
   it.each([1, 2, 4] as const)(
     'creates exactly %s safe printable cards',
     async (copies) => {

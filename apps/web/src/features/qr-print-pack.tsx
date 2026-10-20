@@ -10,6 +10,7 @@ import {
   type QrPackFields,
 } from '../../../../packages/shared/src/qr-pack';
 import { storedHighlights } from '../../../../packages/shared/src/highlights';
+import { invitationPageSnapshot } from '../../../../packages/shared/src/event-invitation-page';
 
 const ownerEvent = z.object({
   id: z.uuid(),
@@ -22,6 +23,18 @@ const ownerEvent = z.object({
   deletionStartedAt: z.string().optional(),
   deletionCompletedAt: z.string().optional(),
 });
+function defaultCopy(destination: QrPackFields['destination']) {
+  return destination === 'invitation'
+    ? {
+        heading: 'You are invited',
+        instruction:
+          'Scan the code or open the link below for the published invitation.',
+      }
+    : {
+        heading: 'Find your event photos',
+        instruction: 'Scan the code or open the link below to view the photos.',
+      };
+}
 export function QrPrintPack({ eventId }: { eventId: string }) {
   const account = useQuery({ queryKey: ['session'], queryFn: session });
   if (account.isPending) return <Loading />;
@@ -77,7 +90,37 @@ function PrintPackEditor({
     setPreview(null);
     setMessage('');
   }
+  function chooseDestination(destination: QrPackFields['destination']) {
+    const previous = defaultCopy(draft.destination),
+      next = defaultCopy(destination);
+    edit({
+      destination,
+      ...(draft.heading === previous.heading ? { heading: next.heading } : {}),
+      ...(draft.instruction === previous.instruction
+        ? { instruction: next.instruction }
+        : {}),
+    });
+  }
   async function checkAccess(fields: QrPackFields, signal: AbortSignal) {
+    if (fields.destination === 'invitation') {
+      const result = invitationPageSnapshot.parse(
+        await api(`/events/${encodeURIComponent(eventId)}/invitation-page`, {
+          signal,
+          headers: { 'X-PicFind-Invitation-Actor': accountId },
+        }),
+      );
+      signal.throwIfAborted();
+      if (
+        result.accountId !== accountId ||
+        result.eventId !== eventId ||
+        !result.editable ||
+        !result.page.published
+      )
+        throw new Error(
+          'Publish an invitation on an active event owned by this account before preparing its print pack.',
+        );
+      return;
+    }
     if (fields.destination === 'highlights') {
       const result = await api<{ highlights: unknown }>(
         `/events/${encodeURIComponent(eventId)}/highlights`,
@@ -169,7 +212,7 @@ function PrintPackEditor({
       <p>
         Prepare one, two or four cards for an A4 sheet, plus PNG and SVG files
         for your designer. Current sharing access is checked before download.
-        This does not publish your gallery.
+        This does not publish your gallery or invitation.
       </p>
       <p>
         Use the deployed public PicFind site for a guest-ready pack. Printed
@@ -182,13 +225,14 @@ function PrintPackEditor({
           <select
             value={draft.destination}
             onChange={(event) =>
-              edit({
-                destination: event.target.value as QrPackFields['destination'],
-              })
+              chooseDestination(
+                event.target.value as QrPackFields['destination'],
+              )
             }
           >
             <option value="event">Full event gallery</option>
             <option value="highlights">Published highlights only</option>
+            <option value="invitation">Published invitation</option>
           </select>
         </label>
         <label>
