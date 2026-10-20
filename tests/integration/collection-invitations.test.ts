@@ -7,6 +7,37 @@ import {
   origin,
 } from '../fixtures/collection-invitations';
 describe('account-bound collection invitations', () => {
+  it('rechecks a grant revoked during the final credit metadata read before setting any header', async () => {
+    const f = fixture();
+    const invitation = (await f.create().expect(201)).body.invitation;
+    const photoId = f.photos[0]!.id;
+    f.records.get(photoId)!.attribution = {
+      name: 'Photographer',
+      website: '',
+      published: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+    let bytesRead = false;
+    vi.mocked(f.store.file).mockImplementationOnce(async () => {
+      bytesRead = true;
+      return new Response(new Uint8Array([1, 2, 3]));
+    });
+    const get = f.store.get;
+    f.store.get = async (id) => {
+      const row = await get(id);
+      if (bytesRead && id === photoId) {
+        f.records.get(invitation.id)!.invitationRevokedAt =
+          new Date().toISOString();
+        bytesRead = false;
+      }
+      return row;
+    };
+    const response = await f
+      .read(`${f.path(invitation.id)}/photos/${photoId}`)
+      .expect(404);
+    expect(response.headers['x-picfind-attribution']).toBeUndefined();
+  });
   it('authorizes HEAD without fetching or billing bytes and denies revoked HEAD requests', async () => {
     const f = fixture(true);
     const invitation = (await f.create().expect(201)).body.invitation;

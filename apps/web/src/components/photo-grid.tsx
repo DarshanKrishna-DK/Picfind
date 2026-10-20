@@ -15,6 +15,10 @@ import { collectPhotoFiles, createGalleryArchive } from '../gallery-downloads';
 import { Empty, ErrorNote } from './ui';
 import { MenuSelect } from './menu-select';
 import { PhotoNote } from '../features/photo-note';
+import {
+  PhotoAttributionEditor,
+  PublishedPhotoCredit,
+} from '../features/photo-attribution';
 
 export function PhotoGrid({
   photos,
@@ -527,8 +531,15 @@ export function PhotoGrid({
               )}
             </div>
             <ErrorNote error={error} />
+            <PublishedPhotoCredit credit={detail.credit} />
             {privateNotes && !readOnly && (
-              <PhotoNote key={detail.id} photoId={detail.id} />
+              <>
+                <PhotoNote key={`note-${detail.id}`} photoId={detail.id} />
+                <PhotoAttributionEditor
+                  key={`credit-${detail.id}`}
+                  photoId={detail.id}
+                />
+              </>
             )}
           </>
         )}

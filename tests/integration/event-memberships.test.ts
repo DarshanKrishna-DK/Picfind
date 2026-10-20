@@ -98,6 +98,34 @@ async function fixture() {
   return { rows, billing, event, other, store, lookup, app, invite, image };
 }
 describe('event moderator authority', () => {
+  it('denies a moderator revoked while reading image bytes and omits attribution headers', async () => {
+    const f = await fixture();
+    await f.invite().expect(201);
+    const uploaded = await request(f.app)
+      .post(`/api/photos?eventId=${f.event.id}`)
+      .set('Cookie', 'picfind_session=moderator')
+      .set('Origin', origin)
+      .set('Content-Type', 'application/octet-stream')
+      .send(f.image)
+      .expect(201);
+    const photo = f.rows.get(uploaded.body.photo.id)!;
+    photo.attribution = {
+      name: 'Studio',
+      website: '',
+      published: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+    f.store.file = vi.fn(async () => {
+      await f.billing.revokeEventMember('owner', f.event.id, moderator.id);
+      return new Response(new Uint8Array(photo.bytes!));
+    });
+    const response = await request(f.app)
+      .get(`/api/photos/${photo.id}/file`)
+      .set('Cookie', 'picfind_session=moderator')
+      .expect(404);
+    expect(response.headers['x-picfind-attribution']).toBeUndefined();
+  });
   it('adds a verified existing account idempotently and discovers only its shared event', async () => {
     const f = await fixture();
     const first = await f.invite().expect(201),

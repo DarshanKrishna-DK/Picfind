@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unzipSync } from 'fflate';
 import {
+  ATTRIBUTION_HEADER,
+  attributionCsv,
+} from '../../packages/shared/src/photo-attribution';
+import {
   archiveFilename,
   collectPhotoFiles,
   createGalleryArchive,
@@ -17,6 +21,153 @@ const jpeg = () =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('device-only gallery downloads', () => {
+  it.each(['invalid', 'over-budget'])(
+    'cancels %s credit responses before reading image bodies or fetching another photo',
+    async (reason) => {
+      const response = jpeg();
+      response.headers.set(
+        ATTRIBUTION_HEADER,
+        reason === 'invalid'
+          ? '%bad'
+          : encodeURIComponent(JSON.stringify({ name: 'Studio', website: '' })),
+      );
+      const read = vi.spyOn(response.body!, 'getReader');
+      const cancel = vi.spyOn(response.body!, 'cancel');
+      const fetcher = vi.fn(async () => response);
+      vi.stubGlobal('fetch', fetcher);
+      await expect(
+        collectPhotoFiles(
+          photos,
+          new AbortController().signal,
+          () => {},
+          reason === 'invalid' ? 1000 : 8,
+        ),
+      ).rejects.toThrow();
+      expect(read).not.toHaveBeenCalled();
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledOnce();
+    },
+  );
+  it('includes each credit row once and enforces the exact combined image and manifest limit', async () => {
+    const credit = { name: 'Studio', website: '' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = jpeg();
+        response.headers.set(
+          ATTRIBUTION_HEADER,
+          encodeURIComponent(JSON.stringify(credit)),
+        );
+        return response;
+      }),
+    );
+    const csv = attributionCsv(
+      photos.map((photo, index) => ({
+        archiveName: archiveFilename(photo.filename, index),
+        photoId: photo.id,
+        filename: photo.filename,
+        credit,
+      })),
+    );
+    const limit = new TextEncoder().encode(csv).byteLength + 8;
+    const result = await collectPhotoFiles(
+      photos,
+      new AbortController().signal,
+      () => {},
+      limit,
+    );
+    expect(new TextDecoder().decode(result['credits.csv'])).toBe(csv);
+    await expect(
+      collectPhotoFiles(
+        photos,
+        new AbortController().signal,
+        () => {},
+        limit - 1,
+      ),
+    ).rejects.toThrow('too large');
+  });
+  it('includes current published response credits in the ZIP without changing JPEG bytes', async () => {
+    const credit = { name: '=Asha, "Studio"', website: 'https://example.test' };
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = jpeg();
+        if (calls++ === 0)
+          response.headers.set(
+            ATTRIBUTION_HEADER,
+            encodeURIComponent(JSON.stringify(credit)),
+          );
+        return response;
+      }),
+    );
+    const signal = new AbortController().signal;
+    const files = await collectPhotoFiles(photos, signal, () => {});
+    const zip = unzipSync(await createGalleryArchive(files, signal));
+    expect(Object.keys(zip)).toHaveLength(3);
+    expect([...zip[archiveFilename(photos[0]!.filename, 0)]!]).toEqual([
+      255, 216, 255, 217,
+    ]);
+    const csv = new TextDecoder().decode(zip['credits.csv']);
+    expect(csv).toContain(archiveFilename(photos[0]!.filename, 0));
+    expect(csv).toContain(`"'=Asha, ""Studio"""`);
+    expect(csv).not.toContain(archiveFilename(photos[1]!.filename, 1));
+  });
+  it('ignores stale gallery credit when the current file response has none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jpeg()),
+    );
+    const stale = photos.map((photo) => ({
+      ...photo,
+      credit: { name: 'Withdrawn', website: '' },
+    }));
+    const files = await collectPhotoFiles(
+      stale,
+      new AbortController().signal,
+      () => {},
+    );
+    expect(files).not.toHaveProperty('credits.csv');
+  });
+  it.each([
+    '%invalid',
+    '{}',
+    JSON.stringify({ name: 'Credit', website: 'javascript:alert(1)' }),
+    JSON.stringify({
+      name: 'Credit',
+      website: '',
+      privateNote: 'must not enter ZIP',
+    }),
+    'x'.repeat(6001),
+  ])('rejects malformed attribution response metadata %s', async (header) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = jpeg();
+        response.headers.set(ATTRIBUTION_HEADER, header);
+        return response;
+      }),
+    );
+    await expect(
+      collectPhotoFiles(photos, new AbortController().signal, () => {}),
+    ).rejects.toThrow('attribution metadata');
+  });
+  it('counts the attribution sidecar against the total archive byte budget', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = jpeg();
+        response.headers.set(
+          ATTRIBUTION_HEADER,
+          encodeURIComponent(JSON.stringify({ name: 'Studio', website: '' })),
+        );
+        return response;
+      }),
+    );
+    await expect(
+      collectPhotoFiles(photos, new AbortController().signal, () => {}, 8),
+    ).rejects.toThrow('include photographer credits');
+  });
   it('uses distinct safe JPEG names, including duplicate and path-like filenames', () => {
     const first = archiveFilename('../../photo.png', 0);
     const second = archiveFilename('../../photo.png', 1);
