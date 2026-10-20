@@ -28,6 +28,11 @@ already downloaded pixels. Every new photo request still reauthorizes current
 publication and selected-photo membership on the API. Withdrawal or removal
 is reflected on the next successful refresh; denied refreshes hide old data.
 The owner can withdraw the set through the existing editor.
+The expiry timer updates React state, so it does not depend on a later fetch or
+user interaction to hide stale content. Browser timers remain subject to
+JavaScript scheduling; hidden tabs are blanked separately on visibility change.
+The standalone wall owns a main landmark and back link instead of the public
+navigation and footer.
 
 Selection tracks photo identity across refreshed ordering. If the current
 photo disappears, the first available selection is shown and playback pauses.

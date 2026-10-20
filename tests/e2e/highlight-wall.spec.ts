@@ -93,9 +93,81 @@ async function fixture(page: Page) {
 async function openWall(page: Page) {
   await page.goto(wallPath);
   await expect(
+    page.getByRole('main', { name: 'Event photo wall' }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('img', { name: 'First.jpg', exact: true }),
   ).toBeVisible();
 }
+test('expires displayed access without polling or a later user interaction', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  await page.addInitScript(() => {
+    const setInterval = window.setInterval.bind(window);
+    Object.defineProperty(window, 'setInterval', {
+      configurable: true,
+      writable: true,
+      value: (handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+        setInterval(
+          handler,
+          timeout === 15_000 ? 86_400_000 : timeout,
+          ...args,
+        ),
+    });
+  });
+  await openWall(page);
+  await page.clock.runFor(44_000);
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toBeVisible();
+  expect(state.reads).toBe(1);
+  await page.clock.runFor(1100);
+  await expect(
+    page.getByText(
+      'The access check is out of date. Refresh the wall to continue.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Refresh wall' }).click();
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start slideshow' }),
+  ).toBeVisible();
+});
+test('navigates relative to the visible replacement after removing the current photo', async ({
+  page,
+}) => {
+  const { state, photos } = await fixture(page);
+  const third = {
+    ...photos[0]!,
+    id: 'd15cfe6e-2ff0-4564-b83d-047d0eb2e679',
+    filename: 'Third.jpg',
+  };
+  state.photos = [...photos, third];
+  await openWall(page);
+  await page.getByRole('button', { name: 'Next photo' }).click();
+  await expect(
+    page.getByRole('img', { name: 'Second.jpg', exact: true }),
+  ).toBeVisible();
+  state.photos = [photos[0]!, third];
+  await page.getByRole('button', { name: 'Refresh wall' }).click();
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Next photo' }).click();
+  await expect(
+    page.getByRole('img', { name: 'Third.jpg', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Previous photo' }).click();
+  await expect(
+    page.getByRole('img', { name: 'First.jpg', exact: true }),
+  ).toBeVisible();
+});
 test('starts paused, advances on request and preserves identity across refreshed ordering', async ({
   page,
 }, testInfo) => {

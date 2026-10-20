@@ -9,6 +9,8 @@ ranks merged PRs with a follow-up push after review. At the last verified refres
 on 2026-10-20, Picfind had 25 pushed after review, 33 merged and
 reviewed, and 33 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
+The table records completed merges only. The PR carrying a ledger update is
+excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | PR                                                         | Outcome                                          | Merge and review evidence                                                                                                             |
 | ---------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |

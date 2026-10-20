@@ -320,7 +320,7 @@ export function HighlightsPage() {
                 <h1>{query.data.title}</h1>
                 <Link
                   className="button secondary"
-                  to={`/highlights/${eventId}/wall`}
+                  to={`/highlights/${encodeURIComponent(eventId!)}/wall`}
                 >
                   Open photo wall
                 </Link>

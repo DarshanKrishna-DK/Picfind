@@ -160,26 +160,24 @@ function WallView({ eventId }: { eventId: string }) {
   if (account.error) return <ErrorNote error={account.error} />;
   if (!account.data)
     return (
-      <section className="wrap standalone">
+      <main className="wrap standalone">
         <h1>Event photo wall</h1>
         <p>Sign in to view the published highlights.</p>
         <Link
           className="button"
-          to={`/sign-in?returnTo=${encodeURIComponent(`/highlights/${eventId}/wall`)}`}
+          to={`/sign-in?returnTo=${encodeURIComponent(`/highlights/${encodeURIComponent(eventId)}/wall`)}`}
         >
           Sign in to view photo wall
         </Link>
-      </section>
+      </main>
     );
   return (
-    <section
-      ref={stage}
-      className="highlight-wall"
-      aria-label="Event photo wall"
-    >
+    <main ref={stage} className="highlight-wall" aria-label="Event photo wall">
       <header>
         <h1>{ready ? query.data?.title : 'Event photo wall'}</h1>
-        <Link to={`/highlights/${eventId}`}>Back to highlights</Link>
+        <Link to={`/highlights/${encodeURIComponent(eventId)}`}>
+          Back to highlights
+        </Link>
       </header>
       <div className="highlight-wall-picture">
         {photo ? (
@@ -285,6 +283,6 @@ function WallView({ eventId }: { eventId: string }) {
           when you start it.
         </p>
       </footer>
-    </section>
+    </main>
   );
 }
