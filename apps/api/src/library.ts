@@ -18,6 +18,11 @@ import { discoverState, publicScan } from './discover-state.js';
 import { libraryCapacity } from './capacity.js';
 import { withAccountLock } from './locks.js';
 import { createPhotoIndexer, requiresUncertainRetry } from './face-indexing.js';
+import {
+  assertIndexProvider,
+  assertSearchModel,
+  searchIndexVersion,
+} from './face-index-compatibility.js';
 import { publicJob, type JobQueue } from './jobs.js';
 import {
   deletePhotoSafely,
@@ -1769,6 +1774,20 @@ export function createLibraryRouter(
             'SCAN_EXPIRED',
             'This scan no longer has available photos. Start a new scan with a current collection.',
           );
+        const indexedPhotos = (await store().list(user, 'photo')).filter(
+          (photo) =>
+            photo.ownerId === user &&
+            photo.scanId === scan.id &&
+            !photo.eventId &&
+            !photo.deletionStartedAt &&
+            photoAvailable(photo) &&
+            photo.indexState === 'ready',
+        );
+        const provider = options.faceProviderName ?? 'aws-rekognition';
+        if (scan.provider) assertIndexProvider(scan, provider);
+        const expectedModel = searchIndexVersion(indexedPhotos, provider);
+        if (scan.modelVersion)
+          assertSearchModel(expectedModel, scan.modelVersion);
         const processed = await processPhotoBytes(req.body as Buffer);
         const bytes = new Uint8Array(processed.data);
         try {
@@ -1778,8 +1797,19 @@ export function createLibraryRouter(
             bytes,
             consentRecordId: scan.id.replaceAll('-', ''),
           });
+          assertSearchModel(expectedModel, search.modelVersion);
           const photos = (await store().list(user, 'photo')).filter(
-            (photo) => photo.scanId === scan.id,
+            (photo) =>
+              photo.ownerId === user &&
+              photo.scanId === scan.id &&
+              !photo.eventId &&
+              !photo.deletionStartedAt &&
+              photoAvailable(photo) &&
+              photo.indexState === 'ready',
+          );
+          assertSearchModel(
+            expectedModel,
+            searchIndexVersion(photos, provider),
           );
           scan.matches = rankMatches(
             photos,
@@ -1889,7 +1919,12 @@ export function createLibraryRouter(
       if (!available(event))
         throw new ApiError(404, 'NOT_FOUND', 'This event is not available.');
       const photos = (await store().list(event.ownerId, 'photo')).filter(
-        (photo) => photo.eventId === event.id && photoAvailable(photo),
+        (photo) =>
+          photo.ownerId === event.ownerId &&
+          photo.eventId === event.id &&
+          !photo.scanId &&
+          !photo.deletionStartedAt &&
+          photoAvailable(photo),
       );
       const ready = photos.filter((photo) => photo.indexState === 'ready');
       if (!ready.length)
@@ -1898,6 +1933,10 @@ export function createLibraryRouter(
           'EVENT_NOT_READY',
           'This event is still preparing face search, or no faces were found in the photos.',
         );
+      const expectedModel = searchIndexVersion(
+        ready,
+        options.faceProviderName ?? 'aws-rekognition',
+      );
       const processed = await processPhotoBytes(req.body as Buffer);
       const bytes = new Uint8Array(processed.data);
       try {
@@ -1907,13 +1946,39 @@ export function createLibraryRouter(
           bytes,
           consentRecordId: `find${event.id.replaceAll('-', '')}`.slice(0, 64),
         });
+        assertSearchModel(expectedModel, search.modelVersion);
+        const latestEvent = await store().get(event.id);
+        if (
+          !available(latestEvent) ||
+          latestEvent.ownerId !== event.ownerId ||
+          latestEvent.passcodeHash !== event.passcodeHash
+        )
+          throw new ApiError(404, 'NOT_FOUND', 'This event is not available.');
+        const latestPhotos = (
+          await store().list(event.ownerId, 'photo')
+        ).filter(
+          (photo) =>
+            photo.ownerId === event.ownerId &&
+            photo.eventId === event.id &&
+            !photo.scanId &&
+            !photo.deletionStartedAt &&
+            photoAvailable(photo) &&
+            photo.indexState === 'ready',
+        );
+        assertSearchModel(
+          expectedModel,
+          searchIndexVersion(
+            latestPhotos,
+            options.faceProviderName ?? 'aws-rekognition',
+          ),
+        );
         const faceMap = Object.fromEntries(
-          ready
+          latestPhotos
             .filter((photo) => photo.externalImageId)
             .map((photo) => [photo.externalImageId!, photo.id]),
         );
         res.json({
-          matches: rankMatches(photos, faceMap, search.matches),
+          matches: rankMatches(latestPhotos, faceMap, search.matches),
           limitReached: search.limitReached,
           provider: options.faceProviderName ?? 'aws-rekognition',
         });

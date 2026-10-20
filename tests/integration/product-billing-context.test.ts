@@ -44,6 +44,8 @@ async function fixture() {
     filename: 'personal.jpg',
     bytes: bytes.length,
     indexState: 'ready',
+    provider: 'aws-rekognition',
+    modelVersion: 'synthetic',
     externalImageId: 'personal-face',
   };
   const eventPhoto: LibraryRecord = {
@@ -323,10 +325,14 @@ describe('server-derived product billing context', () => {
     async (context) => {
       const f = await fixture();
       const reserveUsage = vi.fn(async () => {});
-      const photo = {
+      const photo: LibraryRecord = {
         ...(context === 'personal' ? f.scanPhoto : f.eventPhoto),
         indexState: 'none' as const,
       };
+      delete photo.provider;
+      delete photo.modelVersion;
+      delete photo.externalImageId;
+      delete photo.faceIds;
       const scope =
         context === 'personal'
           ? { kind: 'scan' as const, id: f.scan.id.replaceAll('-', '') }

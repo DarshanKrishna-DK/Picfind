@@ -38,6 +38,8 @@ export function matchingReadiness(
       // An older provider's saved result is not evidence for this deployment.
       if (
         photo.provider !== 'aws-rekognition' ||
+        typeof photo.modelVersion !== 'string' ||
+        !photo.modelVersion.trim() ||
         (photo.indexState === 'ready' && !photo.externalImageId)
       ) {
         counts.needsReview++;
@@ -49,6 +51,11 @@ export function matchingReadiness(
       }
     } else if (photo.indexState === 'failed') counts.failed++;
     else counts.waiting++;
+  }
+  if (models.size > 1) {
+    counts.needsReview += counts.prepared + counts.noFaces;
+    counts.prepared = 0;
+    counts.noFaces = 0;
   }
   const gallery = event.deletionStartedAt
     ? 'deleting'

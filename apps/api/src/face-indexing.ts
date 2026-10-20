@@ -7,6 +7,7 @@ import { mapFaceError } from './face-errors.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { assertPhotoAvailable, photoAvailable } from './retention.js';
 import type { ProductScope } from './billing/product-scope.js';
+import { assertIndexProvider } from './face-index-compatibility.js';
 
 export interface IndexingDependencies {
   providerName: string;
@@ -48,6 +49,7 @@ export function createPhotoIndexer(dependencies: IndexingDependencies) {
         'This photo does not belong to the requested collection.',
       );
     assertPhotoAvailable(photo);
+    assertIndexProvider(photo, dependencies.providerName);
     if (requiresUncertainRetry(photo) && !authorization.retryUncertain)
       throw new ApiError(
         409,
