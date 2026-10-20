@@ -526,6 +526,21 @@ function EnquiryEditor({
   return (
     <section className="enquiry-editor" aria-label="Selected enquiry">
       <h3>Request from {baseline.name}</h3>
+      <Link
+        to={`/app/enquiries/${baseline.id}/handoff`}
+        onClick={(event) => {
+          if (
+            operation.busy ||
+            (dirty &&
+              !window.confirm(
+                'Discard unsaved follow-up changes and open the project handoff?',
+              ))
+          )
+            event.preventDefault();
+        }}
+      >
+        Create or recover project handoff
+      </Link>
       <dl>
         <dt>Reply email</dt>
         <dd>{baseline.email}</dd>

@@ -12,11 +12,16 @@ export function studioReturnPath(value: unknown): string {
     /^\/app\/projects\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\/(?:questionnaires|proposals)$/.test(
       path ?? '',
     );
+  const validHandoff =
+    /^\/app\/enquiries\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\/handoff$/.test(
+      path ?? '',
+    );
   if (
     extra !== undefined ||
     !path ||
     (!validGallery &&
       !validQuestionnaires &&
+      !validHandoff &&
       !/^\/app(?:\/(?:library|clients|enquiries|services|expenses|portfolio|credits|projects|work|schedule|duplicates|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?$/.test(
         path,
       ))

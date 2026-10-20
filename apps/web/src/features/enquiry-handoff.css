@@ -1,0 +1,31 @@
+.handoff-page {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.handoff-source,
+.handoff-draft,
+.handoff-recovery {
+  padding: 1.4rem;
+}
+.handoff-targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.handoff-targets article {
+  padding: 1rem;
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 0.7rem;
+}
+.handoff-draft fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .handoff-targets {
+    grid-template-columns: 1fr;
+  }
+}

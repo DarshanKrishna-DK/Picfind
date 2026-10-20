@@ -76,6 +76,7 @@ import { createStudioEnquiries } from './studio-enquiries.js';
 import { createStudioServices } from './studio-services.js';
 import { createStudioExpenses } from './studio-expenses.js';
 import { createStudioPortfolio } from './studio-portfolio.js';
+import { createEnquiryHandoff } from './enquiry-handoff.js';
 import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
@@ -112,6 +113,7 @@ export interface LibraryRecord {
   serviceCommandDigest?: string;
   studioExpense?: import('../../../packages/shared/src/studio-expenses.js').StudioExpense;
   studioPortfolio?: import('../../../packages/shared/src/studio-portfolio.js').StoredPortfolio;
+  enquiryHandoff?: import('../../../packages/shared/src/enquiry-handoff.js').EnquiryHandoff;
   expenseCommandDigest?: string;
   folderSyncId?: string;
   members?: import('../../../packages/shared/src/event-membership.js').EventMembership[];
@@ -742,6 +744,7 @@ export function createLibraryRouter(
   router.use(createStudioServices(store, owner));
   router.use(createStudioExpenses(store, owner));
   router.use(createStudioPortfolio(store, owner, sendPhoto));
+  router.use(createEnquiryHandoff(store, owner));
   router.use(createStudioProposals(auth, store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
