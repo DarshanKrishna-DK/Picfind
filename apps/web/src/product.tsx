@@ -14,6 +14,7 @@ import { NewEvent, EventDetail, SharedEvent } from './features/events';
 import { SettingsPage } from './features/account';
 import { BillingPage } from './features/billing';
 import { InvitedCollectionPage } from './features/collection-invitations';
+import { HighlightsPage } from './features/highlights';
 import './features/billing.css';
 
 export function Product() {
@@ -41,6 +42,7 @@ export function Product() {
         <Route path="terms" element={<Information page="terms" />} />
         <Route path="contact" element={<Information page="contact" />} />
         <Route path="e/:eventId" element={<SharedEvent />} />
+        <Route path="highlights/:eventId" element={<HighlightsPage />} />
         <Route
           path="proofing/:invitationId"
           element={<InvitedCollectionPage />}

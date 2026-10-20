@@ -13,6 +13,7 @@ describe('authentication return destinations', () => {
     '/app/billing?context=organizer',
     '/app/billing?context=personal',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa',
+    '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa',
   ])('retains product route %s', (value) =>
     expect(studioReturnPath(value)).toBe(value),
   );
@@ -36,6 +37,8 @@ describe('authentication return destinations', () => {
     '/app/settings?context=organizer',
     '/app/billing?context=organizer#outside',
     '/proofing/not-an-id',
+    '/highlights/not-an-id',
+    '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa?redirect=outside',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa?redirect=outside',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa/../app',
   ])('rejects hostile or unknown destination %s', (value) =>

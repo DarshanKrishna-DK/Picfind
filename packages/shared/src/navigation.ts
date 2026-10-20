@@ -5,7 +5,7 @@ export function studioReturnPath(value: unknown): string {
   if (
     extra !== undefined ||
     !path ||
-    !/^(?:\/app(?:\/(?:library|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?|\/(?:e|proofing)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$/.test(
+    !/^(?:\/app(?:\/(?:library|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?|\/(?:e|proofing|highlights)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$/.test(
       path,
     )
   )
