@@ -26,13 +26,17 @@ export function PhotoGrid({
   readOnly = false,
   preserveOrder = false,
   privateNotes = false,
+  photoUrl,
 }: {
   photos: Photo[];
   eventId?: string;
   readOnly?: boolean;
   preserveOrder?: boolean;
   privateNotes?: boolean;
+  photoUrl?: (photoId: string) => string;
 }) {
+  const source = (photoId: string) =>
+    photoUrl?.(photoId) ?? fileUrl(photoId, eventId);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState(preserveOrder ? 'source' : 'newest');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -104,7 +108,7 @@ export function PhotoGrid({
     setProgress({ completed: 0, total: items.length });
     try {
       const files = await collectPhotoFiles(
-        items.map((photo) => ({ ...photo, url: fileUrl(photo.id, eventId) })),
+        items.map((photo) => ({ ...photo, url: source(photo.id) })),
         request.signal,
         (completed, total) => {
           setProgress({ completed, total });
@@ -356,7 +360,7 @@ export function PhotoGrid({
                 <img
                   loading="lazy"
                   decoding="async"
-                  src={fileUrl(photo.id, eventId)}
+                  src={source(photo.id)}
                   alt={photo.filename}
                   width={photo.width || 800}
                   height={photo.height || 600}
@@ -375,7 +379,7 @@ export function PhotoGrid({
                 <a
                   className="icon-button"
                   aria-label={`Download ${photo.filename}`}
-                  href={`${fileUrl(photo.id, eventId)}?download=1`}
+                  href={`${source(photo.id)}?download=1`}
                   aria-disabled={busy}
                   onClick={(event) => {
                     event.preventDefault();
@@ -463,7 +467,7 @@ export function PhotoGrid({
                 touch.current = null;
               }}
             >
-              <img src={fileUrl(detail.id, eventId)} alt={detail.filename} />
+              <img src={source(detail.id)} alt={detail.filename} />
             </div>
             <div className="viewer-navigation">
               <button
@@ -508,7 +512,7 @@ export function PhotoGrid({
               </button>
               <a
                 className="button compact"
-                href={`${fileUrl(detail.id, eventId)}?download=1`}
+                href={`${source(detail.id)}?download=1`}
                 aria-disabled={busy}
                 onClick={(event) => {
                   event.preventDefault();

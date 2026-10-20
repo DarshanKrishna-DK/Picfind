@@ -28,6 +28,7 @@ import './organizer.css';
 import type { OrganizerEventPolicy } from '../../../../packages/shared/src/event-policy';
 import { ProofingCollections } from './proofing-collections';
 import { RawJpegPairing } from './raw-jpeg-pairing';
+import { HighlightsEditor } from './highlights';
 
 export function EventForm({
   existing,
@@ -416,6 +417,7 @@ export function EventDetail() {
           'photos',
           'collections',
           'editing',
+          'highlights',
           'sharing',
           'members',
           'settings',
@@ -457,6 +459,9 @@ export function EventDetail() {
       )}
       {tab === 'editing' && (
         <RawJpegPairing key={event.id} eventId={event.id} />
+      )}
+      {tab === 'highlights' && (
+        <HighlightsEditor key={event.id} eventId={event.id} photos={photos} />
       )}
       {tab === 'sharing' && (
         <div className="settings-panel">

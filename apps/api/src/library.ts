@@ -64,6 +64,7 @@ import { mapFaceError } from './face-errors.js';
 import { createEventTools } from './event-tools.js';
 import { createPhotoNotes } from './photo-notes.js';
 import { createPhotoAttribution } from './photo-attribution.js';
+import { createHighlights } from './highlights.js';
 import {
   ATTRIBUTION_HEADER,
   publishedAttribution,
@@ -141,6 +142,7 @@ export interface LibraryRecord {
     | 'proofing-comment'
     | 'proofing-submission'
     | 'retouching-task'
+    | 'event-highlights'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -174,6 +176,7 @@ export interface LibraryRecord {
   commentRemovedAt?: string;
   privatePhotoNote?: string;
   attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
+  highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
   submittedById?: string;
@@ -661,6 +664,7 @@ export function createLibraryRouter(
   router.use(createEventTools(auth, store, owner, saveEvent));
   router.use(createPhotoNotes(store, owner));
   router.use(createPhotoAttribution(store, owner));
+  router.use(createHighlights(store, owner, sendPhoto));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(
