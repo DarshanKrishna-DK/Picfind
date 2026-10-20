@@ -41,7 +41,7 @@ export function withAccountLocks<T>(
     allowed = new Set(options.allowDeleted ?? []);
   if (
     !ordered.length ||
-    ordered.length > 201 ||
+    ordered.length > 401 ||
     ordered.some((id) => typeof id !== 'string' || !id || id.length > 128) ||
     [...allowed].some((id) => !ordered.includes(id))
   )

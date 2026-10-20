@@ -3,13 +3,13 @@ export function studioReturnPath(value: unknown): string {
   if (typeof value !== 'string' || value.length > 1024) return '/app';
   const [path, search, extra] = value.split('?');
   const galleryPath =
-    /^\/(e|proofing|highlights|questionnaires)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}(\/wall)?$/.exec(
+    /^\/(e|proofing|highlights|questionnaires|proposals)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}(\/wall)?$/.exec(
       path ?? '',
     );
   const validGallery =
     galleryPath && (!galleryPath[2] || galleryPath[1] === 'highlights');
   const validQuestionnaires =
-    /^\/app\/projects\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\/questionnaires$/.test(
+    /^\/app\/projects\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}\/(?:questionnaires|proposals)$/.test(
       path ?? '',
     );
   if (

@@ -118,7 +118,7 @@ describe('ordered account locks for shared questionnaire lifecycle', () => {
       [''],
       [1] as unknown as string[],
       [{}] as unknown as string[],
-      Array.from({ length: 202 }, (_, i) => String(i)),
+      Array.from({ length: 402 }, (_, i) => String(i)),
     ])
       expect(() => withAccountLocks(ids, async () => undefined)).toThrow();
     expect(() =>
@@ -126,5 +126,12 @@ describe('ordered account locks for shared questionnaire lifecycle', () => {
         allowDeleted: ['someone-else'],
       }),
     ).toThrow();
+  });
+  it('supports one owner and both full catalogs of distinct form recipients', async () => {
+    const ids = Array.from({ length: 401 }, () => randomUUID());
+    expect(await withAccountLocks(ids, async () => 'locked')).toBe('locked');
+    expect(await withAccountLock(ids[400]!, async () => 'released')).toBe(
+      'released',
+    );
   });
 });

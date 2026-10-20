@@ -74,6 +74,7 @@ import { createStudioQuestionnaires } from './studio-questionnaires.js';
 import { createCreditPresets } from './credit-presets.js';
 import { createStudioEnquiries } from './studio-enquiries.js';
 import { createStudioServices } from './studio-services.js';
+import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
 import {
@@ -101,6 +102,10 @@ import {
 } from './retention.js';
 
 export interface LibraryRecord {
+  studioProposal?: import('../../../packages/shared/src/studio-proposals.js').StudioProposal;
+  proposalResponse?: import('../../../packages/shared/src/studio-proposals.js').ProposalResponse;
+  proposalCommandDigest?: string;
+  proposalRemovalStartedAt?: string;
   studioService?: import('../../../packages/shared/src/studio-services.js').StudioService;
   serviceCommandDigest?: string;
   folderSyncId?: string;
@@ -163,6 +168,8 @@ export interface LibraryRecord {
     | 'event-rsvp-response'
     | 'studio-client'
     | 'studio-service'
+    | 'studio-proposal'
+    | 'proposal-response'
     | 'studio-project'
     | 'studio-milestone'
     | 'studio-appointment'
@@ -726,6 +733,7 @@ export function createLibraryRouter(
   router.use(createCreditPresets(store, owner));
   router.use(createStudioEnquiries(store, owner));
   router.use(createStudioServices(store, owner));
+  router.use(createStudioProposals(auth, store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
   router.use(createEventReadiness(options, owner));

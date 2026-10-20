@@ -13,6 +13,7 @@ import { authenticate, sessionCookieName, trustedOrigin } from './security.js';
 import { markDeletedAccount, withAccountLock } from './locks.js';
 import type { LibraryStore } from './library.js';
 import { studioReturnPath } from '../../../packages/shared/src/navigation.js';
+import { removeProposalResponse } from './proposal-cleanup.js';
 import {
   removeQuestionnaireResponse,
   withQuestionnaireCleanupLocks,
@@ -299,6 +300,8 @@ export function createAccountRouter(
         for (const job of await store.list(user.id, 'job')) {
           if (job.purpose === 'studio-questionnaire')
             await removeQuestionnaireResponse(store, job, lockedAccounts);
+          if (job.purpose === 'studio-proposal')
+            await removeProposalResponse(store, job, lockedAccounts);
           await store.remove(job.id);
         }
         await lifecycle.afterCleanup?.(user.id);
