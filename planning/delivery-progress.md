@@ -9,6 +9,8 @@ ranks merged PRs with a follow-up push after review. At the last verified refres
 on 2026-10-21, Picfind had 41 pushed after review, 51 merged and
 reviewed, and 51 opened (rank 6). This is a
 timestamped observation, not a live counter or a promise of event credit.
+PR #53 merged after this observation. Its leaderboard credit has not yet been
+reverified because the subsequent leaderboard refresh was unavailable.
 The table records completed merges only. The PR carrying a ledger update is
 excluded until GitHub confirms its merge; it is recorded in a later update.
 
@@ -74,7 +76,9 @@ excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | [52](https://github.com/DarshanKrishna-DK/Picfind/pull/52) | Private service catalog and complete filtered CSV exports | Reviewed, exact export and price boundary evidence strengthened after review, re-reviewed with no actionable findings, all CI passed, merged |
 
-GitHub currently proves fifty-one merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51 and #52 were visibly
+| [53](https://github.com/DarshanKrishna-DK/Picfind/pull/53) | Immutable client package proposals and scoped preferences | Reviewed, complete package snapshots and damaged-response recovery improved after review, all 15 observations answered, re-reviewed with no actionable findings, all CI passed, merged |
+
+GitHub currently proves fifty-two merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51 and #52 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 

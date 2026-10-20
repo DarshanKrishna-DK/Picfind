@@ -74,6 +74,7 @@ import { createStudioQuestionnaires } from './studio-questionnaires.js';
 import { createCreditPresets } from './credit-presets.js';
 import { createStudioEnquiries } from './studio-enquiries.js';
 import { createStudioServices } from './studio-services.js';
+import { createStudioExpenses } from './studio-expenses.js';
 import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
@@ -108,6 +109,8 @@ export interface LibraryRecord {
   proposalRemovalStartedAt?: string;
   studioService?: import('../../../packages/shared/src/studio-services.js').StudioService;
   serviceCommandDigest?: string;
+  studioExpense?: import('../../../packages/shared/src/studio-expenses.js').StudioExpense;
+  expenseCommandDigest?: string;
   folderSyncId?: string;
   members?: import('../../../packages/shared/src/event-membership.js').EventMembership[];
   membershipGrantId?: string;
@@ -168,6 +171,7 @@ export interface LibraryRecord {
     | 'event-rsvp-response'
     | 'studio-client'
     | 'studio-service'
+    | 'studio-expense'
     | 'studio-proposal'
     | 'proposal-response'
     | 'studio-project'
@@ -733,6 +737,7 @@ export function createLibraryRouter(
   router.use(createCreditPresets(store, owner));
   router.use(createStudioEnquiries(store, owner));
   router.use(createStudioServices(store, owner));
+  router.use(createStudioExpenses(store, owner));
   router.use(createStudioProposals(auth, store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));

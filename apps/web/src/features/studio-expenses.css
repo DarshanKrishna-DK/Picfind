@@ -1,0 +1,80 @@
+.expense-page {
+  display: grid;
+  gap: 1.1rem;
+}
+.expense-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.expense-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.expense-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.expense-totals article {
+  padding: 1.2rem;
+}
+.expense-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1.2fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.expense-list,
+.expense-form,
+.expense-form fieldset {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.expense-form {
+  padding: 1.5rem;
+}
+.expense-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.expense-row {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1.1rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.expense-row:hover {
+  border-color: var(--accent);
+}
+.expense-page input,
+.expense-page select,
+.expense-page textarea {
+  width: 100%;
+  min-width: 0;
+}
+.expense-page textarea {
+  min-height: 110px;
+}
+.expense-money {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+}
+.expense-page [role='alert'] {
+  padding: 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+}
+@media (max-width: 760px) {
+  .expense-layout {
+    grid-template-columns: 1fr;
+  }
+}
