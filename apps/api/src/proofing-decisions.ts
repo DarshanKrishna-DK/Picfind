@@ -203,7 +203,13 @@ export function createProofingDecisions(dependencies: {
     async (req, res) => {
       const actor = await actorOf(req);
       const { collection } = await ownerCollection(req, actor);
-      const row = await store().get(invitationId(req));
+      const row = await store()
+        .get(invitationId(req))
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 404)
+            throw missing();
+          throw error;
+        });
       if (
         row.kind !== 'job' ||
         row.purpose !== 'collection-invitation' ||

@@ -42,6 +42,7 @@ export function ClientCollectionReview({
   const [message, setMessage] = useState('');
   const [filter, setFilter] = useState('all');
   const pending = useRef<AbortController | null>(null);
+  const operation = useRef(false);
   useEffect(() => () => pending.current?.abort(), []);
   const query = useQuery({
     queryKey: key,
@@ -52,7 +53,17 @@ export function ClientCollectionReview({
     refetchOnWindowFocus: !busy,
   });
   async function save(photoId: string, status: ProofingDecision | null) {
-    if (busy || conflict || !query.data || query.error) return;
+    if (
+      operation.current ||
+      busy ||
+      conflict ||
+      query.isFetching ||
+      !query.data ||
+      query.error
+    )
+      return;
+    operation.current = true;
+    const expectedVersion = query.data.version;
     setBusy(true);
     setError(null);
     setMessage('');
@@ -63,7 +74,7 @@ export function ClientCollectionReview({
       const saved = await api<ProofingDecisions>(root, {
         method: 'PATCH',
         signal: controller.signal,
-        body: JSON.stringify({ photoId, status, version: query.data.version }),
+        body: JSON.stringify({ photoId, status, version: expectedVersion }),
       });
       if (!controller.signal.aborted) {
         client.setQueryData(key, saved);
@@ -78,21 +89,32 @@ export function ClientCollectionReview({
           failure instanceof HttpError &&
           [401, 403, 404].includes(failure.status)
         )
-          void query.refetch();
+          await query.refetch();
       }
     } finally {
       if (!controller.signal.aborted) setBusy(false);
+      operation.current = false;
       if (pending.current === controller) pending.current = null;
     }
   }
   async function refresh() {
-    const result = await query.refetch();
-    if (!result.error) {
-      setConflict(false);
-      setError(null);
-      setMessage('Saved decisions refreshed.');
+    if (operation.current || query.isFetching) return;
+    operation.current = true;
+    setBusy(true);
+    try {
+      const result = await query.refetch();
+      if (!result.error) {
+        setConflict(false);
+        setError(null);
+        setMessage('Saved decisions refreshed.');
+      }
+    } finally {
+      operation.current = false;
+      setBusy(false);
     }
   }
+  const accessDenied =
+    error instanceof HttpError && [401, 403, 404].includes(error.status);
   const saved = new Map(
     query.data?.decisions.map((item) => [item.photoId, item.status]) ?? [],
   );
@@ -123,6 +145,7 @@ export function ClientCollectionReview({
         <Loading />
       ) : (
         !query.error &&
+        !accessDenied &&
         query.data && (
           <>
             <p>
@@ -183,7 +206,7 @@ export function ClientCollectionReview({
                       Decision for {photo.filename}
                       <select
                         value={saved.get(photo.id) ?? ''}
-                        disabled={busy || conflict}
+                        disabled={busy || conflict || query.isFetching}
                         onChange={(event) =>
                           void save(
                             photo.id,
@@ -222,7 +245,7 @@ export function OwnerClientDecisions({
 }) {
   const [open, setOpen] = useState(false);
   const query = useQuery({
-    queryKey: ['owner-client-decisions', invitationId],
+    queryKey: ['owner-client-decisions', root, invitationId],
     queryFn: ({ signal }) =>
       api<ProofingDecisions>(`${root}/${invitationId}/decisions`, { signal }),
     enabled: open,

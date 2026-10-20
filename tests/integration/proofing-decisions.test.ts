@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { invitationFixture, origin } from '../fixtures/collection-invitations';
 import type { LibraryRecord } from '../../apps/api/src/library';
@@ -27,6 +28,50 @@ async function fixture() {
 }
 
 describe('saved client proofing decisions', () => {
+  it('clears an untouched or last choice with a positive version and remains editable after reload', async () => {
+    const f = await fixture();
+    const photoId = f.photos[0]!.id;
+    expect((await f.save(photoId, null, 0).expect(200)).body).toMatchObject({
+      version: 1,
+      decisions: [],
+    });
+    await f.read(f.root).expect(200);
+    await f.save(photoId, 'favorite', 1).expect(200);
+    expect((await f.save(photoId, null, 2).expect(200)).body).toMatchObject({
+      version: 3,
+      decisions: [],
+    });
+    expect((await f.read(f.root).expect(200)).body.version).toBe(3);
+    await f.save(photoId, 'maybe', 3).expect(200);
+  });
+  it('denies both owner and client views when a collection points at a different event', async () => {
+    const f = await fixture();
+    f.collection.eventId = randomUUID();
+    await f.read(f.root).expect(404);
+    await f.read(f.ownerRoot, 'owner').expect(404);
+    await f.save(f.photos[0]!.id, 'favorite', 0).expect(404);
+    expect(f.record().proofingDecisions).toBeUndefined();
+  });
+  it('normalizes absent and wrong-kind invitation responses without swallowing store failures', async () => {
+    const f = await fixture();
+    const prefix = f.ownerRoot.replace(`${f.invitation.id}/decisions`, '');
+    const absent = await f
+      .read(`${prefix}${randomUUID()}/decisions`, 'owner')
+      .expect(404);
+    const wrongKind = await f
+      .read(`${prefix}${f.photos[0]!.id}/decisions`, 'owner')
+      .expect(404);
+    expect(absent.body.error).toMatchObject({
+      code: wrongKind.body.error.code,
+      message: wrongKind.body.error.message,
+    });
+    const get = f.store.get;
+    f.store.get = async (id) => {
+      if (id === f.invitation.id) throw new Error('Storage outage');
+      return get(id);
+    };
+    await f.read(f.ownerRoot, 'owner').expect(500);
+  });
   it('persists all choices, reloads, clears and shows the owner an explicit private projection', async () => {
     const f = await fixture();
     expect((await f.read(f.root).expect(200)).body).toEqual({

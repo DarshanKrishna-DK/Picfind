@@ -254,6 +254,8 @@ test('collection invitations persist, survive client reload and stop access afte
   let signedIn = true;
   let recipient = false;
   let conflict = false;
+  let holdDecisionSave = false;
+  let releaseDecisionSave: (() => void) | undefined;
   let decisions: ProofingDecisions = {
     version: 0,
     updatedAt: null,
@@ -318,67 +320,76 @@ test('collection invitations persist, survive client reload and stop access afte
       json: { invitations: invitation ? [invitation] : [] },
     });
   });
-  await page.route(`**/api/proofing-invitations/${invitationId}**`, (route) => {
-    if (!recipient || invitation?.revokedAt)
-      return route.fulfill({
-        status: 404,
-        json: { error: { message: 'Invitation unavailable.' } },
-      });
-    if (new URL(route.request().url()).pathname.endsWith('/decisions')) {
-      if (route.request().method() === 'PATCH') {
-        const input = route.request().postDataJSON();
-        if (conflict) {
-          conflict = false;
-          decisions = {
-            ...decisions,
-            version: decisions.version + 1,
-            decisions: [
-              {
-                photoId: photos[0]!.id,
-                filename: photos[0]!.filename,
-                status: 'maybe',
-              },
-            ],
-          };
-          return route.fulfill({
-            status: 409,
-            json: {
-              error: {
-                message:
-                  'Choices changed in another tab. Refresh saved decisions.',
-              },
-            },
-          });
-        }
-        expect(input.version).toBe(decisions.version);
-        decisions = {
-          version: decisions.version + 1,
-          updatedAt: new Date().toISOString(),
-          unavailableCount: 0,
-          decisions: input.status
-            ? [
+  await page.route(
+    `**/api/proofing-invitations/${invitationId}**`,
+    async (route) => {
+      if (!recipient || invitation?.revokedAt)
+        return route.fulfill({
+          status: 404,
+          json: { error: { message: 'Invitation unavailable.' } },
+        });
+      if (new URL(route.request().url()).pathname.endsWith('/decisions')) {
+        if (route.request().method() === 'PATCH') {
+          const input = route.request().postDataJSON();
+          if (holdDecisionSave) {
+            holdDecisionSave = false;
+            await new Promise<void>((resolve) => {
+              releaseDecisionSave = resolve;
+            });
+          }
+          if (conflict) {
+            conflict = false;
+            decisions = {
+              ...decisions,
+              version: decisions.version + 1,
+              decisions: [
                 {
-                  photoId: input.photoId,
+                  photoId: photos[0]!.id,
                   filename: photos[0]!.filename,
-                  status: input.status,
+                  status: 'maybe',
                 },
-              ]
-            : [],
-        };
+              ],
+            };
+            return route.fulfill({
+              status: 409,
+              json: {
+                error: {
+                  message:
+                    'Choices changed in another tab. Refresh saved decisions.',
+                },
+              },
+            });
+          }
+          expect(input.version).toBe(decisions.version);
+          decisions = {
+            version: decisions.version + 1,
+            updatedAt: new Date().toISOString(),
+            unavailableCount: 0,
+            decisions: input.status
+              ? [
+                  {
+                    photoId: input.photoId,
+                    filename: photos[0]!.filename,
+                    status: input.status,
+                  },
+                ]
+              : [],
+          };
+        }
+        return route.fulfill({ json: decisions });
       }
-      return route.fulfill({ json: decisions });
-    }
-    if (new URL(route.request().url()).pathname.includes('/photos/'))
-      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
-    return route.fulfill({
-      json: {
-        title: 'Album round',
-        eventTitle: 'Garden wedding',
-        expiresAt,
-        photos: [photos[0]],
-      },
-    });
-  });
+      if (new URL(route.request().url()).pathname.includes('/photos/'))
+        return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+      return route.fulfill({
+        json: {
+          title: 'Album round',
+          eventTitle: 'Garden wedding',
+          expiresAt,
+          photos: [photos[0]],
+        },
+      });
+    },
+  );
   await page.goto(`/app/events/${eventId}`);
   await page.getByRole('tab', { name: 'Collections', exact: true }).click();
   await page
@@ -427,7 +438,14 @@ test('collection invitations persist, survive client reload and stop access afte
   ).toHaveCount(0);
   const review = page.getByRole('region', { name: 'Your photo decisions' });
   const choice = review.getByLabel(`Decision for ${photos[0]!.filename}`);
+  holdDecisionSave = true;
   await choice.selectOption('favorite');
+  await expect.poll(() => Boolean(releaseDecisionSave)).toBe(true);
+  await expect(choice).toBeDisabled();
+  await expect(
+    review.getByRole('button', { name: 'Refresh saved decisions' }),
+  ).toBeDisabled();
+  releaseDecisionSave!();
   await expect(choice).toHaveValue('favorite');
   await expect(review).toContainText('1 favorites');
   await page.reload();
@@ -456,6 +474,13 @@ test('collection invitations persist, survive client reload and stop access afte
   await choice.selectOption('favorite');
   await expect(choice).toHaveValue('favorite');
   invitation!.revokedAt = new Date().toISOString();
+  await choice.selectOption('rejected');
+  await expect(
+    review.getByRole('img', { name: photos[0]!.filename }),
+  ).toHaveCount(0);
+  await expect(
+    review.getByText('Invitation unavailable.', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Refresh collection', exact: true })
     .click();
