@@ -120,6 +120,8 @@ describe('portable printable QR packs', () => {
   it.each([
     'http://picfind.example.test',
     'http://192.168.1.2',
+    'http://127.300.1.1',
+    'https://127.999.999.999',
     'javascript:alert(1)',
     'https://user:password@example.test',
     'https://example.test/path',

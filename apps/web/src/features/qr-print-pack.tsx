@@ -150,7 +150,7 @@ function PrintPackEditor({
         localPreview: pack.localPreview,
       });
       setMessage(
-        'Print pack downloaded. Open print.html from the ZIP to print or save as PDF.',
+        'Print pack download started. Once saved, open print.html from the ZIP to print or save as PDF.',
       );
     } catch (failure) {
       if (mounted.current) {

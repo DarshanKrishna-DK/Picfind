@@ -66,7 +66,7 @@ export async function prepareQrPack(
     3_000_000
   )
     throw new Error(
-      'The print pack is too large. Shorten the heading or instruction.',
+      'The generated print pack exceeds the 3 MB limit. No download was started.',
     );
   return { files, png, ...destination };
 }

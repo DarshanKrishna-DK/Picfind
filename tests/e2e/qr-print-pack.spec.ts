@@ -125,7 +125,12 @@ async function decodedPng(bytes: Uint8Array) {
     .toBuffer({ resolveWithObject: true });
   return jsQR(new Uint8ClampedArray(data), info.width, info.height)?.data;
 }
-async function inspectPrint(page: Page, html: string, copies: number) {
+async function inspectPrint(
+  page: Page,
+  html: string,
+  copies: number,
+  expectedTarget: string,
+) {
   await page.setViewportSize({ width: 794, height: 1123 });
   await page.emulateMedia({ media: 'print' });
   await page.setContent(html);
@@ -135,6 +140,22 @@ async function inspectPrint(page: Page, html: string, copies: number) {
     .evaluateAll(async (images) =>
       Promise.all(images.map((image) => (image as HTMLImageElement).decode())),
     );
+  const images = await page.locator('article img').evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      source: (node as HTMLImageElement).src,
+      width: (node as HTMLImageElement).naturalWidth,
+    })),
+  );
+  expect(images).toHaveLength(copies);
+  for (const image of images) {
+    expect(image.width).toBe(600);
+    expect(image.source).toMatch(/^data:image\/png;base64,/);
+    expect(
+      await decodedPng(Buffer.from(image.source.split(',')[1]!, 'base64')),
+    ).toBe(expectedTarget);
+  }
+  for (const link of await page.locator('article a').all())
+    await expect(link).toHaveAttribute('href', expectedTarget);
   const size = await page.locator('.sheet').evaluate((sheet) => ({
     height: sheet.getBoundingClientRect().height,
     width: sheet.getBoundingClientRect().width,
@@ -170,7 +191,7 @@ test('downloads a decoded full-gallery print pack after two fresh access checks'
     ),
   ).toBeVisible();
   const printPage = await context.newPage();
-  await inspectPrint(printPage, html, 2);
+  await inspectPrint(printPage, html, 2, target);
   await printPage.close();
 });
 test('prepares only the published highlights destination for a private full event', async ({
@@ -222,6 +243,7 @@ test('fits four maximum-text cards on A4 and keeps hostile headings inert', asyn
     page,
     new TextDecoder().decode(pack.files['print.html']),
     4,
+    pack.target,
   );
   await page.screenshot({
     path: testInfo.outputPath('four-card-print.png'),
@@ -242,6 +264,7 @@ test('fits four maximum-text cards on A4 and keeps hostile headings inert', asyn
     page,
     new TextDecoder().decode(hostile.files['print.html']),
     1,
+    hostile.target,
   );
   await expect(page.getByRole('heading')).toHaveText(
     '<img src=x onerror=alert(1)>',
@@ -303,4 +326,28 @@ test('cancels pending access validation without downloading a pack', async ({
     page.getByRole('button', { name: 'Generate print pack' }),
   ).toBeEnabled();
   expect(state.downloads).toBe(0);
+  state.hold = false;
+  await downloadPack(page);
+  expect(state.downloads).toBe(1);
+});
+
+test('keeps selected card counts in the generated pack and accurately reports download initiation', async ({
+  page,
+}) => {
+  await fixture(page);
+  const copies = page.getByLabel('Cards per A4 sheet');
+  await expect(copies).toHaveValue('2');
+  for (const count of ['1', '4']) {
+    await copies.selectOption(count);
+    await expect(copies).toHaveValue(count);
+    const files = await downloadPack(page);
+    expect(
+      new TextDecoder().decode(files['print.html']).match(/<article>/g),
+    ).toHaveLength(Number(count));
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Print pack download started.' }),
+    ).toBeVisible();
+  }
 });
