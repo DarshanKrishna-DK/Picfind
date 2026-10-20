@@ -1,0 +1,58 @@
+.service-catalog {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.service-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.7rem;
+  margin-block: 1rem;
+}
+.service-controls label {
+  display: grid;
+  flex: 1 1 190px;
+  min-width: 0;
+  gap: 0.4rem;
+}
+.service-form {
+  display: grid;
+  gap: 1rem;
+}
+.service-form label:not(.service-checkbox) {
+  display: grid;
+  gap: 0.4rem;
+}
+.service-form input:not([type='checkbox']),
+.service-form textarea,
+.service-form select,
+.service-controls input,
+.service-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 8px;
+  background: var(--surface, white);
+  color: inherit;
+  font: inherit;
+}
+.service-form textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.service-checkbox {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+.service-list {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.service-list article {
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 12px;
+  padding: 1rem;
+}
