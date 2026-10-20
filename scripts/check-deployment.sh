@@ -16,13 +16,13 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -keyout "$temporary/key.pem" -out "$temporary/certificate.pem" \
   >/dev/null 2>&1
 # Validate the temporary copy without privileged or public listeners.
+# Fail closed if a listener changes to an unsupported form.
+node "$root/scripts/validation-listeners.ts" "$root/infra/picfind.nginx.conf" |
 sed \
-  -e 's/listen 80;/listen 127.0.0.1:18080;/' \
-  -e 's/listen 443 ssl;/listen 127.0.0.1:18443 ssl;/' \
   -e "s|/etc/letsencrypt/live/example.invalid/fullchain.pem|$temporary/certificate.pem|g" \
   -e "s|/etc/letsencrypt/live/example.invalid/privkey.pem|$temporary/key.pem|g" \
   -e "s|/opt/picfind/current/apps/web/dist|$root/apps/web/dist|g" \
-  "$root/infra/picfind.nginx.conf" > "$temporary/site.conf"
+  > "$temporary/site.conf"
 cat > "$temporary/nginx.conf" <<EOF
 pid $temporary/nginx.pid;
 error_log stderr;
