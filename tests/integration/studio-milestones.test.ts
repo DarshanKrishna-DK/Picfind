@@ -149,6 +149,48 @@ function fixture() {
   };
 }
 describe('private dated studio milestones', () => {
+  it('rejects exhausted versions at the API boundary before any increment', async () => {
+    const f = fixture(),
+      id = f.seed();
+    f.records.get(id)!.studioMilestone!.version = Number.MAX_SAFE_INTEGER;
+    await f.save(id, {}, Number.MAX_SAFE_INTEGER).expect(400);
+    await f
+      .save(id, { title: 'Changed' }, Number.MAX_SAFE_INTEGER - 1)
+      .expect(409);
+    expect(f.store.put).not.toHaveBeenCalled();
+    await f.remove(id, Number.MAX_SAFE_INTEGER).expect(204);
+  });
+  it('does not confuse identical new edits with retries of an older version', async () => {
+    const f = fixture(),
+      id = randomUUID();
+    await f.save(id).expect(200);
+    const next = await f.save(id, {}, 1).expect(200);
+    expect(next.body.milestone.version).toBe(2);
+    const replay = await f.save(id, {}, 1).expect(200);
+    expect(replay.body).toEqual(next.body);
+    expect(f.store.put).toHaveBeenCalledTimes(2);
+    await f.save(id, {}, 0).expect(409);
+  });
+  it('removes corrupt child content only within a confirmed owned project removal', async () => {
+    const f = fixture(),
+      child = f.seed(),
+      unrelated = f.seed(randomUUID(), randomUUID());
+    f.records.get(child)!.studioMilestone!.title = '';
+    await f.read().expect(503);
+    f.archive();
+    await f.removeProject().expect(204);
+    expect(f.records.has(child)).toBe(false);
+    expect(f.records.has(unrelated)).toBe(true);
+  });
+  it('counts corrupt records toward storage capacity rather than granting extra slots', async () => {
+    const f = fixture();
+    for (let i = 0; i < 300; i++) {
+      const id = f.seed(randomUUID(), randomUUID());
+      delete f.records.get(id)!.studioMilestone;
+    }
+    await f.save().expect(409);
+    expect(f.store.put).not.toHaveBeenCalled();
+  });
   it('persists with a current owner project projection and no command digest', async () => {
     const f = fixture(),
       id = randomUUID();

@@ -18,6 +18,42 @@ const fields = {
   status: 'open' as const,
 };
 describe('calendar deadlines and milestone lifecycle', () => {
+  it('preserves chronological timestamps during clock rollback and accepts equivalent ISO precision', () => {
+    const id = randomUUID();
+    const first = advanceMilestone(
+      null,
+      id,
+      { ...fields, status: 'completed' },
+      '2026-03-02T00:00:00Z',
+    );
+    const changed = advanceMilestone(
+      first,
+      id,
+      { ...fields, status: 'completed', title: 'Revised' },
+      '2026-03-01T23:59:00Z',
+    );
+    expect(changed.updatedAt).toBe(first.updatedAt);
+    expect(changed.completedAt).toBe(first.completedAt);
+    expect(changed.version).toBe(2);
+    const reopened = advanceMilestone(
+      changed,
+      id,
+      fields,
+      '2026-03-01T23:59:30Z',
+    );
+    const finished = advanceMilestone(
+      reopened,
+      id,
+      { ...fields, status: 'completed' },
+      '2026-03-01T23:59:40Z',
+    );
+    expect(finished.completedAt).toBe(first.updatedAt);
+    expect(finished.version).toBe(4);
+    expect(
+      savedMilestone.safeParse({ ...first, createdAt: '2026-03-02T00:00:00Z' })
+        .success,
+    ).toBe(true);
+  });
   it('keeps the whole spring DST calendar day due and crosses midnight correctly', () => {
     const milestone = advanceMilestone(
       null,

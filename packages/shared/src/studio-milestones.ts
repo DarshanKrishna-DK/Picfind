@@ -46,12 +46,12 @@ export const savedMilestone = milestoneFields
   .strict()
   .refine(
     (value) =>
-      value.createdAt <= value.updatedAt &&
+      Date.parse(value.createdAt) <= Date.parse(value.updatedAt) &&
       (value.status === 'open'
         ? value.completedAt === null
         : value.completedAt !== null &&
-          value.completedAt >= value.createdAt &&
-          value.completedAt <= value.updatedAt),
+          Date.parse(value.completedAt) >= Date.parse(value.createdAt) &&
+          Date.parse(value.completedAt) <= Date.parse(value.updatedAt)),
   );
 export type SavedMilestone = z.infer<typeof savedMilestone>;
 const projectSummary = z
@@ -117,13 +117,17 @@ export function advanceMilestone(
   fields: MilestoneFields,
   now: string,
 ): SavedMilestone {
+  // Version is the ordering authority; wall-clock rollback must not reverse history.
+  const timestamp = new Date(
+    Math.max(Date.parse(now), Date.parse(current?.updatedAt ?? now)),
+  ).toISOString();
   return savedMilestone.parse({
     ...fields,
     id,
     version: (current?.version ?? 0) + 1,
-    createdAt: current?.createdAt ?? now,
-    updatedAt: now,
+    createdAt: current?.createdAt ?? timestamp,
+    updatedAt: timestamp,
     completedAt:
-      fields.status === 'open' ? null : (current?.completedAt ?? now),
+      fields.status === 'open' ? null : (current?.completedAt ?? timestamp),
   });
 }
