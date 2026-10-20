@@ -19,8 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-      - name: Install pinned encrypted-index dependencies
+      - name: Download and verify pinned encrypted-index wheels
         run: |
-          python -m pip install --only-binary=:all: -r scripts/face-runtime/requirements-index.txt
+          python -m pip install --force-reinstall --require-hashes --only-binary=:all: -r scripts/face-runtime/requirements-index.lock
       - name: Test artifact integrity and resource bounds without model downloads
         run: python -m unittest discover -s scripts/face-runtime -p "test_*.py"

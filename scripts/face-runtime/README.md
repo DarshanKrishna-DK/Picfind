@@ -181,7 +181,18 @@ OpenCV is unnecessary for index operations. Install once in the evaluation
 environment:
 
 ```powershell
-uv pip install --python artifacts/face-eval-venv/Scripts/python.exe --only-binary :all: -r scripts/face-runtime/requirements-index.txt
+uv pip install --python artifacts/face-eval-venv/Scripts/python.exe --require-hashes --only-binary :all: -r scripts/face-runtime/requirements-index.lock
+```
+
+The input version pins live in `requirements-index.txt`; the committed lock
+also pins SHA-256 hashes for the resolved packages. CI reinstalls and verifies
+those wheels rather than trusting a preinstalled copy. Dependency installation
+uses the network, while the tests use synthetic data without model downloads.
+An unavailable package registry fails the check; it does not bypass verification.
+Regenerate the lock deliberately when reviewing dependency updates:
+
+```powershell
+uv pip compile scripts/face-runtime/requirements-index.txt --python artifacts/face-eval-venv/Scripts/python.exe --generate-hashes --output-file scripts/face-runtime/requirements-index.lock
 ```
 
 The index uses [PyCA authenticated encryption](https://cryptography.io/en/latest/hazmat/primitives/aead/)
