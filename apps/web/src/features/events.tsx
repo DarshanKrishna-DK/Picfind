@@ -32,6 +32,7 @@ import { HighlightsEditor } from './highlights';
 import { QrPrintPack } from './qr-print-pack';
 import { EventDayReadiness } from './event-readiness';
 import { EventCoverage } from './event-coverage';
+import { EventInvitationEditor } from './event-invitation-page';
 
 export function EventForm({
   existing,
@@ -364,14 +365,14 @@ export function EventDetail() {
           aria-label="Event setup"
         >
           <div>
-            <h2>Your event link is ready.</h2>
+            <h2>Your gallery link is ready.</h2>
             <p>
-              Add photographs to this event and share its invitation. Guests
+              Add photographs to this event and share its gallery link. Guests
               sign in, but do not pay for event access.
             </p>
           </div>
           <label>
-            Event invitation link
+            Event gallery link
             <input readOnly value={url} onFocus={(e) => e.target.select()} />
           </label>
           <div className="actions">
@@ -382,16 +383,16 @@ export function EventDetail() {
                   .writeText(url)
                   .then(() => setMessage('Link copied.'))
                   .catch(() =>
-                    setMessage('Select and copy the invitation link above.'),
+                    setMessage('Select and copy the gallery link above.'),
                   )
               }
             >
               <Copy size={16} />
-              Copy invitation link
+              Copy gallery link
             </button>
             <button className="button secondary" onClick={() => void qr()}>
               <ArrowDownToLine size={16} />
-              Download invitation QR
+              Download gallery QR
             </button>
             <button
               className="button"
@@ -409,8 +410,8 @@ export function EventDetail() {
           </div>
           <p className="field-help">
             {event.visibility === 'private'
-              ? 'This gallery is still private. Open Sharing to enable your invitation, even before uploading photos.'
-              : 'Invitation access is enabled. Keep this link private to your guests.'}
+              ? 'This gallery is still private. Open Sharing to enable gallery access, even before uploading photos.'
+              : 'Gallery access is enabled. Keep this link private to your guests.'}
           </p>
           <p role="status">{message}</p>
         </section>
@@ -420,6 +421,7 @@ export function EventDetail() {
           'photos',
           'readiness',
           'coverage',
+          'invitation',
           'collections',
           'editing',
           'highlights',
@@ -453,6 +455,9 @@ export function EventDetail() {
       )}
       {tab === 'coverage' && (
         <EventCoverage key={event.id} eventId={event.id} photos={photos} />
+      )}
+      {tab === 'invitation' && (
+        <EventInvitationEditor key={event.id} eventId={event.id} />
       )}
       {tab === 'photos' && (
         <>
