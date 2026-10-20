@@ -6,22 +6,27 @@ import { ErrorNote } from '../components/ui';
 /** Server-relative elapsed time avoids trusting the guest device wall clock. */
 export function useSelectionClosed(window?: SelectionWindow) {
   const [expiredAt, setExpiredAt] = useState<string | null>(null);
+  const closesAt = window?.closesAt;
+  const serverNow = window?.serverNow;
+  const closed = window?.closed;
+  const remaining = closesAt
+    ? Date.parse(closesAt) - Date.parse(serverNow ?? '')
+    : null;
+  const invalid = Boolean(
+    window?.invalid || (remaining !== null && !Number.isFinite(remaining)),
+  );
   useEffect(() => {
-    if (!window?.closesAt || window.closed) return;
-    const remaining =
-      Date.parse(window.closesAt) - Date.parse(window.serverNow);
+    if (!closesAt || closed || invalid || remaining === null) return;
     const started = performance.now();
     const timer = setInterval(() => {
       if (performance.now() - started >= remaining) {
-        setExpiredAt(window.closesAt);
+        setExpiredAt(closesAt);
         clearInterval(timer);
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [window]);
-  return Boolean(
-    window?.closed || (window?.closesAt && window.closesAt === expiredAt),
-  );
+  }, [closesAt, closed, invalid, remaining, serverNow]);
+  return Boolean(closed || invalid || (closesAt && closesAt === expiredAt));
 }
 
 export function SelectionWindowNote({

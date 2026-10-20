@@ -563,6 +563,29 @@ test('compare requests, filter shared favorites and export current availability'
   expect(state.unexpectedWrites).toEqual([]);
 });
 
+test('an invalid stored deadline can be reopened by the owner', async ({
+  page,
+}) => {
+  const { eventId, state } = await fixture(page);
+  state.selectionWindow = {
+    closesAt: null,
+    serverNow: new Date().toISOString(),
+    closed: true,
+    invalid: true,
+  };
+  await page.goto(`/app/events/${eventId}`);
+  await page
+    .getByText('Favorites submission deadline', { exact: true })
+    .click();
+  await expect(page.getByText(/The stored deadline is invalid/)).toBeVisible();
+  await page.getByRole('button', { name: 'Reopen without deadline' }).click();
+  await expect(
+    page.getByText('Favorites submissions are open.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/The stored deadline is invalid/)).toHaveCount(0);
+  expect(state.selectionWindow.closed).toBe(false);
+});
+
 test('comparison export fails when owner access is revoked', async ({
   page,
 }) => {

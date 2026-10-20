@@ -24,6 +24,9 @@ The public access projection and owner insights return the deadline, closed/inva
 state and server time. The guest interface uses elapsed monotonic time from that
 snapshot to close an already-open form, independent of the device wall clock.
 Network delay can make that indication late; the server remains authoritative.
+A refetch of the same snapshot preserves elapsed time. Unusable clock snapshots
+close the form without starting a timer. Stored deadlines use canonical UTC ISO
+timestamps with millisecond precision, as written by every schedule/close action.
 A closed response refreshes the policy, and guests can refresh after reopening.
 Selected photo IDs survive a close/reopen within the mounted gallery view.
 

@@ -466,7 +466,13 @@ test('a server-relative deadline closes an open guest form and reopening preserv
     page.getByRole('button', { name: 'Send 1 favorites' }),
   ).toBeEnabled();
   await expect(page.getByText(/Shown in your device time zone/)).toBeVisible();
-  await page.clock.runFor(61_000);
+  await page.clock.runFor(30_000);
+  // A refetch of an unchanged snapshot must not restart its elapsed timer.
+  await page.getByRole('button', { name: 'Refresh selection limits' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Refresh selection limits' }),
+  ).toBeEnabled();
+  await page.clock.runFor(31_000);
   await expect(
     page.getByRole('heading', { name: 'Favorites submissions are closed.' }),
   ).toBeVisible();
@@ -481,5 +487,34 @@ test('a server-relative deadline closes an open guest form and reopening preserv
   await expect(
     page.getByRole('button', { name: 'Send 1 favorites' }),
   ).toBeEnabled();
+  expect(state.selections).toBe(0);
+});
+
+test('an unusable server clock closes favorites while keeping the gallery viewable', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  state.unlocked = true;
+  await page.route('**/api/public/events/event1/access', (route) =>
+    route.fulfill({
+      json: {
+        brandingName: '',
+        accentColor: '#173f37',
+        selectionWindow: {
+          closesAt: '2026-10-20T12:01:00.000Z',
+          serverNow: 'invalid',
+          closed: false,
+          invalid: false,
+        },
+      },
+    }),
+  );
+  await page.goto('/e/event1');
+  await expect(
+    page.getByRole('heading', { name: 'Favorites submissions are closed.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Test celebration' }),
+  ).toBeVisible();
   expect(state.selections).toBe(0);
 });
