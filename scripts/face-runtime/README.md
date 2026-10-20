@@ -123,3 +123,52 @@ claimed confidence interval and do not represent event-gallery retrieval accurac
 Review genuine/impostor sample sizes, lighting, pose, camera and group-shot
 coverage separately. Production remains gated by consented representative
 evaluation, candidate retrieval testing, deletion and operational review.
+
+## Bounded local JPEG extraction
+
+`extract.py` uses the pinned models already prepared by `evaluate.py`. It never
+downloads weights or calls a hosted API. Use the existing evaluation environment
+and an operator-authorized JPEG. Keep photos and output under private ignored
+`artifacts/`. The output directory must already exist and the output file must
+be new.
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/extract.py --input artifacts/private-evaluation/photo.jpg --output artifacts/private-evaluation/photo-faces.json --models-dir artifacts/face-models --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00 --photo-id 6087f37f-a5c7-4db8-a905-11764fb343ac --consent-reference evaluation-record-1
+```
+
+Use `--mode reference` for a query image. It requires exactly one detected face;
+photo mode allows zero faces. Defaults are two CPU threads, 1,280 maximum
+detection side, 100 faces and a 30-second child-process deadline. Flags
+`--threads`, `--side`, `--max-faces` and `--timeout` allow only bounded values.
+Input is limited to 10 MiB, 16 million pixels and 8,192 pixels per side. JPEG
+dimensions are checked before native decode. Exif rotation is deliberately
+ignored and recorded in the preprocessing profile, so use correctly oriented
+JPEGs for evaluation. Limits are resource safeguards, not an OS memory sandbox.
+
+The private JSON contains normalized 128-value embeddings, detector coordinates,
+scope/photo identifiers, consent reference, model/input digests and a pipeline
+fingerprint. Coordinates refer to the recorded detector dimensions. Scope and
+consent labels come from the operator and are not verified authorization. stdout
+contains only a completion count and mode. Outputs are sensitive biometric
+artifacts. Do not commit, upload or retain them beyond the evaluation purpose.
+File mode 0600 is requested on POSIX; Windows uses the parent directory ACL.
+Choose an owner-private directory on either system.
+
+The supervisor publishes via an exclusive link, never replacing an existing
+output, and removes its temporary file on ordinary failures. Filesystems must
+support hard links. Abrupt termination or power loss can leave a temporary file,
+so keep the whole output directory private. No face crop or query image is saved.
+Publication conflicts return `OUTPUT_ALREADY_EXISTS`; unsupported or denied
+hard-link publication returns `OUTPUT_PUBLICATION_FAILED` with a directory hint.
+Duplicate detection vectors fail with `DUPLICATE_DETECTION` rather than assigning
+ambiguous face IDs. The evaluation operator must inspect and retry such inputs.
+The `--internal-worker` entry point is an implementation detail, not a service or
+a public API; the supported CLI supplies the process deadline.
+
+Validation on the development laptop: a generated black 640x480 JPEG produced
+zero faces in photo mode; reference mode rejected it with `REFERENCE_NO_FACE`
+and created no output. Dependency-free tests cover parser limits, worker input,
+native boundary stubs, normalization, stable/scoped IDs, publication and failure
+handling. This establishes execution behavior only. It provides no real-face
+accuracy evidence, does not activate a local provider in PicFind, and does not
+remove the need for consented calibration, protected indexing and deletion.
