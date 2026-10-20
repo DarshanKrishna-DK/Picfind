@@ -19,6 +19,7 @@ import { HighlightWall } from './features/highlight-wall';
 import { StudioClients } from './features/studio-clients';
 import { PhotographerCredits } from './features/credit-presets';
 import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
+import { StudioServices } from './features/studio-services';
 import { StudioProjects } from './features/studio-projects';
 import { ProjectQuestionnaires } from './features/project-questionnaires';
 import { StudioWork } from './features/studio-work';
@@ -83,6 +84,7 @@ export function Product() {
         <Route index element={<Dashboard />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="clients" element={<StudioClients />} />
+        <Route path="services" element={<StudioServices />} />
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
         <Route path="projects" element={<StudioProjects />} />

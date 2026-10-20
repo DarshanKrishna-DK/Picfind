@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-21, Picfind had 39 pushed after review, 49 merged and
-reviewed, and 49 opened. This is a
+on 2026-10-21, Picfind had 40 pushed after review, 50 merged and
+reviewed, and 50 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 The table records completed merges only. The PR carrying a ledger update is
 excluded until GitHub confirms its merge; it is recorded in a later update.
@@ -70,7 +70,9 @@ excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | [50](https://github.com/DarshanKrishna-DK/Picfind/pull/50) | Recoverable folder import plans and exact private collection mapping | Reviewed, full-path and manifest-kind validation corrected with replay and scope evidence after review, re-reviewed with no actionable findings, all CI passed, merged |
 
-GitHub currently proves forty-nine merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49 and #50 were visibly
+| [51](https://github.com/DarshanKrishna-DK/Picfind/pull/51) | Consented studio enquiries and private follow-up inbox | Reviewed, photographer intake throttling and refresh recovery improved with receipt and payload evidence after review, re-reviewed with no actionable findings, all CI passed, merged |
+
+GitHub currently proves fifty merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50 and #51 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
