@@ -70,7 +70,9 @@ def validate_artifact(data, expected_scope, expected_mode="photo"):
     if data["scope"] != {"kind": expected_scope[0], "id": expected_scope[1]}:
         raise ValueError("ARTIFACT_SCOPE_MISMATCH")
     canonical_uuid(data["photo_id"])
-    if expected_mode not in ("photo", "reference") or data["mode"] != expected_mode or data["quality_evaluated"] is not False:
+    if expected_mode not in ("photo", "reference"):
+        raise ValueError("ARTIFACT_MODE_INVALID")
+    if data["mode"] != expected_mode or data["quality_evaluated"] is not False:
         raise ValueError("PHOTO_ARTIFACT_REQUIRED" if expected_mode == "photo" else "REFERENCE_ARTIFACT_REQUIRED")
     if not hexadecimal(data["input_sha256"]) or not hexadecimal(data["pipeline_id"]):
         raise ValueError("ARTIFACT_DIGEST_INVALID")

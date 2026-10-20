@@ -9,6 +9,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 import calibrate
@@ -118,6 +119,18 @@ class ScopedSearchTests(unittest.TestCase):
             result = search.search(index, self.scope, self.reference, self.scores_path)
             self.assertFalse(result["small_evaluation"])
             self.assertFalse(result["production_enabled"])
+            for partition in ("calibration", "held_out_test"):
+                self.assertEqual(result["evaluation"][partition]["genuine_pairs"], 100)
+                self.assertEqual(result["evaluation"][partition]["impostor_pairs"], 1000)
+            complete = self.scores["pairs"][:]
+            for split in ("calibration", "test"):
+                for genuine in (True, False):
+                    removed = next(i for i, pair in enumerate(complete)
+                                   if pair["split"] == split and (pair["left_identity"] == pair["right_identity"]) == genuine)
+                    self.scores["pairs"] = complete[:removed] + complete[removed + 1:]
+                    self.write_scores()
+                    with self.assertRaisesRegex(ValueError, "CALIBRATION_SAMPLE_FLOOR"):
+                        search.search(index, self.scope, self.reference, self.scores_path)
 
     def test_requires_calibration_pipeline_and_recognizer_provenance(self):
         with self.index() as index:
@@ -152,6 +165,8 @@ class ScopedSearchTests(unittest.TestCase):
                 reference = artifact(self.scope, scores, mode=mode)
                 with self.assertRaisesRegex(ValueError, "SINGLE_FACE_REFERENCE_REQUIRED|REFERENCE_ARTIFACT_REQUIRED"):
                     search.search(index, self.scope, reference, self.scores_path, allow_small=True)
+            with self.assertRaisesRegex(ValueError, "ARTIFACT_MODE_INVALID"):
+                local_index.validate_artifact(self.reference, self.scope, "unknown")
 
     def test_rejects_query_index_pipeline_mismatch(self):
         with self.index() as index:
@@ -219,6 +234,18 @@ class ScopedSearchTests(unittest.TestCase):
         for secret in ("embedding", "detection", "cal-person", "held-person", "synthetic-test-only", "generated-fixture"):
             self.assertNotIn(secret, result)
 
+    def test_future_calibration_fields_cannot_expand_the_private_result_projection(self):
+        report = calibrate.load_report(self.scores_path, 0)
+        report["private_identity"] = "must-stay-private"
+        report["calibration"]["private_samples"] = ["must-stay-private"]
+        report["limitations"] = ["must-stay-private"]
+        with self.index() as index:
+            index.import_photo(self.scope, artifact(self.scope, [1]))
+            with patch.object(search, "load_report", return_value=report):
+                result = self.query(index)
+        self.assertNotIn("must-stay-private", json.dumps(result))
+        self.assertEqual(result["evaluation"]["candidate_threshold"], 0.7)
+
     def test_cli_publishes_private_results_without_overwriting_and_reports_only_counts(self):
         reference_file, output = self.root / "reference.json", self.root / "results.json"
         reference_file.write_text(json.dumps(self.reference))
@@ -253,6 +280,27 @@ class ScopedSearchTests(unittest.TestCase):
                 "--output", str(output), "--allow-small-evaluation"])
         self.assertEqual(code, 1)
         self.assertFalse(output.exists())
+
+    def test_output_created_after_precheck_is_not_overwritten_or_printed_as_success(self):
+        reference_file, output = self.root / "reference.json", self.root / "results.json"
+        reference_file.write_text(json.dumps(self.reference))
+        with self.index() as index:
+            index.import_photo(self.scope, artifact(self.scope, [1]))
+        original_search = search.search
+        def competing_output(*args, **kwargs):
+            result = original_search(*args, **kwargs)
+            output.write_bytes(b"another process owns this file")
+            return result
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.object(search, "search", side_effect=competing_output), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = search.main(["--database", str(self.database), "--key-file", str(self.key_file),
+                "--scope-kind", self.scope[0], "--scope-id", self.scope[1],
+                "--reference", str(reference_file), "--scores", str(self.scores_path),
+                "--output", str(output), "--allow-small-evaluation"])
+        self.assertEqual(code, 1)
+        self.assertEqual(output.read_bytes(), b"another process owns this file")
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("OUTPUT_ALREADY_EXISTS", stderr.getvalue())
 
 
 if __name__ == "__main__":

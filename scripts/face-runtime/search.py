@@ -29,7 +29,24 @@ def calibration(path, pipeline_id, target_fmr, allow_small=False):
             raise ValueError("CALIBRATION_SAMPLE_FLOOR")
     if result["held_out_test"]["false_match_rate"] > target_fmr:
         raise ValueError("HELD_OUT_FALSE_MATCH_TARGET_EXCEEDED")
-    return result
+    # Keep the result contract private even if calibration reports gain new fields.
+    summary = {
+        name: result[name] for name in (
+            "dataset_sha256", "pipeline_id", "model_sha256", "candidate_threshold",
+            "reject_all", "target_calibration_fmr",
+        )
+    }
+    for partition in ("calibration", "held_out_test"):
+        summary[partition] = {
+            name: result[partition][name] for name in (
+                "pairs", "genuine_pairs", "impostor_pairs", "false_matches",
+                "false_nonmatches", "false_match_rate", "false_nonmatch_rate", "identities",
+            )
+        }
+    return {
+        **summary, "schema_version": 1, "score_kind": "cosine_similarity",
+        "comparison": "score >= threshold", "production_enabled": False,
+    }
 
 
 def cosine(left, right):
