@@ -8,6 +8,7 @@ import { withAccountLock } from './locks.js';
 import {
   ENQUIRY_ACTOR,
   ENQUIRY_LIMIT,
+  ENQUIRY_HOURLY_LIMIT,
   ENQUIRY_PAGE_SIZE,
   enquiryFormWrite,
   enquirySubmit,
@@ -238,12 +239,36 @@ export function createStudioEnquiries(
             throw changed();
           return prior.value;
         }
-        if ((await all(initial.ownerId)).length >= ENQUIRY_LIMIT)
+        const retained = await all(initial.ownerId);
+        if (retained.length >= ENQUIRY_LIMIT)
           throw new ApiError(
             409,
             'ENQUIRY_LIMIT',
             'This photographer is not accepting more enquiries right now.',
           );
+        const recent = retained.filter(
+          (row) => Date.parse(row.createdAt) > Date.now() - 60 * 60_000,
+        );
+        if (recent.length >= ENQUIRY_HOURLY_LIMIT) {
+          const retrySeconds = Math.max(
+            1,
+            Math.min(
+              3600,
+              Math.ceil(
+                (Math.min(...recent.map((row) => Date.parse(row.createdAt))) +
+                  60 * 60_000 -
+                  Date.now()) /
+                  1000,
+              ),
+            ),
+          );
+          res.set('Retry-After', String(retrySeconds));
+          throw new ApiError(
+            429,
+            'ENQUIRY_INTAKE_BUSY',
+            'This photographer has received many recent enquiries. Please try again later.',
+          );
+        }
         const now = new Date().toISOString();
         const next = savedEnquiry.parse({
           ...input.data,

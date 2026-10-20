@@ -28,6 +28,12 @@ only a reference ID and received timestamp.
 Public input is bounded to 6,000 UTF-8 bytes, with rate-limited writes and a
 200-enquiry account cap. Exact request replay can acknowledge a retained record
 without creating another. A reused UUID with different details conflicts.
+New intake also stops at 25 retained requests received in the previous hour for
+the same photographer, independent of the submitting IP. This check uses stored
+timestamps under the account lock and returns a retry interval. Exact retries
+remain available. The throttle limits burst impact; anonymous intake is not
+proof of a human visitor and this is not complete distributed abuse prevention.
+Removing retained requests can free intake capacity.
 Recheck publication and ownership under the photographer account lock before
 storing or replaying a request. Existing account erasure removes form and inbox.
 
@@ -81,3 +87,12 @@ Full repository validation passed 138 test files and 2,198 tests, lint, type
 checking and API/web builds. Existing nonfatal dependency annotation and bundle
 size warnings remain. The source implements the feature; no production deployment
 or external messaging service was activated.
+
+Post-review verification adds photographer-wide recent-intake throttling,
+explicit pending-refresh controls and a disabled load-latest action after a
+failed form read. Twenty-one API cases pass, including exact replay at the
+intake limit, recovery after the window and a near-limit submission with worst
+escaped notes and full history below the configured 16,000-byte payload budget.
+All 26 desktop/mobile browser cases passed, including actual background query
+refetch with receipt persistence and a fresh UUID on a deliberate new page visit.
+Type checking and focused lint passed after the review changes.

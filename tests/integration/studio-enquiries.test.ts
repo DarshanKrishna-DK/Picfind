@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { enquiryFixture as fixture } from '../fixtures/studio-enquiries';
 import {
   ENQUIRY_ACTOR,
+  ENQUIRY_HOURLY_LIMIT,
+  ENQUIRY_CONSENT,
+  enquirySubmit,
   enquiryFormDirectory,
   enquiryInbox,
   enquiryReceipt,
@@ -11,6 +14,64 @@ import {
 } from '../../packages/shared/src/studio-enquiries';
 
 describe('published studio enquiry intake and private follow-up', () => {
+  it('throttles retained new intake per photographer while allowing exact replay and recovery after the window', async () => {
+    const f = fixture();
+    await f.publish().expect(200);
+    await f.submit().expect(201);
+    const original = f.records.get(f.enquiryId)!;
+    for (let i = 1; i < ENQUIRY_HOURLY_LIMIT; i++) {
+      const row = structuredClone(original),
+        id = randomUUID();
+      row.id = row.studioEnquiry!.id = id;
+      f.records.set(id, row);
+    }
+    const blocked = await f.submit({}, randomUUID()).expect(429);
+    expect(blocked.body.error.code).toBe('ENQUIRY_INTAKE_BUSY');
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    await f.submit().expect(201);
+    expect(
+      [...f.records.values()].filter((row) => row.purpose === 'studio-enquiry'),
+    ).toHaveLength(25);
+    const old = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    for (const row of f.records.values()) {
+      if (!row.studioEnquiry) continue;
+      row.createdAt =
+        row.studioEnquiry.createdAt =
+        row.studioEnquiry.updatedAt =
+          old;
+      row.studioEnquiry.history = [{ stage: 'new', at: old }];
+    }
+    await f.submit({}, randomUUID()).expect(201);
+  });
+  it('keeps a near-limit submission with worst escaped notes and full history inside the Appwrite payload budget', async () => {
+    const f = fixture();
+    await f.publish().expect(200);
+    let message = 'अ'.repeat(2000);
+    while (
+      !enquirySubmit.safeParse({
+        ...f.contact,
+        message,
+        formVersion: 1,
+        consent: ENQUIRY_CONSENT,
+      }).success
+    )
+      message = message.slice(0, -1);
+    await f.submit({ message }).expect(201);
+    const row = f.records.get(f.enquiryId)!,
+      value = row.studioEnquiry!;
+    value.history = Array.from({ length: 30 }, (_, i) => ({
+      stage: i % 2 ? ('contacted' as const) : ('new' as const),
+      at: value.createdAt,
+    }));
+    value.stage = 'contacted';
+    await f
+      .update({ stage: 'contacted', note: '\u0001'.repeat(1000) })
+      .expect(200);
+    expect(
+      Buffer.byteLength(JSON.stringify(f.records.get(f.enquiryId))),
+    ).toBeLessThan(16000);
+    await f.read('/api/studio/enquiries').expect(200);
+  });
   it('requires explicit publication and projects only the public form fields', async () => {
     const f = fixture();
     const empty = await f.read('/api/studio/enquiry-form').expect(200);
@@ -209,6 +270,12 @@ describe('published studio enquiry intake and private follow-up', () => {
         id = randomUUID();
       row.id = row.studioEnquiry!.id = id;
       row.studioEnquiry!.name = `Request ${i}`;
+      const old = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+      row.createdAt =
+        row.studioEnquiry!.createdAt =
+        row.studioEnquiry!.updatedAt =
+          old;
+      row.studioEnquiry!.history = [{ stage: 'new', at: old }];
       f.records.set(id, row);
     }
     const first = (await f.read('/api/studio/enquiries').expect(200)).body;

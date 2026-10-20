@@ -433,7 +433,7 @@ function FormEditor({
           <button
             type="button"
             className="button secondary"
-            disabled={operation.busy}
+            disabled={operation.busy || blocked}
             onClick={() => {
               if (
                 !dirty ||
@@ -677,6 +677,7 @@ export function PublicEnquiry() {
       key={id}
       current={query.data}
       readError={query.error}
+      refreshing={query.isFetching}
       refresh={() => void query.refetch()}
     />
   );
@@ -685,10 +686,12 @@ function VisitorForm({
   current,
   refresh,
   readError,
+  refreshing,
 }: {
   current: { id: string; name: string; introduction: string; version: number };
   refresh: () => void;
   readError: unknown;
+  refreshing: boolean;
 }) {
   const [baseline, setBaseline] = useState(current);
   const [draft, setDraft] = useState(blankEnquiry);
@@ -702,7 +705,7 @@ function VisitorForm({
   const stale = current.version !== baseline.version;
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!consent || stale || readError) return;
+    if (!consent || stale || readError || refreshing) return;
     void operation.run(
       async (signal) => {
         const body = enquirySubmit.parse({
@@ -834,11 +837,18 @@ function VisitorForm({
           )}
           <ErrorNote error={operation.error} />
           <ErrorNote error={readError} />
+          {refreshing && (
+            <p role="status">Refreshing published form details.</p>
+          )}
           <div className="enquiry-controls">
             <button
               className="button"
               disabled={
-                operation.busy || !consent || stale || Boolean(readError)
+                operation.busy ||
+                !consent ||
+                stale ||
+                Boolean(readError) ||
+                refreshing
               }
             >
               Send enquiry
@@ -846,7 +856,7 @@ function VisitorForm({
             <button
               className="button secondary"
               type="button"
-              disabled={operation.busy}
+              disabled={operation.busy || refreshing}
               onClick={refresh}
             >
               Refresh form details
@@ -855,7 +865,7 @@ function VisitorForm({
               <button
                 className="button secondary"
                 type="button"
-                disabled={operation.busy}
+                disabled={operation.busy || refreshing || Boolean(readError)}
                 onClick={() => {
                   setBaseline(current);
                   setConsent(false);

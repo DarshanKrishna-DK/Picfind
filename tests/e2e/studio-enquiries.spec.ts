@@ -10,6 +10,9 @@ async function fixture(page: Page) {
     actor: f.ownerId as string,
     losePath: '',
     failRead: '',
+    holdRead: '',
+    publicReads: 0,
+    release: null as (() => void) | null,
   };
   await page.route('**/api/**', async (route) => {
     const incoming = route.request(),
@@ -17,6 +20,11 @@ async function fixture(page: Page) {
       path = url.pathname + url.search,
       method = incoming.method().toLowerCase() as
         'get' | 'post' | 'put' | 'patch' | 'delete';
+    if (method === 'get' && url.pathname === f.publicPath) state.publicReads++;
+    if (method === 'get' && state.holdRead === url.pathname)
+      await new Promise<void>((resolve) => {
+        state.release = resolve;
+      });
     if (method === 'get' && state.failRead && url.pathname === state.failRead)
       return route.fulfill({
         status: 503,
@@ -449,4 +457,106 @@ test('pages actual retained enquiries and searches beyond the first page', async
   await expect(
     page.getByRole('button', { name: 'Previous enquiries' }),
   ).toBeDisabled();
+});
+
+test('keeps a confirmed receipt through background refetch and uses a fresh request after a new page visit', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.publish().expect(200);
+  await f.visitor();
+  await fillVisitor(page);
+  await page.getByRole('button', { name: 'Send enquiry' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Enquiry saved' }),
+  ).toBeVisible();
+  const reads = f.state.publicReads;
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event('visibilitychange')),
+  );
+  await expect.poll(() => f.state.publicReads).toBeGreaterThan(reads);
+  await expect(
+    page.getByRole('heading', { name: 'Enquiry saved' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send enquiry' })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole('button', { name: 'Refresh form details' }),
+  ).toHaveCount(0);
+  await page.reload();
+  await fillVisitor(page);
+  await page.getByRole('button', { name: 'Send enquiry' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Enquiry saved' }),
+  ).toBeVisible();
+  const rows = [...f.records.values()].filter(
+    (row) => row.purpose === 'studio-enquiry',
+  );
+  expect(rows).toHaveLength(2);
+  expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+});
+
+test('blocks repeated refresh, submission and acceptance while a public refresh is pending', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.publish().expect(200);
+  await f.visitor();
+  await fillVisitor(page);
+  await f.publish({ introduction: 'Updated studio details.' }, 1).expect(200);
+  await page.getByRole('button', { name: 'Refresh form details' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Accept updated form details' }),
+  ).toBeVisible();
+  f.state.holdRead = f.publicPath;
+  await page.getByRole('button', { name: 'Refresh form details' }).click();
+  await expect.poll(() => Boolean(f.state.release)).toBe(true);
+  try {
+    await expect(
+      page.getByText('Refreshing published form details.', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Refresh form details' }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Accept updated form details' }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Send enquiry' }),
+    ).toBeDisabled();
+  } finally {
+    f.state.holdRead = '';
+    f.state.release?.();
+  }
+  await expect(
+    page.getByRole('button', { name: 'Accept updated form details' }),
+  ).toBeEnabled();
+});
+
+test('keeps the publication draft and blocks loading a cached form after a failed refresh', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.publish().expect(200);
+  await f.open();
+  const introduction = page.getByRole('textbox', {
+    name: 'Public introduction',
+  });
+  await introduction.fill('Preserve my draft.');
+  f.state.failRead = '/api/studio/enquiry-form';
+  await page.getByRole('button', { name: 'Refresh saved form' }).click();
+  await expect(
+    page.getByText('Synthetic read outage.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Load latest form', exact: true }),
+  ).toBeDisabled();
+  await expect(introduction).toHaveValue('Preserve my draft.');
+  f.state.failRead = '';
+  await page.getByRole('button', { name: 'Refresh saved form' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Load latest form', exact: true }),
+  ).toBeEnabled();
+  await expect(introduction).toHaveValue('Preserve my draft.');
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const ENQUIRY_LIMIT = 200;
+export const ENQUIRY_HOURLY_LIMIT = 25;
 export const ENQUIRY_PAGE_SIZE = 50;
 export const ENQUIRY_CONSENT = 'studio-enquiry-v1';
 export const ENQUIRY_ACTOR = 'X-PicFind-Enquiry-Actor';
