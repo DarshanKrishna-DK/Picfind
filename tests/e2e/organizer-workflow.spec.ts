@@ -586,6 +586,85 @@ test('an invalid stored deadline can be reopened by the owner', async ({
   expect(state.selectionWindow.closed).toBe(false);
 });
 
+test('private photo instructions save, reload, clear and recover a conflicting draft', async ({
+  page,
+}) => {
+  const { eventId } = await fixture(page);
+  let note = { text: '', version: 0, updatedAt: null as string | null };
+  let conflict = false;
+  await page.route('**/api/photos/*/private-note', (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({ json: { note } });
+    const body = route.request().postDataJSON();
+    if (conflict) {
+      conflict = false;
+      note = {
+        text: 'Saved in another tab',
+        version: note.version + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      return route.fulfill({
+        status: 409,
+        json: {
+          error: {
+            code: 'PHOTO_NOTE_CHANGED',
+            message: 'Another tab changed this photo note.',
+          },
+        },
+      });
+    }
+    expect(body.version).toBe(note.version);
+    note = {
+      text: body.text.trim(),
+      version: note.version + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    return route.fulfill({ json: { note } });
+  });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('button', { name: 'Open Ceremony.jpg' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Photo viewer' });
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  const input = dialog.getByLabel('Private editing note');
+  await input.fill('Crop from the left');
+  await input.press('ArrowRight');
+  await expect(
+    dialog.getByRole('heading', { name: 'Ceremony.jpg' }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save private note' }).click();
+  await expect(
+    dialog.getByText('Private note saved.', { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close photo' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Open Ceremony.jpg' }).click();
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  await expect(input).toHaveValue('Crop from the left');
+  conflict = true;
+  await input.fill('My unsaved draft');
+  await dialog.getByRole('button', { name: 'Save private note' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Another tab');
+  await expect(input).toHaveValue('My unsaved draft');
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  await expect(input).not.toBeVisible();
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  await expect(input).toHaveValue('My unsaved draft');
+  await expect(
+    dialog.getByRole('button', { name: 'Save private note' }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole('button', { name: 'Replace draft with latest note' })
+    .click();
+  await expect(input).toHaveValue('Saved in another tab');
+  await input.fill('');
+  await dialog.getByRole('button', { name: 'Save private note' }).click();
+  await expect(
+    dialog.getByText('Private note cleared.', { exact: true }),
+  ).toBeVisible();
+  expect(note.text).toBe('');
+  expect(note.version).toBe(3);
+});
+
 test('comparison export fails when owner access is revoked', async ({
   page,
 }) => {

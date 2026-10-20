@@ -14,17 +14,20 @@ import { api, fileUrl, type Photo } from '../api';
 import { collectPhotoFiles, createGalleryArchive } from '../gallery-downloads';
 import { Empty, ErrorNote } from './ui';
 import { MenuSelect } from './menu-select';
+import { PhotoNote } from '../features/photo-note';
 
 export function PhotoGrid({
   photos,
   eventId,
   readOnly = false,
   preserveOrder = false,
+  privateNotes = false,
 }: {
   photos: Photo[];
   eventId?: string;
   readOnly?: boolean;
   preserveOrder?: boolean;
+  privateNotes?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState(preserveOrder ? 'source' : 'newest');
@@ -406,6 +409,13 @@ export function PhotoGrid({
           if (event.target === event.currentTarget) dialog.current?.close();
         }}
         onKeyDown={(event) => {
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.closest(
+              'input, textarea, select, [contenteditable="true"]',
+            )
+          )
+            return;
           if (event.key === 'ArrowLeft') {
             event.preventDefault();
             move(-1);
@@ -517,6 +527,9 @@ export function PhotoGrid({
               )}
             </div>
             <ErrorNote error={error} />
+            {privateNotes && !readOnly && (
+              <PhotoNote key={detail.id} photoId={detail.id} />
+            )}
           </>
         )}
       </dialog>

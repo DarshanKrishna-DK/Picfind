@@ -229,7 +229,7 @@ export function LibraryPage() {
           </button>
         </>
       ) : (
-        <PhotoGrid photos={personalPhotos} />
+        <PhotoGrid photos={personalPhotos} privateNotes />
       )}
     </>
   );

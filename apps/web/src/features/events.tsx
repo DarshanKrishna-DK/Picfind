@@ -436,7 +436,7 @@ export function EventDetail() {
               <UploadBox eventId={event.id} />
             </div>
           )}
-          <PhotoGrid photos={photos} />
+          <PhotoGrid photos={photos} privateNotes />
         </>
       )}
       {tab === 'sharing' && (
