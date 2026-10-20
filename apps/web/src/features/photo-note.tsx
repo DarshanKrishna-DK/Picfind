@@ -24,22 +24,21 @@ export function PhotoNote({ photoId }: { photoId: string }) {
     >
       <summary>Private photo instructions</summary>
       <p>Only you can read this note. Save before changing photos.</p>
-      {open &&
-        (query.isPending ? (
-          <Loading />
-        ) : query.error ? (
-          <>
-            <ErrorNote error={query.error} />
-            <button
-              className="button secondary"
-              onClick={() => void query.refetch()}
-            >
-              Retry loading note
-            </button>
-          </>
-        ) : query.data ? (
-          <PhotoNoteEditor photoId={photoId} initial={query.data.note} />
-        ) : null)}
+      {query.isPending ? (
+        <Loading />
+      ) : query.error ? (
+        <>
+          <ErrorNote error={query.error} />
+          <button
+            className="button secondary"
+            onClick={() => void query.refetch()}
+          >
+            Retry loading note
+          </button>
+        </>
+      ) : query.data ? (
+        <PhotoNoteEditor photoId={photoId} initial={query.data.note} />
+      ) : null}
     </details>
   );
 }

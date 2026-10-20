@@ -18,6 +18,7 @@ database compare-and-swap guarantee. Photo erasure also erases its note.
 
 The owner photo viewer loads notes on demand. Unsaved text is preserved after a
 conflict; an explicit load-latest action replaces it. Save before navigating to
-another photo. Arrow keys inside the editor edit text instead of changing photos.
+another photo. Collapsing the note panel retains its draft and conflict state.
+Arrow keys inside the editor edit text instead of changing photos.
 Public galleries and moderator views do not mount the editor or expose note
 fields through their existing explicit photo projections.

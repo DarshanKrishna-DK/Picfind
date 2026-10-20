@@ -645,6 +645,10 @@ test('private photo instructions save, reload, clear and recover a conflicting d
   await dialog.getByRole('button', { name: 'Save private note' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Another tab');
   await expect(input).toHaveValue('My unsaved draft');
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  await expect(input).not.toBeVisible();
+  await dialog.getByText('Private photo instructions', { exact: true }).click();
+  await expect(input).toHaveValue('My unsaved draft');
   await expect(
     dialog.getByRole('button', { name: 'Save private note' }),
   ).toBeDisabled();
