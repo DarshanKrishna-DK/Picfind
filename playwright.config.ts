@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -17,7 +18,9 @@ export default defineConfig({
     { name: 'webkit-mobile', use: { ...devices['iPhone 13'] } },
   ],
   webServer: {
-    command: 'npm run dev:web -- --host 127.0.0.1',
+    command:
+      'node ../../node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort',
+    cwd: fileURLToPath(new URL('./apps/web', import.meta.url)),
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
   },

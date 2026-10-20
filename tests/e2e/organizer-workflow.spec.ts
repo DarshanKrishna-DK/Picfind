@@ -207,9 +207,9 @@ test('event folders, search and visibility filters survive reload', async ({
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('Garden wedding');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Event folder', exact: true })).toHaveText(
-    'Weddings 2026',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Event folder', exact: true }),
+  ).toHaveText('Weddings 2026');
   await expect(cards).toHaveCount(1);
   await page.getByLabel('Search events').fill('not present');
   await expect(page.getByText('No events match these filters.')).toBeVisible();

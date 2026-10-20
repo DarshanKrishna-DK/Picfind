@@ -5,9 +5,7 @@ declare global {
     __discoverUploadSizes: number[];
   }
 }
-test('library album photos can be selected and cleared', async ({
-  page,
-}) => {
+test('library album photos can be selected and cleared', async ({ page }) => {
   const state = await fixture(page);
   await expect(page.getByLabel('Source 0.jpg', { exact: true })).toBeChecked();
   await expect(page.getByLabel('Source 1.jpg', { exact: true })).toBeChecked();
@@ -17,7 +15,9 @@ test('library album photos can be selected and cleared', async ({
   await expect(
     page.getByLabel('Source 0.jpg', { exact: true }),
   ).not.toBeChecked();
-  await page.getByRole('button', { name: 'Use this album', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Use this album', exact: true })
+    .click();
   await expect(page.getByLabel('Source 0.jpg', { exact: true })).toBeChecked();
   expect(state.creates).toBe(0);
   expect(state.searches).toBe(0);
@@ -130,7 +130,7 @@ async function fixture(page: Page) {
       const body = req.postDataJSON();
       expect(body.requestId).toMatch(/^[a-f0-9-]{36}$/);
       expect(body.consent).toBe(true);
-      expect(body.photoIds).toEqual(['source-0']);
+      expect(body.photoIds).toEqual(['source-0', 'source-1']);
       save(body.requestId as string);
       return route.fulfill(
         state.loseCreate
@@ -220,6 +220,7 @@ async function fixture(page: Page) {
 }
 async function enqueue(page: Page) {
   await page.getByLabel('Source 0.jpg', { exact: true }).check();
+  await page.getByLabel('Source 1.jpg', { exact: true }).check();
   await page.getByLabel('Reference selfie', { exact: true }).setInputFiles({
     name: 'synthetic.png',
     mimeType: 'image/png',
