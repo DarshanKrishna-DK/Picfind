@@ -15,6 +15,10 @@ Account cleanup already removes owner job records. Deleting a contact removes
 the retained contact record without changing unrelated galleries or invitations.
 
 `GET /studio/clients` returns only the authenticated owner's valid contacts.
+It reports the total count and at most two hundred sorted contacts. If stored
+data exceeds capacity, the owner can still view, edit and remove displayed
+contacts; new creation is blocked. Removal refreshes the list so formerly
+omitted contacts become available. CSV export refuses an incomplete projection.
 `PUT /studio/clients/:id` creates at version zero or updates a matching current
 version. An exact replay of the immediately preceding write returns that result.
 `DELETE /studio/clients/:id` requires its current version. Requests never accept

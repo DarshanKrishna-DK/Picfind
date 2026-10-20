@@ -86,22 +86,25 @@ export function createStudioClients(
         row.kind === 'job' &&
         row.purpose === 'studio-client',
     );
-    if (rows.length > MAX_STUDIO_CLIENTS)
+    const clients = rows.map((row) => contact(row, actorId));
+    if (new Set(clients.map((client) => client.id)).size !== clients.length)
       throw new ApiError(
         503,
-        'CLIENT_DIRECTORY_LIMIT',
-        'The client directory needs maintenance.',
+        'CLIENT_METADATA_INVALID',
+        'The client directory contains duplicate record identifiers.',
       );
-    return rows
-      .map((row) => contact(row, actorId))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    return clients.sort(
+      (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+    );
   }
   router.get('/studio/clients', async (req, res) => {
     const accountId = await actor(req);
+    const clients = await list(accountId);
     res.json({
       accountId,
       limit: MAX_STUDIO_CLIENTS,
-      clients: await list(accountId),
+      totalCount: clients.length,
+      clients: clients.slice(0, MAX_STUDIO_CLIENTS),
     });
   });
   router.put('/studio/clients/:id', async (req, res) => {

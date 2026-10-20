@@ -37,13 +37,15 @@ export const clientDirectory = z
   .object({
     accountId: z.string().min(1),
     limit: z.literal(MAX_STUDIO_CLIENTS),
+    totalCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     clients: z.array(savedClient).max(MAX_STUDIO_CLIENTS),
   })
   .strict()
   .refine(
     (value) =>
       new Set(value.clients.map((client) => client.id)).size ===
-      value.clients.length,
+        value.clients.length &&
+      value.clients.length === Math.min(value.totalCount, value.limit),
   );
 export type ClientFields = z.infer<typeof clientFields>;
 export type SavedClient = z.infer<typeof savedClient>;

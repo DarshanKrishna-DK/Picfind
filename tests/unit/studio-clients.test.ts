@@ -16,6 +16,30 @@ const client: SavedClient = {
   updatedAt: '2026-10-20T10:00:00.000Z',
 };
 describe('private contact CSV and response contracts', () => {
+  it.each(['\t=1+1', '\r=1+1', '\n=1+1', '\ufeff=1+1'])(
+    'neutralizes trimmed whitespace prefix %j',
+    (value) => {
+      expect(clientDirectoryCsv([{ ...client, name: value }])).toContain(
+        `"'=1+1"`,
+      );
+    },
+  );
+  it.each(['part\t=1', 'part\r=1', 'part\n=1'])(
+    'rejects embedded control characters %j',
+    (value) => {
+      expect(() => clientDirectoryCsv([{ ...client, name: value }])).toThrow();
+    },
+  );
+  it('rejects a response that hides contacts without reporting the correct total', () => {
+    expect(
+      clientDirectory.safeParse({
+        accountId: 'owner',
+        limit: 200,
+        totalCount: 2,
+        clients: [client],
+      }).success,
+    ).toBe(false);
+  });
   it('quotes commas, quotes and Unicode while preserving stable IDs', () => {
     const csv = clientDirectoryCsv([
       { ...client, name: 'Asha, "写真"', company: 'Studio, Inc.' },
@@ -46,6 +70,7 @@ describe('private contact CSV and response contracts', () => {
       clientDirectory.safeParse({
         accountId: 'owner',
         limit: 200,
+        totalCount: 2,
         clients: [client, client],
       }).success,
     ).toBe(false);

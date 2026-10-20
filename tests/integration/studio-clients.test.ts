@@ -106,12 +106,56 @@ function fixture() {
   return { app, records, store, read, save, remove, seed };
 }
 describe('private photographer client directory', () => {
+  it('normalizes mixed-case stored emails before checking a duplicate', async () => {
+    const f = fixture();
+    f.seed(randomUUID(), 'owner', { ...fields, email: 'ASHA@Example.Test' });
+    expect((await f.read().expect(200)).body.clients[0].email).toBe(
+      'asha@example.test',
+    );
+    await f.save().expect(409);
+    expect(f.records.size).toBe(1);
+  });
+  it('preserves creation time when an update occurs a year later', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+      const f = fixture(),
+        id = randomUUID();
+      await f.save(id).expect(200);
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      const updated = await f
+        .save(id, { ...fields, name: 'New name' }, 1)
+        .expect(200);
+      expect(updated.body.client.createdAt).toBe('2025-01-01T00:00:00.000Z');
+      expect(updated.body.client.updatedAt).toBe('2026-01-01T00:00:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('offers bounded recovery reads and existing edits when stored data exceeds capacity', async () => {
+    const f = fixture();
+    const rows = Array.from({ length: MAX_STUDIO_CLIENTS + 1 }, () =>
+      f.seed(randomUUID(), 'owner', { ...fields, email: '' }),
+    );
+    const before = await f.read().expect(200);
+    expect(before.body.totalCount).toBe(201);
+    expect(before.body.clients).toHaveLength(200);
+    await f.save(randomUUID(), { ...fields, email: '' }).expect(409);
+    await f
+      .save(rows[0]!.id, { ...fields, email: '', name: 'Corrected' }, 1)
+      .expect(200);
+    await f.remove(rows[0]!.id, 2).expect(204);
+    const after = await f.read().expect(200);
+    expect(after.body.totalCount).toBe(200);
+    expect(after.body.clients).toHaveLength(200);
+  });
   it('persists normalized contact fields, updates and clears optional details without file operations', async () => {
     const f = fixture(),
       id = randomUUID();
     expect((await f.read().expect(200)).body).toEqual({
       accountId: 'owner',
       limit: MAX_STUDIO_CLIENTS,
+      totalCount: 0,
       clients: [],
     });
     const first = await f

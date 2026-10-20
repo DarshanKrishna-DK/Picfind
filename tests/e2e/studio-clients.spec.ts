@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import type { SavedClient } from '../../packages/shared/src/studio-clients';
 
 const firstId = 'ad851772-ef2a-46a2-8f66-066975c7b0aa';
@@ -77,7 +78,12 @@ async function fixture(page: Page, initial: SavedClient[] = []) {
             json: { error: { message: 'Directory storage is unavailable.' } },
           });
         return route.fulfill({
-          json: { accountId: state.actor, limit: 200, clients: state.clients },
+          json: {
+            accountId: state.actor,
+            limit: 200,
+            clients: state.clients.slice(0, 200),
+            totalCount: state.clients.length,
+          },
         });
       }
       const id = path.split('/').at(-1)!;
@@ -159,6 +165,61 @@ async function fixture(page: Page, initial: SavedClient[] = []) {
 }
 const savedList = (page: Page) =>
   page.getByRole('list', { name: 'Saved clients' });
+test('recovers an overcapacity directory through bounded display and removal', async ({
+  page,
+}) => {
+  const contacts = Array.from({ length: 201 }, (_, index) =>
+    contact({
+      id: randomUUID(),
+      name: `Contact ${String(index).padStart(3, '0')}`,
+      email: '',
+    }),
+  );
+  const state = await fixture(page, contacts);
+  await expect(
+    page.getByText('Showing the first 200 of 201 contacts.', { exact: false }),
+  ).toBeVisible();
+  await expect(savedList(page).getByRole('button')).toHaveCount(200);
+  await expect(
+    page.getByRole('button', { name: 'New client', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Export private clients CSV' }),
+  ).toBeDisabled();
+  await savedList(page)
+    .getByRole('button', { name: /Contact 000/ })
+    .click();
+  await page
+    .getByRole('button', { name: 'Remove client', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Confirm remove client' }).click();
+  await expect(
+    savedList(page).getByRole('button', { name: /Contact 200/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Export private clients CSV' }),
+  ).toBeEnabled();
+  expect(state.clients).toHaveLength(200);
+});
+test('refuses to export a partial directory discovered by the fresh read', async ({
+  page,
+}) => {
+  const state = await fixture(page, [contact()]);
+  state.clients.push(
+    ...Array.from({ length: 200 }, () =>
+      contact({ id: randomUUID(), email: '' }),
+    ),
+  );
+  await page
+    .getByRole('button', { name: 'Export private clients CSV' })
+    .click();
+  await expect(
+    page.getByText(
+      'The directory exceeds its limit. Remove unused contacts and reload before exporting a complete CSV.',
+    ),
+  ).toBeVisible();
+  expect(state.downloads).toBe(0);
+});
 test('creates, reloads, searches, edits and explicitly removes a private contact', async ({
   page,
 }, testInfo) => {

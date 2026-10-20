@@ -115,7 +115,7 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
         setConflict(true);
       if (failure instanceof HttpError && [401, 403].includes(failure.status)) {
         setDenied(true);
-        setDirectory({ ...initial, clients: [] });
+        setDirectory({ ...initial, clients: [], totalCount: 0 });
         setDraft(blankClient());
         setSelected(null);
       }
@@ -151,6 +151,9 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
         );
       setDirectory((current) => ({
         ...current,
+        totalCount:
+          current.totalCount +
+          (current.clients.some((row) => row.id === client.id) ? 0 : 1),
         clients: [
           ...current.clients.filter((row) => row.id !== client.id),
           client,
@@ -174,6 +177,10 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
     await run(async (signal) => {
       const latest = await readDirectory(initial.accountId, signal);
       signal.throwIfAborted();
+      if (latest.totalCount !== latest.clients.length)
+        throw new Error(
+          'The directory exceeds its limit. Remove unused contacts and reload before exporting a complete CSV.',
+        );
       saveFile(
         new Blob(['\ufeff', clientDirectoryCsv(latest.clients)], {
           type: 'text/csv;charset=utf-8',
@@ -198,9 +205,13 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
       signal.throwIfAborted();
       setDirectory((current) => ({
         ...current,
+        totalCount: current.totalCount - 1,
         clients: current.clients.filter((row) => row.id !== target.id),
       }));
       choose(null);
+      const latest = await readDirectory(initial.accountId, signal);
+      signal.throwIfAborted();
+      setDirectory(latest);
       setMessage(
         'Client removed from your directory. Existing invitations and exported files are unchanged.',
       );
@@ -236,8 +247,15 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
         send messages or give access to photos.
       </p>
       <p>
-        {directory.clients.length} / {directory.limit} clients saved.
+        {directory.totalCount} / {directory.limit} clients saved.
       </p>
+      {directory.totalCount > directory.clients.length && (
+        <p role="alert">
+          Showing the first {directory.clients.length} of {directory.totalCount}{' '}
+          contacts. Remove unused contacts to bring the directory within its
+          limit. Export is unavailable while contacts are omitted.
+        </p>
+      )}
       <div className="button-row">
         <button
           type="button"
@@ -250,7 +268,7 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
         <button
           type="button"
           className="button secondary"
-          disabled={busy}
+          disabled={busy || directory.totalCount > directory.clients.length}
           onClick={() => void exportCsv()}
         >
           Export private clients CSV
@@ -270,7 +288,7 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
           <button
             type="button"
             className="button"
-            disabled={busy || directory.clients.length >= directory.limit}
+            disabled={busy || directory.totalCount >= directory.limit}
             onClick={() => choose(null)}
           >
             New client
@@ -328,7 +346,7 @@ function ClientEditor({ initial }: { initial: ClientDirectory }) {
               disabled={
                 conflict ||
                 !draft.name.trim() ||
-                (!selected && directory.clients.length >= directory.limit)
+                (!selected && directory.totalCount >= directory.limit)
               }
             >
               Save private client
