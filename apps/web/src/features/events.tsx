@@ -27,6 +27,7 @@ import { UploadBox, PhotoGrid } from '../features/gallery';
 import './organizer.css';
 import type { OrganizerEventPolicy } from '../../../../packages/shared/src/event-policy';
 import { ProofingCollections } from './proofing-collections';
+import { RawJpegPairing } from './raw-jpeg-pairing';
 
 export function EventForm({
   existing,
@@ -411,24 +412,29 @@ export function EventDetail() {
         </section>
       )}
       <div className="tabs" role="tablist" aria-label="Event sections">
-        {['photos', 'collections', 'sharing', 'members', 'settings'].map(
-          (value) => (
-            <button
-              role="tab"
-              aria-selected={tab === value}
-              key={value}
-              onClick={() => {
-                setTab(value);
-                setError(null);
-              }}
-              className={tab === value ? 'active' : ''}
-            >
-              {value === 'photos'
-                ? `Photos (${photos.length})`
-                : value[0]!.toUpperCase() + value.slice(1)}
-            </button>
-          ),
-        )}
+        {[
+          'photos',
+          'collections',
+          'editing',
+          'sharing',
+          'members',
+          'settings',
+        ].map((value) => (
+          <button
+            role="tab"
+            aria-selected={tab === value}
+            key={value}
+            onClick={() => {
+              setTab(value);
+              setError(null);
+            }}
+            className={tab === value ? 'active' : ''}
+          >
+            {value === 'photos'
+              ? `Photos (${photos.length})`
+              : value[0]!.toUpperCase() + value.slice(1)}
+          </button>
+        ))}
       </div>
       <ErrorNote error={error} />
       {tab === 'photos' && (
@@ -448,6 +454,9 @@ export function EventDetail() {
           eventId={event.id}
           photos={photos}
         />
+      )}
+      {tab === 'editing' && (
+        <RawJpegPairing key={event.id} eventId={event.id} />
       )}
       {tab === 'sharing' && (
         <div className="settings-panel">
