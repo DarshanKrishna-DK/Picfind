@@ -21,4 +21,5 @@ conflict; an explicit load-latest action replaces it. Save before navigating to
 another photo. Collapsing the note panel retains its draft and conflict state.
 Arrow keys inside the editor edit text instead of changing photos.
 Public galleries and moderator views do not mount the editor or expose note
-fields through their existing explicit photo projections.
+fields. The moderator gallery now uses an explicit photo projection instead of
+returning the storage record, keeping internal note and face-index metadata private.

@@ -105,6 +105,7 @@ export function createEventMembershipRouter(
         photo.ownerId === access.event.ownerId &&
         photo.eventId === access.event.id &&
         !photo.scanId &&
+        !photo.deletionStartedAt &&
         photoAvailable(photo),
     );
     const { members, passcodeHash, folder, ...event } = access.event;
@@ -113,7 +114,27 @@ export function createEventMembershipRouter(
     void folder;
     res.json({
       event: { ...event, accessRole: access.role },
-      photos,
+      photos: photos.map(
+        ({
+          id,
+          eventId,
+          filename,
+          width,
+          height,
+          bytes,
+          createdAt,
+          expiresAt,
+        }) => ({
+          id,
+          eventId,
+          filename,
+          width,
+          height,
+          bytes: bytes ?? 0,
+          createdAt,
+          ...(expiresAt ? { expiresAt } : {}),
+        }),
+      ),
       remainingUploads: Math.max(
         0,
         Math.min(

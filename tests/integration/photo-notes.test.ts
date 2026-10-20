@@ -124,6 +124,35 @@ describe('owner-only photo instructions', () => {
       .expect(403);
     expect(f.records.get(f.photo.id)?.privatePhotoNote).toBeUndefined();
   });
+  it('does not leak private note metadata through a real moderator gallery grant', async () => {
+    const f = fixture();
+    f.event.members = [
+      {
+        userId: 'moderator',
+        role: 'moderator',
+        grantId: randomUUID(),
+        addedAt: new Date().toISOString(),
+      },
+    ];
+    await f.save('Owner-only editing instructions').expect(200);
+    const gallery = await request(f.app)
+      .get(`/api/events/${f.event.id}/gallery`)
+      .set('Cookie', 'picfind_session=moderator')
+      .expect(200);
+    expect(gallery.body.photos).toHaveLength(1);
+    expect(gallery.body.photos[0]).toEqual({
+      id: f.photo.id,
+      eventId: f.event.id,
+      filename: 'portrait.jpg',
+      bytes: 100,
+      createdAt: f.photo.createdAt,
+    });
+    expect(JSON.stringify(gallery.body)).not.toMatch(
+      /privatePhotoNote|Owner-only editing/,
+    );
+    await f.read('moderator').expect(404);
+    await f.save('Moderator overwrite', 1, 'moderator').expect(404);
+  });
   it('allows only one concurrent write for a version and preserves the winner', async () => {
     const f = fixture();
     const results = await Promise.all([
