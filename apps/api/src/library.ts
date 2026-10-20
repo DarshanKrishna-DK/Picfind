@@ -1151,6 +1151,13 @@ export function createLibraryRouter(
     express.raw({ type: 'application/octet-stream', limit: MAX_INPUT_BYTES }),
     async (req, res) => {
       const user = await owner(req);
+      const expectedActor = req.get('X-PicFind-Upload-Actor');
+      if (expectedActor !== undefined && expectedActor !== user)
+        throw new ApiError(
+          409,
+          'UPLOAD_ACCOUNT_CHANGED',
+          'The signed-in account changed. Restore the account that prepared this upload queue.',
+        );
       const eventId =
         req.query.eventId === undefined
           ? undefined

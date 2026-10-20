@@ -161,6 +161,7 @@ describe('event moderator authority', () => {
     const result = await request(f.app)
       .post(`/api/photos?eventId=${f.event.id}`)
       .set('Cookie', 'picfind_session=moderator')
+      .set('X-PicFind-Upload-Actor', 'moderator')
       .set('Origin', origin)
       .set('Content-Type', 'application/octet-stream')
       .send(f.image)
