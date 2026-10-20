@@ -177,12 +177,10 @@ export function createStudioMilestones(
       accountId,
       limit: MILESTONE_LIMIT,
       totalCount: milestones.length,
-      milestones: milestones
-        .slice(0, MILESTONE_LIMIT)
-        .map((milestone) => ({
-          milestone,
-          project: projects.get(milestone.projectId) ?? null,
-        })),
+      milestones: milestones.slice(0, MILESTONE_LIMIT).map((milestone) => ({
+        milestone,
+        project: projects.get(milestone.projectId) ?? null,
+      })),
       projects: [...projects.values()]
         .filter((project) => project.stage !== 'archived')
         .sort(
