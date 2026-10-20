@@ -4,9 +4,10 @@ import request from 'supertest';
 import { createApp } from '../../apps/api/src/app';
 import { ApiError, type AuthUser } from '../../apps/api/src/auth';
 import type { LibraryRecord, LibraryStore } from '../../apps/api/src/library';
+import type { BillingService } from '../../apps/api/src/billing/service';
 
 const origin = 'http://localhost:5173';
-function fixture() {
+function fixture(metered = false) {
   const now = new Date().toISOString();
   const event: LibraryRecord = {
     id: randomUUID(),
@@ -79,6 +80,11 @@ function fixture() {
     email,
     emailVerified: true,
   }));
+  const billing = {
+    roleCatalogEnabled: true,
+    reserveDelivery: vi.fn(async () => {}),
+    refundDelivery: vi.fn(async () => {}),
+  };
   const app = createApp(
     {
       webOrigin: origin,
@@ -96,7 +102,10 @@ function fixture() {
         logout: vi.fn(),
       },
     },
-    { store },
+    {
+      store,
+      ...(metered ? { billing: billing as unknown as BillingService } : {}),
+    },
   );
   const root = `/api/events/${event.id}/proofing-collections/${collection.id}/invitations`;
   const create = (
@@ -130,10 +139,65 @@ function fixture() {
     read,
     revoke,
     path,
+    billing,
   };
 }
 
 describe('account-bound collection invitations', () => {
+  it('authorizes HEAD without fetching or billing bytes and denies revoked HEAD requests', async () => {
+    const f = fixture(true);
+    const invitation = (await f.create().expect(201)).body.invitation;
+    const url = `${f.path(invitation.id)}/photos/${f.photos[0]!.id}`;
+    await request(f.app)
+      .head(url)
+      .set('Cookie', 'picfind_session=client')
+      .expect(200)
+      .expect('Content-Length', '3');
+    expect(f.store.file).not.toHaveBeenCalled();
+    expect(f.billing.reserveDelivery).not.toHaveBeenCalled();
+    await f.revoke(invitation.id).expect(204);
+    await request(f.app)
+      .head(url)
+      .set('Cookie', 'picfind_session=client')
+      .expect(404);
+  });
+  it('denies metadata when a grant is revoked during the photo-list read', async () => {
+    const f = fixture();
+    const invitation = (await f.create().expect(201)).body.invitation;
+    const list = f.store.list;
+    f.store.list = async (owner, kind) => {
+      const rows = await list(owner, kind);
+      if (kind === 'photo')
+        f.records.get(invitation.id)!.invitationRevokedAt =
+          new Date().toISOString();
+      return rows;
+    };
+    await f.read(f.path(invitation.id)).expect(404);
+  });
+  it('reserves organizer delivery before storage, denies exhausted allowance and retains consumed egress on revocation', async () => {
+    const f = fixture(true);
+    const invitation = (await f.create().expect(201)).body.invitation;
+    const url = `${f.path(invitation.id)}/photos/${f.photos[0]!.id}`;
+    f.billing.reserveDelivery.mockRejectedValueOnce(
+      new ApiError(402, 'DELIVERY_LIMIT', 'Allowance exhausted.'),
+    );
+    await f.read(url).expect(402);
+    expect(f.store.file).not.toHaveBeenCalled();
+    vi.mocked(f.store.file).mockImplementationOnce(async () => {
+      expect(f.billing.reserveDelivery).toHaveBeenLastCalledWith(
+        'owner',
+        expect.any(String),
+        3,
+        'organizer',
+      );
+      f.records.get(invitation.id)!.invitationRevokedAt =
+        new Date().toISOString();
+      return new Response(new Uint8Array([1, 2, 3]));
+    });
+    await f.read(url).expect(404);
+    expect(f.billing.refundDelivery).not.toHaveBeenCalled();
+    expect(f.store.file).toHaveBeenCalledOnce();
+  });
   it('persists a capped invitation, projects only selected photos and revokes future metadata and media access', async () => {
     const f = fixture();
     const invitation = (await f.create().expect(201)).body.invitation;
