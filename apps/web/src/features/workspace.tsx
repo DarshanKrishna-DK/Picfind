@@ -39,6 +39,7 @@ const destinations = [
   { to: '/app/clients', title: 'Clients', icon: Users },
   { to: '/app/projects', title: 'Projects', icon: BriefcaseBusiness },
   { to: '/app/work', title: 'Work queue', icon: CalendarDays },
+  { to: '/app/schedule', title: 'Schedule', icon: CalendarDays },
   { to: '/app/import', title: 'Import photos', icon: CloudUpload },
   { to: '/app/discover/new', title: 'Find my photos', icon: ScanFace },
   { to: '/app/settings', title: 'Settings', icon: Settings },

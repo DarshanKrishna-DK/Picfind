@@ -7,6 +7,7 @@ describe('authentication return destinations', () => {
     '/app/clients',
     '/app/projects',
     '/app/work',
+    '/app/schedule',
     '/app/events/new',
     '/app/events/event-1',
     '/app/discover/new',

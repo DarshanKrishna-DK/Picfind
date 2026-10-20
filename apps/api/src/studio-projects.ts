@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { withAccountLock } from './locks.js';
 import { ownedProjectRecord as read } from './studio-project-access.js';
-import { removeProjectMilestones } from './studio-milestones.js';
+import { removeProjectStudioWork } from './studio-project-cleanup.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { savedClient } from '../../../packages/shared/src/studio-clients.js';
 import {
@@ -328,7 +328,7 @@ export function createStudioProjects(
           throw changed();
       };
       await assertRemoval();
-      await removeProjectMilestones(getStore(), accountId, id, assertRemoval);
+      await removeProjectStudioWork(getStore(), accountId, id, assertRemoval);
       await assertRemoval();
       try {
         await getStore().remove(id);
