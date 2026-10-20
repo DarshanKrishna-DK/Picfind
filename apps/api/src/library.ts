@@ -122,6 +122,7 @@ export interface LibraryRecord {
   brandingName?: string;
   accentColor?: string;
   selectedIds?: string[];
+  submittedById?: string;
   selectionMinimum?: number;
   selectionMaximum?: number;
   selectionClosesAt?: string;
