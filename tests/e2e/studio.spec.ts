@@ -21,7 +21,9 @@ for (const width of [1280, 390]) {
         exact: false,
       }),
     ).toBeVisible();
-    const guide = page.locator('.dashboard-guide');
+    const guide = page.locator('.dashboard-guide').filter({
+      has: page.locator('summary').filter({ hasText: 'Gallery setup guide' }),
+    });
     await expect(guide).not.toHaveAttribute('open', '');
     await guide.locator('summary').click();
     await expect(guide).toHaveAttribute('open', '');
