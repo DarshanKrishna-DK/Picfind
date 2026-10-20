@@ -77,3 +77,12 @@ before producing side effects. The regression cases pass with these fixes.
 Full repository validation passes 140 test files with 2,239 tests, lint, type
 checking and API/web builds. Existing nonfatal dependency annotation and bundle
 size warnings remain. No production deployment or provider activation occurred.
+
+Post-review boundary evidence passes all 92 focused tests. A real API export of
+exactly 500 recoverable records passes both the client response schema and CSV
+encoder without dropping an ID; 501 records produce the explicit repair error.
+The strengthened desktop/mobile price case accepts exactly 10,000,000.00,
+persists 1,000,000,000 minor units, rejects one cent above that limit before any
+write, then confirms that quote-only pricing clears the amount. Type checking
+and focused lint also pass. The review observations did not require changing
+the already-inclusive export limit, the numeric parser guard or fixture wiring.

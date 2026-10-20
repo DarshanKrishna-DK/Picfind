@@ -7,9 +7,33 @@ import {
   SERVICE_ACTOR,
   serviceCatalog,
   serviceExport,
+  serviceCsv,
 } from '../../packages/shared/src/studio-services';
 
 describe('private reusable photographer services', () => {
+  it('exports exactly 500 recoverable records through both client schemas and rejects a 501-record repair overflow', async () => {
+    const f = fixture();
+    await f.save().expect(200);
+    const original = f.records.get(f.serviceId)!;
+    for (let index = 1; index < 500; index++) {
+      const row = structuredClone(original),
+        id = randomUUID();
+      row.id = row.studioService!.id = id;
+      f.records.set(id, row);
+    }
+    const exported = serviceExport.parse(
+      (await f.read(`${f.root}/export`).expect(200)).body,
+    );
+    expect(exported.services).toHaveLength(500);
+    const csv = serviceCsv(exported.services);
+    for (const row of exported.services) expect(csv).toContain(row.id);
+    const extra = structuredClone(original),
+      extraId = randomUUID();
+    extra.id = extra.studioService!.id = extraId;
+    f.records.set(extraId, extra);
+    await f.read(`${f.root}/export`).expect(503);
+    await f.read(f.root).expect(503);
+  });
   it('persists and filters saved packages while keeping them out of generic and public projections', async () => {
     const f = fixture();
     const created = await f.save().expect(200);

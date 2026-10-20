@@ -211,6 +211,22 @@ test('rejects excess decimal precision before writing and removes the amount for
   ).toBeVisible();
   expect(f.state.writes).toBe(0);
   await page
+    .getByRole('textbox', { name: 'Package amount' })
+    .fill('10000000.01');
+  await page.getByRole('button', { name: 'Save service', exact: true }).click();
+  await expect(
+    page.getByText(/Enter an amount with at most two decimal places/),
+  ).toBeVisible();
+  expect(f.state.writes).toBe(0);
+  await page
+    .getByRole('textbox', { name: 'Package amount' })
+    .fill('10000000.00');
+  await save(page);
+  expect(
+    [...f.records.values()].find((row) => row.studioService)?.studioService
+      ?.amountMinor,
+  ).toBe(1000000000);
+  await page
     .getByRole('combobox', { name: 'Pricing mode' })
     .selectOption('quote');
   await expect(
