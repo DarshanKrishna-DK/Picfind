@@ -74,8 +74,11 @@ export function createProofingCollections(
     return event;
   }
   async function collectionOf(req: Request, actor: string, eventId: string) {
-    const row = await getStore().get(parseId(req.params.collectionId));
+    const id = parseId(req.params.collectionId);
+    const row = await getStore().get(id);
     if (
+      !row ||
+      row.id !== id ||
       row.kind !== 'job' ||
       row.purpose !== 'proofing-collection' ||
       row.ownerId !== actor ||
@@ -203,7 +206,8 @@ export function createProofingCollections(
       }
       if (
         existing &&
-        (existing.ownerId !== actor ||
+        (existing.id !== id ||
+          existing.ownerId !== actor ||
           existing.kind !== 'job' ||
           existing.purpose !== 'proofing-collection' ||
           existing.eventId !== event.id ||
@@ -228,8 +232,16 @@ export function createProofingCollections(
       const photos = await validatePhotos(actor, event.id, command.photoIds);
       // Re-read every selected photo before either creation or replay.
       for (const photoId of command.photoIds) {
-        const photo = await getStore().get(photoId);
+        let photo: LibraryRecord | undefined;
+        try {
+          photo = await getStore().get(photoId);
+        } catch (failure) {
+          if (!(failure instanceof ApiError && failure.status === 404))
+            throw failure;
+        }
         if (
+          !photo ||
+          photo.id !== photoId ||
           photo.ownerId !== actor ||
           photo.eventId !== event.id ||
           photo.scanId ||
@@ -257,7 +269,7 @@ export function createProofingCollections(
             'COLLECTION_CHANGED',
             'This collection was edited or belongs to another import. Existing contents were kept.',
           );
-        return present(latest, photos);
+        return { value: present(latest, photos), created: false };
       }
       const now = new Date().toISOString();
       const row: LibraryRecord = {
@@ -275,9 +287,11 @@ export function createProofingCollections(
         submissionPolicy: { ...DEFAULT_PROOFING_POLICY },
       };
       await getStore().put(row, true);
-      return present(row, photos);
+      return { value: present(row, photos), created: true };
     });
-    res.status(201).json({ collection });
+    res
+      .status(collection.created ? 201 : 200)
+      .json({ collection: collection.value });
   });
   router.post(root, async (req, res) => {
     const actor = await owner(req),

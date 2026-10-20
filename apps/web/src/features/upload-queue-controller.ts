@@ -115,6 +115,7 @@ export class UploadQueueController {
         raw,
         this.deps.accountId,
         this.deps.eventId,
+        this.deps.folder ?? false,
       );
       if (queue?.id !== this.current?.id) this.files.clear();
       this.current = queue;
@@ -205,6 +206,8 @@ export class UploadQueueController {
   }
   async prepare(selected: File[], folders?: FolderMapping[]) {
     await this.perform('prepare', async (signal) => {
+      if (!this.current && Boolean(this.deps.folder) !== Boolean(folders))
+        throw new Error('Review the folder mappings before saving this queue.');
       if (!selected.length || selected.length > UPLOAD_QUEUE_LIMIT)
         throw new Error(`Choose between 1 and ${UPLOAD_QUEUE_LIMIT} files.`);
       if (

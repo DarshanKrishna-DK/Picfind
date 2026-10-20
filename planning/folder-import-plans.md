@@ -77,3 +77,21 @@ the current mounted instance is known, avoiding contention with a disposed
 startup instance. Desktop and mobile layouts were inspected with horizontal
 overflow checks. Existing nonfatal Zod annotation and bundle-size warnings
 remain. No provider keys, infrastructure or production activation were added.
+
+Post-review, folder paths validate their own components instead of appending a
+placeholder basename that shortened the supported limit. Controllers and mapping
+reads now require the expected folder/ordinary manifest kind, preserving legacy
+ordinary queues while rejecting missing folder metadata. A vanished photo
+returns a scoped conflict, and collection lookup also validates the returned
+record identity. Creation returns 201; unchanged replay returns 200.
+
+The reviewed workflow creates one new collection for each explicitly selected
+folder; it does not merge folders into an existing collection. Unsafe or
+ambiguous paths reject preparation and now identify the offending filename.
+Refresh, cancel and explicit clear remain local recovery controls even after
+an event closes. They never start uploads. Added evidence covers the full
+512-character photo path, wrong-kind storage, same-folder duplicate bytes,
+deleted photos, malformed lookup identities and closed-destination recovery.
+All 90 focused tests passed after these changes, as did 30 desktop/mobile
+browser cases covering both folder imports and the existing ordinary saved
+queue. Type checking and focused lint passed.

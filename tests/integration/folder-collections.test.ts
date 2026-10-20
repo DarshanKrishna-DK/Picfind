@@ -36,7 +36,7 @@ describe('owner-only idempotent folder collection mapping', () => {
     const original = structuredClone(f.records.get(f.id));
     const reply = await f
       .create({ photoIds: [...f.body.photoIds].reverse() })
-      .expect(201);
+      .expect(200);
     expect(reply.body.collection).toMatchObject({
       id: f.id,
       title: 'Ceremony',
@@ -134,7 +134,7 @@ describe('owner-only idempotent folder collection mapping', () => {
       const id = randomUUID();
       f.records.set(id, { ...original, id });
     }
-    await f.create().expect(201);
+    await f.create().expect(200);
     await f
       .create({}, f.ownerId, f.ownerId, f.path.replace(f.id, randomUUID()))
       .expect(409);
@@ -150,7 +150,38 @@ describe('owner-only idempotent folder collection mapping', () => {
         f.records.get(f.photos[0]!.id)!.ownerId = f.clientId;
       return rows;
     });
-    await f.create().expect(409);
+    const get = vi.spyOn(f.store, 'get');
+    const response = await f.create().expect(409);
+    expect(response.body.error.code).toBe('COLLECTION_PHOTOS_UNAVAILABLE');
+    expect(get).toHaveBeenCalledWith(f.photos[0]!.id);
     expect(f.records.has(f.id)).toBe(false);
+  });
+  it('returns a scoped conflict when a photo disappears after candidate validation', async () => {
+    const f = fixture(),
+      list = f.store.list.bind(f.store);
+    vi.spyOn(f.store, 'list').mockImplementation(async (actor, kind) => {
+      const rows = await list(actor, kind);
+      if (kind === 'photo') f.records.delete(f.photos[0]!.id);
+      return rows;
+    });
+    const response = await f.create().expect(409);
+    expect(response.body.error.code).toBe('COLLECTION_PHOTOS_UNAVAILABLE');
+    expect(f.records.has(f.id)).toBe(false);
+  });
+  it('looks up the exact requested collection and denies a malformed adapter returning another identity', async () => {
+    const f = fixture();
+    await f.create().expect(201);
+    const get = f.store.get.bind(f.store),
+      calls: string[] = [];
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      calls.push(id);
+      const row = await get(id);
+      if (id === f.id && calls.filter((key) => key === f.id).length === 2)
+        row.id = randomUUID();
+      return row;
+    });
+    await f.create().expect(404);
+    expect(calls.filter((id) => id === f.id)).toHaveLength(2);
+    expect(f.records.get(f.id)?.collectionVersion).toBe(1);
   });
 });

@@ -68,6 +68,11 @@ async function fixture(page: Page) {
       bytes: Buffer.from('synthetic raw').toString('base64'),
       type: '',
     },
+    {
+      path: 'Wedding/Ceremony/copy.jpg',
+      bytes: colors[0]!.toString('base64'),
+      type: 'image/jpeg',
+    },
   ];
   const bodies: Buffer[] = [];
   const state = {
@@ -202,7 +207,7 @@ test('reviews nested folders, uploads unique bytes and deliberately maps exact p
   await f.open();
   await choose(page, f.inputs);
   await expect(
-    panel(page).getByText(/4 files inspected. 1 excluded. 3 supported/),
+    panel(page).getByText(/5 files inspected. 1 excluded. 4 supported/),
   ).toBeVisible();
   await panel(page).getByText('Inspect file report', { exact: true }).click();
   await expect(panel(page).getByText(/Unsupported file type/)).toBeVisible();
@@ -511,4 +516,43 @@ test('a changed saved manifest cannot be mapped from an older on-screen plan', a
   ).toBeVisible();
   expect(f.state.mappings).toBe(0);
   expect(f.collections()).toHaveLength(0);
+});
+
+test('closed destinations still allow local refresh, cancellation and explicit clearing without server writes', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.open();
+  await prepare(page, f.inputs);
+  f.records.get(f.eventId)!.archived = true;
+  await page.reload();
+  await expect(
+    panel(page).getByText(/This destination is unavailable/),
+  ).toBeVisible();
+  await expect(
+    panel(page).getByRole('button', { name: 'Start or resume folder upload' }),
+  ).toBeDisabled();
+  await expect(
+    panel(page).getByRole('button', {
+      name: 'Create or verify folder collections',
+    }),
+  ).toBeDisabled();
+  await panel(page)
+    .getByRole('button', { name: 'Refresh folder progress' })
+    .click();
+  await expect(panel(page).getByText(/Queue: paused/)).toBeVisible();
+  await panel(page)
+    .getByRole('button', { name: 'Cancel unfinished folder uploads' })
+    .click();
+  await expect(panel(page).getByText(/Queue: cancelled/)).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await panel(page)
+    .getByRole('button', { name: 'Clear saved folder plan' })
+    .click();
+  await expect(
+    panel(page).getByText(/Saved folder plan cleared/),
+  ).toBeVisible();
+  expect(f.state.uploads).toBe(0);
+  expect(f.state.mappings).toBe(0);
+  expect(f.stored.size).toBe(0);
 });

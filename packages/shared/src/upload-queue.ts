@@ -88,6 +88,7 @@ export function parseUploadQueue(
   text: string | null,
   accountId: string,
   eventId: string | null,
+  folder?: boolean,
 ): UploadQueue | null {
   if (text === null) return null;
   if (text.length > UPLOAD_QUEUE_STORAGE_LIMIT)
@@ -104,7 +105,8 @@ export function parseUploadQueue(
   if (
     !result.success ||
     result.data.accountId !== accountId ||
-    result.data.eventId !== eventId
+    result.data.eventId !== eventId ||
+    (folder !== undefined && Boolean(result.data.folders) !== folder)
   )
     throw new Error(
       'The saved upload queue is damaged or belongs to another destination. Its contents were not changed.',

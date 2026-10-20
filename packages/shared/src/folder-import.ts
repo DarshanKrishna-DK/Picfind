@@ -3,30 +3,25 @@ import { z } from 'zod';
 export const FOLDER_SCAN_LIMIT = 1000;
 export const FOLDER_GROUP_LIMIT = 20;
 export const FOLDER_ACTOR_HEADER = 'X-PicFind-Upload-Actor';
+const safeParts = (path: string) =>
+  !/[\\:]/.test(path) &&
+  ![...path].some(
+    (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+  ) &&
+  path.split('/').every((part) => part && part !== '.' && part !== '..');
 export const relativePhotoPath = z
   .string()
   .min(1)
   .max(512)
-  .refine(
-    (path) =>
-      !/[\\:]/.test(path) &&
-      ![...path].some(
-        (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
-      ) &&
-      path.split('/').length >= 2 &&
-      path.split('/').every((part) => part && part !== '.' && part !== '..'),
-  );
+  .refine((path) => safeParts(path) && path.split('/').length >= 2);
 export const folderMappingSchema = z
   .object({
-    path: z.string().min(1).max(511),
+    path: z.string().min(1).max(510).refine(safeParts),
     title: z.string().trim().min(1).max(100),
     collectionId: z.uuid(),
     createCollection: z.boolean(),
   })
-  .strict()
-  .refine(
-    (row) => relativePhotoPath.safeParse(`${row.path}/photo.jpg`).success,
-  );
+  .strict();
 export const folderMappingsSchema = z
   .array(folderMappingSchema)
   .min(1)
@@ -65,7 +60,7 @@ export function inspectFolder(files: File[]): FolderFile[] {
       seen.has(path)
     )
       throw new Error(
-        'This folder contains missing, unsafe or duplicate relative paths. Choose an unambiguous folder.',
+        `This folder contains missing, unsafe or duplicate relative paths. File: ${JSON.stringify(file.name.slice(0, 255))}. Choose an unambiguous folder.`,
       );
     seen.add(path);
     const extension = file.name.split('.').at(-1)?.toLowerCase();

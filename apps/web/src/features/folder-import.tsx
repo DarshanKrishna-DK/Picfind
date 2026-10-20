@@ -328,6 +328,7 @@ function FolderPanel({
               localStorage.getItem(uploadQueueKey(accountId, eventId, true)),
               accountId,
               eventId,
+              true,
             );
             if (JSON.stringify(latest) !== JSON.stringify(queue))
               throw new Error(

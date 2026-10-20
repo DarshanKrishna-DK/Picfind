@@ -19,11 +19,11 @@ function file(path: string, text = path, type = 'image/jpeg') {
 function fixture() {
   const data = new Map<string, string>();
   const upload = vi.fn(async () => randomUUID());
-  const make = () =>
+  const make = (folder = true) =>
     new UploadQueueController({
       accountId: 'owner',
       eventId: 'event',
-      folder: true,
+      folder,
       storage: {
         getItem: (key) => data.get(key) ?? null,
         setItem: (key, value) => {
@@ -149,7 +149,7 @@ describe('folder descriptors and recoverable path-aware queues', () => {
   });
   it('keeps old saved queues compatible and separates folder storage from ordinary batches', async () => {
     const f = fixture(),
-      queue = f.make();
+      queue = f.make(false);
     await queue.refresh();
     await queue.prepare([file('Root/a.jpg')]);
     const text = f.data.get(queue.key)!;
@@ -160,6 +160,58 @@ describe('folder descriptors and recoverable path-aware queues', () => {
     expect(() => parseUploadQueue(text, 'another', 'event')).toThrow(
       /another destination/,
     );
+  });
+  it('accepts the full supported photo path without reserving a longer placeholder filename', async () => {
+    const f = fixture(),
+      queue = f.make(),
+      path = 'r'.repeat(506);
+    const photo = file(`${path}/a.jpg`);
+    expect(photo.webkitRelativePath).toHaveLength(512);
+    expect(inspectFolder([photo])[0]?.reason).toBeNull();
+    await queue.refresh();
+    await queue.prepare([photo], [{ ...f.folders[0]!, path }]);
+    expect(queue.view.queue?.folders?.[0]?.path).toBe(path);
+  });
+  it('rejects a missing folder plan and an ordinary queue copied under a folder key', async () => {
+    const f = fixture(),
+      ordinary = f.make(false);
+    await ordinary.refresh();
+    await ordinary.prepare([file('Root/a.jpg')]);
+    const text = f.data.get(ordinary.key)!;
+    const folder = f.make();
+    f.data.set(folder.key, text);
+    await expect(folder.refresh()).rejects.toThrow(/damaged/);
+    expect(f.data.get(folder.key)).toBe(text);
+    expect(f.upload).not.toHaveBeenCalled();
+    expect(() => parseUploadQueue(text, 'owner', 'event', true)).toThrow(
+      /damaged/,
+    );
+    const fresh = fixture(),
+      empty = fresh.make();
+    await empty.refresh();
+    await expect(empty.prepare([file('Root/a.jpg')])).rejects.toThrow(
+      /mappings/,
+    );
+    expect(fresh.data.size).toBe(0);
+  });
+  it('uploads same-folder duplicate bytes once while retaining both reported names', async () => {
+    const f = fixture(),
+      queue = f.make();
+    await queue.refresh();
+    await queue.prepare(
+      [
+        file('Root/Ceremony/a.jpg', 'same'),
+        file('Root/Ceremony/b.jpg', 'same'),
+      ],
+      [f.folders[0]!],
+    );
+    await queue.run();
+    expect(f.upload).toHaveBeenCalledOnce();
+    expect(queue.view.queue?.items[0]?.relativePaths).toEqual([
+      'Root/Ceremony/a.jpg',
+      'Root/Ceremony/b.jpg',
+    ]);
+    expect(queue.view.queue?.items).toHaveLength(1);
   });
   it('rejects invalid saved memberships and out-of-range mappings', async () => {
     const f = fixture(),
