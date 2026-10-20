@@ -10,6 +10,27 @@ import {
 } from '../../packages/shared/src/credit-presets';
 
 describe('owned photographer credit presets and fresh batch previews', () => {
+  it.each(['1', null, false])(
+    'rejects the same nonnumeric version %j on save and delete without changing the preset',
+    async (version) => {
+      const f = fixture();
+      await f.save().expect(200);
+      const original = structuredClone(f.records.get(f.presetId));
+      await f
+        .put(`${f.presetRoot}/${f.presetId}`, {
+          ...f.fields,
+          name: 'Rejected change',
+          version,
+        })
+        .expect(400);
+      await f.remove(`${f.presetRoot}/${f.presetId}`, { version }).expect(400);
+      expect(f.records.get(f.presetId)).toEqual(original);
+      await f.save({ name: 'Accepted numeric version' }, 1).expect(200);
+      await f
+        .remove(`${f.presetRoot}/${f.presetId}`, { version: 2 })
+        .expect(204);
+    },
+  );
   it('persists private presets separately from photos, galleries and generic library jobs', async () => {
     const f = fixture();
     await f.save().expect(200);

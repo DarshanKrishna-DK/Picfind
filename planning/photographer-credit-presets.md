@@ -78,3 +78,9 @@ failure, a committed write with a lost reply, newer-edit conflicts, account
 changes and navigation during a request. Desktop and mobile layouts were
 inspected with horizontal overflow checks. Existing nonfatal bundle-size
 warnings remain. No production provider or infrastructure was activated.
+
+Shipwright questioned whether PUT coerces version strings while DELETE does
+not. Both use strict `z.number()` validation. Three API regressions now verify
+that string, null and boolean versions are rejected by both methods, leave
+the saved preset unchanged, and still permit subsequent numeric updates and
+deletion. No coercion mismatch was reproduced.
