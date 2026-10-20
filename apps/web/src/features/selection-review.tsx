@@ -11,6 +11,7 @@ import {
   type SelectionStatus,
 } from '../../../../packages/shared/src/proofing';
 import './organizer.css';
+import { SelectionComparison } from './selection-comparison';
 import {
   exportSelectionFilenames,
   type SelectionExportFormat,
@@ -66,6 +67,11 @@ export function SelectionInbox({
         private; saving a review does not send a message or change the guest
         gallery.
       </p>
+      <SelectionComparison
+        key={eventId}
+        eventId={eventId}
+        selections={selections}
+      />
       <div className="selection-filters">
         <label>
           Search selections
