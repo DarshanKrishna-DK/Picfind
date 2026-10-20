@@ -3,13 +3,14 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { withAccountLock } from './locks.js';
+import { ownedProjectRecord as read } from './studio-project-access.js';
+import { removeProjectMilestones } from './studio-milestones.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { savedClient } from '../../../packages/shared/src/studio-clients.js';
 import {
   advanceProject,
   PROJECT_LIMIT,
   projectWrite,
-  savedProject,
   type SavedProject,
   type ProjectFields,
   type ProjectView,
@@ -53,32 +54,6 @@ export function createStudioProjects(
       if (failure instanceof ApiError && failure.status === 404) return null;
       throw failure;
     }
-  }
-  function read(row: LibraryRecord, actorId: string, id = row.id) {
-    if (
-      row.id !== id ||
-      row.ownerId !== actorId ||
-      row.kind !== 'job' ||
-      row.purpose !== 'studio-project' ||
-      row.eventId ||
-      row.deletionStartedAt ||
-      row.deletionCompletedAt
-    )
-      throw missing();
-    const parsed = savedProject.safeParse(row.studioProject);
-    if (
-      !parsed.success ||
-      parsed.data.id !== id ||
-      parsed.data.createdAt !== row.createdAt ||
-      parsed.data.transitions.some((entry) => entry.actorId !== actorId) ||
-      !/^[a-f0-9]{64}$/.test(row.projectCommandDigest ?? '')
-    )
-      throw new ApiError(
-        503,
-        'PROJECT_METADATA_INVALID',
-        'A project record needs metadata repair.',
-      );
-    return { row, project: parsed.data };
   }
   async function find(id: string, actorId: string) {
     const row = await maybe(id);
@@ -309,6 +284,14 @@ export function createStudioProjects(
           'PROJECT_NOT_ARCHIVED',
           'Archive this project before removing its private record.',
         );
+      await removeProjectMilestones(getStore(), accountId, id);
+      const fresh = await find(id, accountId);
+      if (
+        !fresh ||
+        fresh.project.version !== body.data.version ||
+        fresh.project.stage !== 'archived'
+      )
+        throw changed();
       await getStore().remove(id);
     });
     res.status(204).end();

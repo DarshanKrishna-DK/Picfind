@@ -461,8 +461,8 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
               {confirmRemove && (
                 <div role="group" aria-label="Confirm project removal">
                   <p>
-                    Remove this archived project and its recent stage history?
-                    Linked client and event records are retained.
+                    Remove this archived project, its milestones and its recent
+                    stage history? Linked client and event records are retained.
                   </p>
                   <button
                     type="button"
