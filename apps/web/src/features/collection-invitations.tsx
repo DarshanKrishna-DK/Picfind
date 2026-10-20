@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, session } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
+import { ProofingComments } from './proofing-comments';
 import {
   ClientCollectionReview,
   OwnerClientDecisions,
@@ -173,6 +174,10 @@ function InvitationManager({
                     invitationId={invitation.id}
                     email={invitation.email}
                   />
+                  <ProofingComments
+                    root={`${root}/${invitation.id}/comments`}
+                    title={`Photo discussion with ${invitation.email}`}
+                  />
                   {!invitation.revokedAt && !expired && (
                     <>
                       <label>
@@ -300,6 +305,10 @@ export function InvitedCollectionPage() {
               invitationId={invitationId!}
               accountId={account.data.id}
               photos={query.data.photos}
+            />
+            <ProofingComments
+              root={`/proofing-invitations/${invitationId}/comments`}
+              title="Photo discussion with your photographer"
             />
           </>
         )

@@ -5,6 +5,7 @@ import { unzipSync } from 'fflate';
 import { chooseMenu } from './menu';
 import type { ProofingCollection } from '../../packages/shared/src/proofing-collection';
 import type { ProofingDecisions } from '../../packages/shared/src/proofing-decisions';
+import type { ProofingComment } from '../../packages/shared/src/proofing-comments';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
 async function fixture(page: Page) {
@@ -518,6 +519,317 @@ test('collection invitations persist, survive client reload and stop access afte
     manager.getByLabel('Invitation link for client@example.test'),
   ).toHaveCount(0);
   expect(state.unexpectedWrites).toEqual([]);
+});
+
+test('private photo discussion persists, retries safely, supports photographer replies and hides denied access', async ({
+  page,
+}) => {
+  const { eventId, photos, jpeg } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const ownerRoot = `/api/events/${eventId}/proofing-collections`;
+  const clientRoot = `/api/proofing-invitations/${invitationId}`;
+  let actor: 'client' | 'owner' = 'client';
+  let revoked = false;
+  let denyDiscussionRead = false;
+  let holdCommentSave = true;
+  let releaseCommentSave: (() => void) | undefined;
+  let discussionPhotos = [photos[0]!];
+  let failAfterSave = true;
+  let lastId: string | undefined;
+  const comments: ProofingComment[] = [];
+  const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: actor,
+          name: actor,
+          email: `${actor}@example.test`,
+          emailVerified: true,
+        },
+      },
+    }),
+  );
+  await page.route(`**${ownerRoot}`, (route) =>
+    route.fulfill({
+      json: {
+        limit: 50,
+        collections: [
+          {
+            id: collectionId,
+            title: 'Album round',
+            version: 1,
+            createdAt: expiresAt,
+            updatedAt: expiresAt,
+            photoIds: [photos[0]!.id],
+            photos: [photos[0]],
+            unavailableCount: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${ownerRoot}/${collectionId}/invitations`, (route) =>
+    route.fulfill({
+      json: {
+        invitations: [
+          {
+            id: invitationId,
+            email: 'client@example.test',
+            createdAt: expiresAt,
+            expiresAt,
+            revokedAt: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${clientRoot}**`, (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/decisions'))
+      return route.fulfill({
+        json: {
+          version: 0,
+          updatedAt: null,
+          unavailableCount: 0,
+          decisions: [],
+        },
+      });
+    if (new URL(route.request().url()).pathname.includes('/photos/'))
+      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+    return route.fulfill({
+      json: {
+        title: 'Album round',
+        eventTitle: 'Garden wedding',
+        expiresAt,
+        photos: [photos[0]],
+      },
+    });
+  });
+  await page.route('**/api/**/comments**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const owner = path.startsWith(ownerRoot);
+    if (
+      (!owner && (revoked || actor !== 'client')) ||
+      (owner && actor !== 'owner') ||
+      (denyDiscussionRead && route.request().method() === 'GET')
+    )
+      return route.fulfill({
+        status: 404,
+        json: { error: { message: 'Discussion unavailable.' } },
+      });
+    if (route.request().method() === 'POST') {
+      if (holdCommentSave) {
+        holdCommentSave = false;
+        await new Promise<void>((resolve) => {
+          releaseCommentSave = resolve;
+        });
+      }
+      const input = route.request().postDataJSON() as {
+        id: string;
+        photoId: string;
+        text: string;
+      };
+      if (lastId && input.text === 'Please remove <b>the sign</b>.')
+        expect(input.id).toBe(lastId);
+      if (!comments.some((row) => row.id === input.id))
+        comments.push({
+          ...input,
+          author: owner ? 'photographer' : 'client',
+          createdAt: new Date().toISOString(),
+          removedAt: null,
+          canRemove: true,
+        });
+      if (failAfterSave) {
+        failAfterSave = false;
+        lastId = input.id;
+        return route.fulfill({
+          status: 503,
+          json: {
+            error: { message: 'Response interrupted. Retry this message.' },
+          },
+        });
+      }
+      return route.fulfill({ status: 201, json: { id: input.id } });
+    }
+    if (route.request().method() === 'DELETE') {
+      const row = comments.find((entry) => path.endsWith(`/${entry.id}`))!;
+      row.text = null;
+      row.removedAt = new Date().toISOString();
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({
+      json: {
+        canPost: !revoked,
+        remaining: 100 - comments.length,
+        unavailableCount: 0,
+        photos: discussionPhotos.map(({ id, filename }) => ({ id, filename })),
+        comments: comments.map((row) => ({
+          ...row,
+          canRemove: !row.removedAt && (owner || row.author === 'client'),
+        })),
+      },
+    });
+  });
+  await page.goto(`/proofing/${invitationId}`);
+  const clientDiscussion = page.getByRole('region', {
+    name: 'Photo discussion with your photographer',
+    exact: true,
+  });
+  await clientDiscussion
+    .getByRole('button', {
+      name: 'Photo discussion with your photographer',
+      exact: true,
+    })
+    .click();
+  const draft = clientDiscussion.getByLabel(
+    'Message to client or photographer',
+  );
+  await draft.fill('Please remove <b>the sign</b>.');
+  await clientDiscussion
+    .getByRole('button', { name: 'Save message', exact: true })
+    .click();
+  await expect.poll(() => Boolean(releaseCommentSave)).toBe(true);
+  await expect(
+    clientDiscussion.getByRole('button', {
+      name: 'Refresh discussion',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(draft).toBeDisabled();
+  releaseCommentSave!();
+  await expect(clientDiscussion.getByRole('alert')).toContainText(
+    'Response interrupted',
+  );
+  await expect(draft).toHaveValue('Please remove <b>the sign</b>.');
+  await clientDiscussion
+    .getByRole('button', { name: 'Save message', exact: true })
+    .click();
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Please remove <b>the sign</b>.');
+  await expect(draft).toHaveValue('');
+  expect(comments).toHaveLength(1);
+  await expect(clientDiscussion.locator('b')).toHaveCount(0);
+  await page.reload();
+  await clientDiscussion
+    .getByRole('button', {
+      name: 'Photo discussion with your photographer',
+      exact: true,
+    })
+    .click();
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Please remove <b>the sign</b>.');
+
+  denyDiscussionRead = true;
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(clientDiscussion.getByRole('alert')).toContainText(
+    'Discussion unavailable',
+  );
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toHaveCount(0);
+  denyDiscussionRead = false;
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Please remove <b>the sign</b>.');
+  await draft.fill('This draft belongs only to the first photo.');
+  discussionPhotos = [photos[1]!];
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(draft).toHaveCount(0);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await clientDiscussion
+    .getByLabel('Discussion photo')
+    .selectOption(photos[1]!.id);
+  await expect(draft).toHaveValue('');
+  discussionPhotos = [photos[0]!];
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await clientDiscussion
+    .getByLabel('Discussion photo')
+    .selectOption(photos[0]!.id);
+
+  actor = 'owner';
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Album round' })
+    .click();
+  const ownerDiscussion = page.getByRole('region', {
+    name: 'Photo discussion with client@example.test',
+    exact: true,
+  });
+  await ownerDiscussion
+    .getByRole('button', {
+      name: 'Photo discussion with client@example.test',
+      exact: true,
+    })
+    .click();
+  await expect(
+    ownerDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Please remove <b>the sign</b>.');
+  await ownerDiscussion
+    .getByLabel('Message to client or photographer')
+    .fill('I can retouch that sign.');
+  await ownerDiscussion
+    .getByRole('button', { name: 'Save message', exact: true })
+    .click();
+  await expect(
+    ownerDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('I can retouch that sign.');
+
+  actor = 'client';
+  await page.goto(`/proofing/${invitationId}`);
+  await clientDiscussion
+    .getByRole('button', {
+      name: 'Photo discussion with your photographer',
+      exact: true,
+    })
+    .click();
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Photographer');
+  await expect(
+    clientDiscussion.getByRole('button', {
+      name: 'Remove message',
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await clientDiscussion
+    .getByRole('button', { name: 'Remove message', exact: true })
+    .click();
+  expect(comments[0]!.text).not.toBeNull();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await clientDiscussion
+    .getByRole('button', { name: 'Remove message', exact: true })
+    .click();
+  await expect(
+    clientDiscussion.getByText('Message removed.', { exact: true }).last(),
+  ).toBeVisible();
+  expect(comments[0]!.text).toBeNull();
+  revoked = true;
+  await draft.fill('A message after revocation');
+  await clientDiscussion
+    .getByRole('button', { name: 'Save message', exact: true })
+    .click();
+  await expect(clientDiscussion.getByRole('alert')).toContainText(
+    'Discussion unavailable',
+  );
+  await expect(
+    clientDiscussion.getByText('I can retouch that sign.', { exact: true }),
+  ).toHaveCount(0);
+  await expect(draft).toHaveCount(0);
+  expect(comments).toHaveLength(2);
 });
 
 test('named collections persist, recover conflicts, remove unavailable photos and delete only the set', async ({

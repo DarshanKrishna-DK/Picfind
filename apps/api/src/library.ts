@@ -126,6 +126,7 @@ export interface LibraryRecord {
     | 'selection'
     | 'proofing-collection'
     | 'collection-invitation'
+    | 'proofing-comment'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -144,6 +145,12 @@ export interface LibraryRecord {
   }[];
   proofingDecisionVersion?: number;
   proofingDecisionUpdatedAt?: string;
+  commentInvitationId?: string;
+  commentPhotoId?: string;
+  commentAuthorId?: string;
+  commentAuthorRole?: 'client' | 'photographer';
+  commentText?: string;
+  commentRemovedAt?: string;
   privatePhotoNote?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
