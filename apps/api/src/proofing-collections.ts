@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
@@ -7,6 +7,10 @@ import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
 import { proofingPolicy, readProofingPolicy } from './proofing-policy.js';
 import { DEFAULT_PROOFING_POLICY } from '../../../packages/shared/src/proofing-policy.js';
+import {
+  FOLDER_ACTOR_HEADER,
+  folderCollectionCommand,
+} from '../../../packages/shared/src/folder-import.js';
 import {
   PROOFING_COLLECTION_LIMIT,
   PROOFING_COLLECTION_PHOTO_LIMIT,
@@ -70,8 +74,11 @@ export function createProofingCollections(
     return event;
   }
   async function collectionOf(req: Request, actor: string, eventId: string) {
-    const row = await getStore().get(parseId(req.params.collectionId));
+    const id = parseId(req.params.collectionId);
+    const row = await getStore().get(id);
     if (
+      !row ||
+      row.id !== id ||
       row.kind !== 'job' ||
       row.purpose !== 'proofing-collection' ||
       row.ownerId !== actor ||
@@ -150,6 +157,141 @@ export function createProofingCollections(
       event = await eventOf(req, actor);
     const row = await collectionOf(req, actor, event.id);
     res.json({ collection: present(row, await photosOf(actor, event.id)) });
+  });
+  router.put(`${root}/:collectionId/import`, async (req, res) => {
+    const actor = await owner(req);
+    if (req.get(FOLDER_ACTOR_HEADER) !== actor)
+      throw new ApiError(
+        409,
+        'ACCOUNT_CHANGED',
+        'The signed-in account changed. Reload before creating a collection.',
+      );
+    const id = parseId(req.params.collectionId);
+    const data = folderCollectionCommand.safeParse(req.body);
+    if (!data.success)
+      throw new ApiError(
+        400,
+        'INVALID_COLLECTION',
+        'Name the folder collection and select 1 to 100 distinct event photos.',
+      );
+    const command = {
+      title: data.data.title,
+      photoIds: [...data.data.photoIds].sort(),
+    };
+    const digest = createHash('sha256')
+      .update(JSON.stringify(command))
+      .digest('hex');
+    const collection = await withAccountLock(actor, async () => {
+      const checkEvent = async () => {
+        const event = await eventOf(req, actor);
+        if (
+          event.archived ||
+          (event.expiresAt !== undefined &&
+            !(Date.parse(event.expiresAt) > Date.now()))
+        )
+          throw new ApiError(
+            410,
+            'EVENT_CLOSED',
+            'This event is closed for folder imports.',
+          );
+        return event;
+      };
+      const event = await checkEvent();
+      let existing: LibraryRecord | null = null;
+      try {
+        existing = await getStore().get(id);
+      } catch (failure) {
+        if (!(failure instanceof ApiError && failure.status === 404))
+          throw failure;
+      }
+      if (
+        existing &&
+        (existing.id !== id ||
+          existing.ownerId !== actor ||
+          existing.kind !== 'job' ||
+          existing.purpose !== 'proofing-collection' ||
+          existing.eventId !== event.id ||
+          existing.deletionStartedAt)
+      )
+        throw missing();
+      const rows = await getStore().list(actor, 'job');
+      if (
+        !existing &&
+        rows.filter(
+          (row) =>
+            row.ownerId === actor &&
+            row.eventId === event.id &&
+            row.purpose === 'proofing-collection',
+        ).length >= PROOFING_COLLECTION_LIMIT
+      )
+        throw new ApiError(
+          409,
+          'COLLECTION_LIMIT',
+          'This event has reached its 50-collection limit.',
+        );
+      const photos = await validatePhotos(actor, event.id, command.photoIds);
+      // Re-read every selected photo before either creation or replay.
+      for (const photoId of command.photoIds) {
+        let photo: LibraryRecord | undefined;
+        try {
+          photo = await getStore().get(photoId);
+        } catch (failure) {
+          if (!(failure instanceof ApiError && failure.status === 404))
+            throw failure;
+        }
+        if (
+          !photo ||
+          photo.id !== photoId ||
+          photo.ownerId !== actor ||
+          photo.eventId !== event.id ||
+          photo.scanId ||
+          photo.deletionStartedAt ||
+          !photoAvailable(photo)
+        )
+          throw new ApiError(
+            409,
+            'COLLECTION_PHOTOS_UNAVAILABLE',
+            'An imported photo is no longer available. Refresh before mapping this folder.',
+          );
+      }
+      await checkEvent();
+      if (existing) {
+        const latest = await collectionOf(req, actor, event.id);
+        if (
+          latest.collectionImportDigest !== digest ||
+          latest.collectionVersion !== 1 ||
+          latest.title !== command.title ||
+          JSON.stringify([...(latest.selectedIds ?? [])].sort()) !==
+            JSON.stringify(command.photoIds)
+        )
+          throw new ApiError(
+            409,
+            'COLLECTION_CHANGED',
+            'This collection was edited or belongs to another import. Existing contents were kept.',
+          );
+        return { value: present(latest, photos), created: false };
+      }
+      const now = new Date().toISOString();
+      const row: LibraryRecord = {
+        id,
+        ownerId: actor,
+        kind: 'job',
+        purpose: 'proofing-collection',
+        eventId: event.id,
+        title: command.title,
+        selectedIds: command.photoIds,
+        collectionVersion: 1,
+        collectionImportDigest: digest,
+        createdAt: now,
+        collectionUpdatedAt: now,
+        submissionPolicy: { ...DEFAULT_PROOFING_POLICY },
+      };
+      await getStore().put(row, true);
+      return { value: present(row, photos), created: true };
+    });
+    res
+      .status(collection.created ? 201 : 200)
+      .json({ collection: collection.value });
   });
   router.post(root, async (req, res) => {
     const actor = await owner(req),

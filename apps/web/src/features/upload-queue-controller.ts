@@ -9,6 +9,11 @@ import {
   type UploadQueue,
   type UploadQueueItem,
 } from '../../../../packages/shared/src/upload-queue';
+import {
+  folderMappingsSchema,
+  inspectFolder,
+  type FolderMapping,
+} from '../../../../packages/shared/src/folder-import';
 
 export class UploadQueueBusy extends Error {
   constructor() {
@@ -43,6 +48,7 @@ export interface UploadQueueView {
 interface Dependencies {
   accountId: string;
   eventId: string | null;
+  folder?: boolean;
   storage: StoragePort;
   exclusive: (work: () => Promise<void>) => Promise<void>;
   digest: (file: File) => Promise<string>;
@@ -78,7 +84,7 @@ export class UploadQueueController {
   private externalBusy = false;
   private disposed = false;
   constructor(private readonly deps: Dependencies) {
-    this.key = uploadQueueKey(deps.accountId, deps.eventId);
+    this.key = uploadQueueKey(deps.accountId, deps.eventId, deps.folder);
   }
   get view(): UploadQueueView {
     return {
@@ -109,6 +115,7 @@ export class UploadQueueController {
         raw,
         this.deps.accountId,
         this.deps.eventId,
+        this.deps.folder ?? false,
       );
       if (queue?.id !== this.current?.id) this.files.clear();
       this.current = queue;
@@ -197,8 +204,10 @@ export class UploadQueueController {
       false,
     );
   }
-  async prepare(selected: File[]) {
+  async prepare(selected: File[], folders?: FolderMapping[]) {
     await this.perform('prepare', async (signal) => {
+      if (!this.current && Boolean(this.deps.folder) !== Boolean(folders))
+        throw new Error('Review the folder mappings before saving this queue.');
       if (!selected.length || selected.length > UPLOAD_QUEUE_LIMIT)
         throw new Error(`Choose between 1 and ${UPLOAD_QUEUE_LIMIT} files.`);
       if (
@@ -216,14 +225,40 @@ export class UploadQueueController {
         throw new Error(
           'Choose JPEG, PNG or WebP files with valid names, each between 1 byte and 8 MiB.',
         );
-      const prepared = new Map<string, { file: File; digest: string }>();
+      const paths = folders ? inspectFolder(selected) : [];
+      if (folders) {
+        folderMappingsSchema.parse(folders);
+        if (
+          paths.some(
+            (row) =>
+              row.reason ||
+              !folders.some((folder) => folder.path === row.folder),
+          )
+        )
+          throw new Error(
+            'Review the supported files and folder mappings first.',
+          );
+      }
+      const prepared = new Map<
+        string,
+        { file: File; digest: string; relativePaths: string[] }
+      >();
       for (const file of selected) {
         if (signal.aborted) return;
         const digest = await this.deps.digest(file);
         if (signal.aborted) return;
         if (!/^[0-9a-f]{64}$/.test(digest))
           throw new Error('Could not fingerprint this file.');
-        if (!prepared.has(digest)) prepared.set(digest, { file, digest });
+        const path = paths.find((row) => row.file === file)?.path;
+        const previous = prepared.get(digest);
+        if (previous) {
+          if (path) previous.relativePaths.push(path);
+        } else
+          prepared.set(digest, {
+            file,
+            digest,
+            relativePaths: path ? [path] : [],
+          });
       }
       if (this.current) {
         const matched = [...prepared.values()].filter(({ file, digest }) =>
@@ -259,14 +294,18 @@ export class UploadQueueController {
           createdAt: now,
           updatedAt: now,
           mode: 'paused',
-          items: [...prepared.values()].map(({ file, digest }) => ({
-            id: crypto.randomUUID(),
-            name: file.name,
-            size: file.size,
-            type: file.type as UploadQueueItem['type'],
-            digest,
-            status: 'pending',
-          })),
+          ...(folders ? { folders } : {}),
+          items: [...prepared.values()].map(
+            ({ file, digest, relativePaths }) => ({
+              id: crypto.randomUUID(),
+              name: file.name,
+              size: file.size,
+              type: file.type as UploadQueueItem['type'],
+              digest,
+              ...(relativePaths.length ? { relativePaths } : {}),
+              status: 'pending',
+            }),
+          ),
         });
         for (const { file, digest } of prepared.values())
           this.files.set(digest, file);

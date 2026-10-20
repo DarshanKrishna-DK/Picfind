@@ -7,6 +7,7 @@ import { ErrorNote } from '../components/ui';
 import { useLibrary } from '../hooks';
 import './sources.css';
 import { SavedCloudImports } from './saved-imports';
+import { FolderImport } from './folder-import';
 import { FolderSyncSetup } from './event-folder-syncs';
 
 type Source = 'drive' | 'dropbox' | 'onedrive' | 'box';
@@ -640,132 +641,6 @@ export function FolderUpload({
   destinationEventId,
 }: { destinationEventId?: string } = {}) {
   const [params] = useSearchParams();
-  const eventId = destinationEventId ?? params.get('eventId') ?? '';
-  const input = useRef<HTMLInputElement>(null);
-  const cancel = useRef(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
-  const client = useQueryClient();
-  const library = useLibrary();
-  const destination = library.data?.events.find(
-    (event) => event.id === eventId,
-  );
-  const destinationReady =
-    !eventId || Boolean(destination && eventOpen(destination));
-  async function upload(files: File[]) {
-    if (!library.data || !destinationReady) {
-      setErrors(['This destination is unavailable. No photos were uploaded.']);
-      return;
-    }
-    const images = files.filter((file) =>
-      /\.(jpe?g|png|webp)$/i.test(file.name),
-    );
-    const room =
-      (library.data?.photoLimit ?? 20) -
-      (library.data?.storedPhotoCount ?? library.data?.photos.length ?? 0);
-    if (images.length > room) {
-      setErrors([
-        `This folder has ${images.length} supported photos but your library has room for ${room}. Choose a smaller folder.`,
-      ]);
-      return;
-    }
-    cancel.current = false;
-    setBusy(true);
-    setErrors([]);
-    let success = 0;
-    try {
-      for (const [index, file] of images.entries()) {
-        if (cancel.current) break;
-        setMessage(`Uploading ${index + 1} of ${images.length}: ${file.name}`);
-        try {
-          if (destination && !eventOpen(destination))
-            throw new Error(
-              'The event has expired. No more photos can be uploaded.',
-            );
-          if (file.size > 8 * 1024 * 1024)
-            throw new Error('File exceeds 8 MB.');
-          await api(`/photos${eventId ? `?eventId=${eventId}` : ''}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/octet-stream',
-              'X-File-Name': encodeURIComponent(file.name),
-            },
-            body: file,
-          });
-          success++;
-        } catch (failure) {
-          setErrors((previous) => [
-            ...previous,
-            `${file.name}: ${failure instanceof Error ? failure.message : 'Upload failed.'}`,
-          ]);
-        }
-      }
-      setMessage(
-        `${success} photos uploaded${cancel.current ? '; stopped after the current file' : ''}. ${files.length - images.length} unsupported files skipped.`,
-      );
-      await client.invalidateQueries({ queryKey: ['library'] });
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = '';
-    }
-  }
-  return (
-    <section className="source-panel">
-      <FolderOpen size={26} />
-      <h2>From a folder or downloaded collection</h2>
-      <p>
-        Choose a folder from your device, including its subfolders. For Google
-        Photos, iCloud or a WeTransfer delivery, download your own permitted
-        photos first and extract any ZIP before selecting the folder. These are
-        device uploads, not native cloud connections.
-      </p>
-      <div className="source-actions">
-        <p className="source-destination">
-          Destination:{' '}
-          <strong>
-            {eventId
-              ? (destination?.title ?? 'This event')
-              : 'Your personal library'}
-          </strong>
-        </p>
-        <button
-          className="button secondary"
-          disabled={
-            busy || !library.data || Boolean(library.error) || !destinationReady
-          }
-          onClick={() => {
-            input.current?.setAttribute('webkitdirectory', '');
-            input.current?.click();
-          }}
-        >
-          Choose a folder
-        </button>
-        {busy && (
-          <button
-            className="button secondary"
-            onClick={() => {
-              cancel.current = true;
-            }}
-          >
-            Stop after current photo
-          </button>
-        )}
-      </div>
-      <input
-        ref={input}
-        hidden
-        type="file"
-        multiple
-        aria-label="Upload photo folder"
-        onChange={(event) => void upload(Array.from(event.target.files ?? []))}
-      />
-      <p role="status">{message}</p>
-      {errors.map((error, index) => (
-        <p className="error-note" key={index}>
-          {error}
-        </p>
-      ))}
-    </section>
-  );
+  const eventId = destinationEventId ?? params.get('eventId') ?? undefined;
+  return <FolderImport {...(eventId ? { eventId } : {})} />;
 }
