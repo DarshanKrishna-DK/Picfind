@@ -8,9 +8,46 @@ import {
   expenseJournal,
   savedExpense,
   expenseCsv,
+  expenseWrite,
 } from '../../packages/shared/src/studio-expenses';
 
 describe('private photographer expense journal', () => {
+  it('reserves storage metadata space for the largest accepted escaped command', async () => {
+    const f = fixture();
+    const changes = {
+      title: '界'.repeat(120),
+      merchant: '界'.repeat(120),
+      reference: '界'.repeat(100),
+      note: '',
+    };
+    for (let size = 1; size <= 1000; size++) {
+      const note = '\u0000'.repeat(size);
+      if (
+        !expenseWrite.safeParse({
+          ...f.fields,
+          ...changes,
+          note,
+          version: 0,
+          generation: null,
+        }).success
+      )
+        break;
+      changes.note = note;
+    }
+    expect(changes.note.length).toBeGreaterThan(500);
+    const saved = (await f.save(changes).expect(200)).body.entry;
+    savedExpense.parse(saved);
+    const exported = expenseExport.parse(
+      (await f.read(`${f.root}/export`).expect(200)).body,
+    );
+    expect(exported.entries[0]!.entry.note).toBe(changes.note);
+    expect(
+      Buffer.byteLength(JSON.stringify(f.records.get(f.expenseId)), 'utf8'),
+    ).toBeLessThan(16000);
+    await f
+      .save({ ...changes, note: changes.note + '\u0000' }, saved)
+      .expect(400);
+  });
   it('persists exact minor units, links an owned project and keeps private journal records out of generic library lists', async () => {
     const f = fixture();
     const saved = savedExpense.parse((await f.save().expect(200)).body.entry);
@@ -244,6 +281,12 @@ describe('private photographer expense journal', () => {
       expenseExport.parse((await f.read(`${f.root}/export`).expect(200)).body)
         .entries,
     ).toHaveLength(1000);
+    const beyond = expenseJournal.parse(
+      (await f.read(`${f.root}?offset=1000`).expect(200)).body,
+    );
+    expect(beyond.entries).toEqual([]);
+    expect(beyond.filteredCount).toBe(1000);
+    expect(beyond.totals[0]!.expenses).toBe(125050000);
     const extra = structuredClone(seed),
       extraId = randomUUID();
     extra.id = extra.studioExpense!.id = extraId;
@@ -257,6 +300,7 @@ describe('private photographer expense journal', () => {
     for (const filter of [
       'from=2026-12-01&to=2026-01-01',
       'offset=-1',
+      'offset=1001',
       'category=unknown',
       'project=foreign',
       'unused=1',

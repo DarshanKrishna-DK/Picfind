@@ -26,8 +26,8 @@ const version = z
   .int()
   .min(1)
   .max(Number.MAX_SAFE_INTEGER - 1);
-const budget = (value: unknown) =>
-  new TextEncoder().encode(JSON.stringify(value)).length <= 6000;
+const budget = (limit: number) => (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).length <= limit;
 const fields = {
   title: line(120).min(1),
   merchant: line(120),
@@ -40,7 +40,7 @@ const fields = {
   note: z.string().trim().max(1000),
   projectId: z.uuid().nullable(),
 };
-export const expenseFields = z.object(fields).strict().refine(budget);
+export const expenseFields = z.object(fields).strict().refine(budget(5500));
 export type ExpenseFields = z.infer<typeof expenseFields>;
 export const expenseWrite = z
   .object({
@@ -54,7 +54,8 @@ export const expenseWrite = z
   })
   .strict()
   .refine((value) => (value.version === 0) === (value.generation === null))
-  .refine(budget);
+  // Leave room for the server-generated identity and timestamps.
+  .refine(budget(5500));
 export const savedExpense = z
   .object({
     ...fields,
@@ -65,7 +66,7 @@ export const savedExpense = z
     updatedAt: z.iso.datetime(),
   })
   .strict()
-  .refine(budget)
+  .refine(budget(6000))
   .refine(
     (value) => Date.parse(value.createdAt) <= Date.parse(value.updatedAt),
   );

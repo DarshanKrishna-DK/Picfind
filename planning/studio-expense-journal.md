@@ -70,3 +70,17 @@ inspected. Browser exports verify every row beyond the first page, and delayed
 exports cannot download after navigation. Existing nonfatal build annotation
 and bundle-size warnings remain. This is local verification; production
 deployment and external provider settings are unchanged.
+
+Shipwright follow-up: the selected existing entry now has an independent fresh
+read. Deletion or a failed selected-record read blocks saving and removal while
+retaining the draft; a valid entry that leaves the active filter remains
+editable. Confirmed filter/page changes clear the entire editor state.
+
+A near-limit escaped-note regression reproduced HTTP 500 before the fix.
+Commands now reserve 500 bytes for server identity and timestamps inside the
+6,000-byte saved-record budget. The largest accepted escaped/multibyte command
+persists and exports successfully, while oversized input returns HTTP 400.
+All 24 API tests and 24 desktop/mobile browser cases passed. Browser export
+from page two includes all 44 records. Offset 1,000 returns an empty page with
+complete totals; offset 1,001 is rejected. Draft-discard confirmation and
+pending-action controls have explicit browser coverage.

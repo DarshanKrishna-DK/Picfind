@@ -96,6 +96,26 @@ function Journal({ accountId }: { accountId: string }) {
     if (editing) editor.current?.scrollIntoView({ block: 'start' });
   }, [editing, editorId]);
   const headers = { [EXPENSE_ACTOR]: accountId };
+  const entryKey = (id: string) => ['studio-expenses', accountId, 'entry', id];
+  async function readEntry(id: string, signal: AbortSignal) {
+    const value = expenseView
+      .extend({ accountId: z.string() })
+      .strict()
+      .parse(await api(`/studio/expenses/${id}`, { signal, headers }));
+    if (value.accountId !== accountId || value.entry.id !== id)
+      throw new HttpError(403, 'This entry belongs to another account.');
+    return value.entry;
+  }
+  const selected = useQuery({
+    queryKey: entryKey(editorId),
+    enabled: editing && baseline !== null,
+    queryFn: ({ signal }) => readEntry(editorId, signal),
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: 'always',
+  });
+  const selectedError = editing && baseline ? selected.error : null;
+  const fetching = editing && baseline !== null && selected.isFetching;
   const query = useQuery({
     queryKey: ['studio-expenses', accountId, filters, offset],
     retry: false,
@@ -120,10 +140,15 @@ function Journal({ accountId }: { accountId: string }) {
   )?.entry;
   const stale =
     !!query.error ||
-    (baseline !== null &&
-      current !== undefined &&
-      (baseline.version !== current.version ||
-        baseline.generation !== current.generation));
+    (editing &&
+      baseline !== null &&
+      (!!selectedError ||
+        !selected.data ||
+        baseline.version !== selected.data.version ||
+        baseline.generation !== selected.data.generation ||
+        (current !== undefined &&
+          (baseline.version !== current.version ||
+            baseline.generation !== current.generation))));
   const dirty =
     editing &&
     (JSON.stringify(draft) !== JSON.stringify(fieldsOf(baseline)) ||
@@ -138,6 +163,19 @@ function Journal({ accountId }: { accountId: string }) {
     setEditing(true);
     setError(null);
     setMessage('');
+  }
+  function closeEditor() {
+    setEditing(false);
+    setBaseline(null);
+    setDraft(blank());
+    setAmount('');
+    setEditorId(crypto.randomUUID());
+    setError(null);
+    setMessage('');
+  }
+  function loadFresh(row: StudioExpense) {
+    queryClient.setQueryData(entryKey(row.id), row);
+    load(row);
   }
   async function run<T>(
     work: (signal: AbortSignal) => Promise<T>,
@@ -170,7 +208,7 @@ function Journal({ accountId }: { accountId: string }) {
   }
   function setFilter(key: keyof typeof filters, value: string) {
     if (!leave()) return;
-    setEditing(false);
+    closeEditor();
     setFilters({ ...filters, [key]: value });
     setOffset(0);
     setError(null);
@@ -184,7 +222,8 @@ function Journal({ accountId }: { accountId: string }) {
   });
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!command.success || stale || query.isFetching || busy) return;
+    if (!command.success || stale || fetching || query.isFetching || busy)
+      return;
     void run(
       async (signal) => {
         const value = z
@@ -210,7 +249,7 @@ function Journal({ accountId }: { accountId: string }) {
         return value.entry;
       },
       (value) => {
-        load(value);
+        loadFresh(value);
         setMessage('Journal entry saved.');
         refresh();
       },
@@ -236,8 +275,7 @@ function Journal({ accountId }: { accountId: string }) {
           }),
         }),
       () => {
-        setEditing(false);
-        setBaseline(null);
+        closeEditor();
         setMessage('Journal entry removed.');
         refresh();
       },
@@ -245,17 +283,7 @@ function Journal({ accountId }: { accountId: string }) {
   }
   function latest() {
     if (!baseline || !leave()) return;
-    void run(async (signal) => {
-      const value = expenseView
-        .extend({ accountId: z.string() })
-        .strict()
-        .parse(
-          await api(`/studio/expenses/${baseline.id}`, { signal, headers }),
-        );
-      if (value.accountId !== accountId || value.entry.id !== baseline.id)
-        throw new HttpError(403, 'This entry belongs to another account.');
-      return value.entry;
-    }, load);
+    void run((signal) => readEntry(baseline.id, signal), loadFresh);
   }
   function exportRows() {
     void run(
@@ -279,11 +307,11 @@ function Journal({ accountId }: { accountId: string }) {
       },
     );
   }
-  if (denied(error) || denied(query.error))
+  if (denied(error) || denied(query.error) || denied(selectedError))
     return (
       <section className="glass-panel">
         <h1>Expense journal unavailable</h1>
-        <ErrorNote error={error || query.error} />
+        <ErrorNote error={error || query.error || selectedError} />
       </section>
     );
   return (
@@ -293,7 +321,7 @@ function Journal({ accountId }: { accountId: string }) {
         These are records you enter yourself. Totals stay separate by currency
         and do not verify payments or calculate tax.
       </p>
-      <ErrorNote error={error || query.error} />
+      <ErrorNote error={error || query.error || selectedError} />
       <p role="status">{message}</p>
       <div className="expense-actions">
         <button
@@ -311,8 +339,12 @@ function Journal({ accountId }: { accountId: string }) {
           onClick={() =>
             void run(
               async () => {
-                const result = await query.refetch();
-                if (result.error) throw result.error;
+                const results = await Promise.all([
+                  query.refetch(),
+                  ...(editing && baseline ? [selected.refetch()] : []),
+                ]);
+                for (const result of results)
+                  if (result.error) throw result.error;
               },
               () => setMessage('Journal refreshed.'),
             )
@@ -449,7 +481,7 @@ function Journal({ accountId }: { accountId: string }) {
                   disabled={busy || offset === 0}
                   onClick={() => {
                     if (leave()) {
-                      setEditing(false);
+                      closeEditor();
                       setOffset(Math.max(0, offset - EXPENSE_PAGE_SIZE));
                     }
                   }}
@@ -464,7 +496,7 @@ function Journal({ accountId }: { accountId: string }) {
                   }
                   onClick={() => {
                     if (leave()) {
-                      setEditing(false);
+                      closeEditor();
                       setOffset(offset + EXPENSE_PAGE_SIZE);
                     }
                   }}
@@ -487,6 +519,14 @@ function Journal({ accountId }: { accountId: string }) {
                     saving.
                   </p>
                 )}
+                {amountMinor !== null &&
+                  draft.title.trim() &&
+                  !command.success && (
+                    <p role="alert">
+                      Check the date and amount, or shorten the details if they
+                      contain many special characters.
+                    </p>
+                  )}
                 <fieldset disabled={busy}>
                   <label>
                     Entry title
@@ -641,7 +681,11 @@ function Journal({ accountId }: { accountId: string }) {
                   <button
                     className="button"
                     disabled={
-                      busy || query.isFetching || stale || !command.success
+                      busy ||
+                      fetching ||
+                      query.isFetching ||
+                      stale ||
+                      !command.success
                     }
                   >
                     Save entry
@@ -659,7 +703,7 @@ function Journal({ accountId }: { accountId: string }) {
                       <button
                         type="button"
                         className="button secondary"
-                        disabled={busy || query.isFetching || stale}
+                        disabled={busy || fetching || query.isFetching || stale}
                         onClick={remove}
                       >
                         Remove entry

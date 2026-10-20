@@ -230,6 +230,105 @@ test('blocks saves and cached adoption after failed refresh while retaining the 
     page.getByRole('textbox', { name: 'Private note', exact: true }),
   ).toHaveValue('Preserve this draft');
 });
+test('detects deletion of the selected entry without losing its unsaved draft', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  const saved = (await f.save().expect(200)).body.entry;
+  await f.edit();
+  await page
+    .getByRole('textbox', { name: 'Private note', exact: true })
+    .fill('Keep this draft');
+  await f.removeEntry(saved).expect(204);
+  await page
+    .getByRole('button', { name: 'Reload journal', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Save entry', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Remove entry', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('textbox', { name: 'Private note', exact: true }),
+  ).toHaveValue('Keep this draft');
+  expect(f.state.writes).toBe(0);
+  await page.getByRole('button', { name: 'New entry', exact: true }).click();
+  await expect(page.getByLabel('Entry title', { exact: true })).toHaveValue('');
+});
+test('keeps a valid selected record editable after its saved direction leaves the filter', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.save().expect(200);
+  await f.open();
+  await page
+    .getByRole('combobox', { name: 'Direction', exact: true })
+    .selectOption('expense');
+  await page
+    .getByRole('button', { name: 'Edit entry: Train to event', exact: true })
+    .click();
+  await page
+    .getByRole('combobox', { name: 'Expense or refund', exact: true })
+    .selectOption('refund');
+  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
+  await expect(
+    page.getByText('No entries match these filters.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Save entry', exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole('textbox', { name: 'Private note', exact: true })
+    .fill('Refund confirmed');
+  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
+  await expect
+    .poll(() => f.records.get(f.expenseId)?.studioExpense?.note)
+    .toBe('Refund confirmed');
+});
+test('confirms changed drafts even after amount is cleared and clears discarded editor state', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.open();
+  await page.getByRole('button', { name: 'New entry', exact: true }).click();
+  page.removeAllListeners('dialog');
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    dialogs++;
+    await dialog.dismiss();
+  });
+  await page
+    .getByRole('combobox', { name: 'Category filter', exact: true })
+    .selectOption('travel');
+  expect(dialogs).toBe(0);
+  await page.getByRole('button', { name: 'New entry', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Private note', exact: true })
+    .fill('Unsaved note');
+  await page.getByLabel('Amount', { exact: true }).fill('1.00');
+  await page.getByLabel('Amount', { exact: true }).fill('');
+  await page
+    .getByRole('combobox', { name: 'Category filter', exact: true })
+    .selectOption('other');
+  expect(dialogs).toBe(1);
+  await expect(
+    page.getByRole('textbox', { name: 'Private note', exact: true }),
+  ).toHaveValue('Unsaved note');
+  page.removeAllListeners('dialog');
+  page.on('dialog', (dialog) => void dialog.accept());
+  await page
+    .getByRole('combobox', { name: 'Category filter', exact: true })
+    .selectOption('other');
+  await expect(page.locator('.expense-form')).toHaveCount(0);
+  await page.getByRole('button', { name: 'New entry', exact: true }).click();
+  await expect(
+    page.getByRole('textbox', { name: 'Private note', exact: true }),
+  ).toHaveValue('');
+  await expect(
+    page.getByRole('button', { name: 'Remove entry', exact: true }),
+  ).toHaveCount(0);
+});
 test('exports all matching pages and preserves exact amounts and escaped notes', async ({
   page,
 }) => {
@@ -251,6 +350,10 @@ test('exports all matching pages and preserves exact amounts and escaped notes',
       exact: true,
     }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Next entries', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Edit entry:/ })).toHaveCount(
+    4,
+  );
   const download = page.waitForEvent('download');
   await page
     .getByRole('button', { name: 'Export all matching entries', exact: true })
@@ -337,6 +440,14 @@ test('cancels a delayed export when navigating away from the journal', async ({
     .getByRole('button', { name: 'Export all matching entries', exact: true })
     .click();
   await expect.poll(() => f.state.release !== null).toBe(true);
+  for (const name of [
+    'New entry',
+    'Reload journal',
+    'Export all matching entries',
+  ])
+    await expect(
+      page.getByRole('button', { name, exact: true }),
+    ).toBeDisabled();
   const overview = page.getByRole('link', { name: 'Overview', exact: true });
   if (!(await overview.isVisible()))
     await page
