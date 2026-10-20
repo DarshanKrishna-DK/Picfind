@@ -28,9 +28,13 @@ again. Missing/foreign project metadata must not expose another account's name.
 New requests bind the expected browser account, and denied responses hide cached
 private work.
 
-Removing an archived project must remove only its owned milestone records
-before deleting the project. If child cleanup fails, keep the archived parent
-so a retry can finish the remaining cleanup. Do not delete photos, contacts,
+Removing an archived project first revalidates its version and persists a
+removal-started timestamp. This durable intent blocks edits and restoration,
+and is visible as removal pending in Projects. Only then remove its owned
+milestone records, checking the parent intent before each deletion. If child
+cleanup fails, keep the marked parent so a retry can finish the remaining
+cleanup. An already absent parent after an authorized removal is success,
+not a misleading late conflict. Do not delete photos, contacts,
 invitations or jobs of another purpose. Existing account cleanup continues to
 cover all retained owner records.
 

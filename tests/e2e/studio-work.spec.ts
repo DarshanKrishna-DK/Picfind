@@ -50,6 +50,12 @@ async function fixture(page: Page) {
       records.set(row.id, structuredClone(row));
     },
     remove: async (id) => {
+      if (state.failCleanup && records.get(id)?.purpose === 'studio-milestone')
+        throw new ApiError(
+          503,
+          'OUTAGE',
+          'Synthetic milestone cleanup outage.',
+        );
       records.delete(id);
     },
     upload: async () => {
@@ -84,7 +90,7 @@ async function fixture(page: Page) {
     },
     { store },
   );
-  const state = { actor: 'owner', loseReply: false };
+  const state = { actor: 'owner', loseReply: false, failCleanup: false };
   await page.route('**/api/**', async (route) => {
     const incoming = route.request(),
       path = new URL(incoming.url()).pathname;
@@ -356,4 +362,52 @@ test('updates overdue display when the saved timezone crosses midnight', async (
   await expect(list(page).getByRole('button')).toHaveCount(0);
   await page.clock.fastForward(61_000);
   await expect(list(page).getByRole('button')).toHaveCount(1);
+});
+test('shows pending project removal after cleanup failure and resumes it without permitting restoration', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await fillMilestone(page, f.projectId);
+  await save(page);
+  await f.archive();
+  await page.goto('/app/projects');
+  await page
+    .getByRole('list', { name: 'Saved projects' })
+    .getByRole('button')
+    .click();
+  f.state.failCleanup = true;
+  await page.getByRole('button', { name: 'Remove archived project' }).click();
+  await expect(
+    page.getByRole('group', { name: 'Confirm project removal' }),
+  ).toContainText('its milestones');
+  await page.getByRole('button', { name: 'Confirm remove project' }).click();
+  await expect(
+    page.getByText('Synthetic milestone cleanup outage.'),
+  ).toBeVisible();
+  expect(f.records.get(f.projectId)!.projectRemovalStartedAt).toBeTruthy();
+  await page
+    .getByRole('button', { name: 'Load latest projects and discard draft' })
+    .click();
+  await expect(page.getByText('Latest projects loaded.')).toBeVisible();
+  await page
+    .getByRole('list', { name: 'Saved projects' })
+    .getByRole('button')
+    .click();
+  await expect(
+    page.getByText('Removal pending', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Project stage', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Save private project' }),
+  ).toBeDisabled();
+  f.state.failCleanup = false;
+  await page.getByRole('button', { name: 'Remove archived project' }).click();
+  await page.getByRole('button', { name: 'Confirm remove project' }).click();
+  await expect(
+    page.getByText('Archived project record removed.'),
+  ).toBeVisible();
+  expect(f.records.has(f.projectId)).toBe(false);
+  expect(f.milestones()).toHaveLength(0);
 });

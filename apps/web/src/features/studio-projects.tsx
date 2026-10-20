@@ -147,7 +147,7 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (conflict || denied) return;
+    if (conflict || denied || selected?.removalPending) return;
     await run(async (signal) => {
       const input = projectWrite.parse({
         ...draft,
@@ -320,6 +320,7 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
                 >
                   <strong>{view.project.name}</strong>
                   <span>{label(view.project.stage)}</span>
+                  {view.removalPending && <span>Removal pending</span>}
                   <span>
                     {view.client
                       ? (view.client.name ?? 'Unavailable client')
@@ -333,121 +334,134 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
         <div>
           <form onSubmit={(event) => void save(event)}>
             <h2>{selected ? 'Edit project' : 'New project'}</h2>
+            {selected?.removalPending && (
+              <p role="status">
+                Removal has started. Some milestones may already be removed.
+                Resume removal below to finish; this project cannot be edited or
+                restored.
+              </p>
+            )}
             <fieldset disabled={busy}>
-              <label>
-                Project name
-                <input
-                  required
-                  maxLength={100}
-                  value={draft.name}
-                  onChange={(event) => edit({ name: event.target.value })}
-                />
-              </label>
-              <label>
-                Private project brief
-                <textarea
-                  maxLength={1000}
-                  value={draft.summary}
-                  onChange={(event) => edit({ summary: event.target.value })}
-                />
-              </label>
-              <label>
-                Linked client
-                <select
-                  value={draft.clientId ?? ''}
-                  onChange={(event) =>
-                    edit({ clientId: event.target.value || null })
+              <fieldset disabled={selected?.removalPending}>
+                <label>
+                  Project name
+                  <input
+                    required
+                    maxLength={100}
+                    value={draft.name}
+                    onChange={(event) => edit({ name: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Private project brief
+                  <textarea
+                    maxLength={1000}
+                    value={draft.summary}
+                    onChange={(event) => edit({ summary: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Linked client
+                  <select
+                    value={draft.clientId ?? ''}
+                    onChange={(event) =>
+                      edit({ clientId: event.target.value || null })
+                    }
+                  >
+                    <option value="">No client linked</option>
+                    {draft.clientId &&
+                      !directory.clients.some(
+                        (client) => client.id === draft.clientId,
+                      ) && (
+                        <option value={draft.clientId}>
+                          {selected?.client?.name ??
+                            'Unavailable linked client'}
+                        </option>
+                      )}
+                    {directory.clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <fieldset className="studio-project-events">
+                  <legend>Linked events ({draft.eventIds.length} / 20)</legend>
+                  {eventChoices.length === 0 && (
+                    <p>Create an event to link it here.</p>
+                  )}
+                  {eventChoices.map((event) => (
+                    <label
+                      key={event.id}
+                      className="studio-project-event-option"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={draft.eventIds.includes(event.id)}
+                        disabled={
+                          !draft.eventIds.includes(event.id) &&
+                          draft.eventIds.length >= 20
+                        }
+                        onChange={(change) =>
+                          edit({
+                            eventIds: change.target.checked
+                              ? [...draft.eventIds, event.id]
+                              : draft.eventIds.filter((id) => id !== event.id),
+                          })
+                        }
+                      />
+                      {event.title}
+                    </label>
+                  ))}
+                </fieldset>
+                <label>
+                  Project stage
+                  <select
+                    value={draft.stage}
+                    onChange={(event) => {
+                      edit({
+                        stage: event.target.value as ProjectFields['stage'],
+                      });
+                      setReason('');
+                    }}
+                  >
+                    {PROJECT_STAGES.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {label(stage)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Reason for stage change
+                  <input
+                    maxLength={160}
+                    value={reason}
+                    required={Boolean(backward)}
+                    disabled={Boolean(
+                      selected && selected.project.stage === draft.stage,
+                    )}
+                    onChange={(event) => setReason(event.target.value)}
+                  />
+                </label>
+                {backward && (
+                  <p>
+                    A reason is required when moving backward or restoring an
+                    archived project.
+                  </p>
+                )}
+                <button
+                  className="button"
+                  disabled={
+                    conflict ||
+                    !draft.name.trim() ||
+                    Boolean(backward && !reason.trim()) ||
+                    (!selected && directory.totalCount >= directory.limit)
                   }
                 >
-                  <option value="">No client linked</option>
-                  {draft.clientId &&
-                    !directory.clients.some(
-                      (client) => client.id === draft.clientId,
-                    ) && (
-                      <option value={draft.clientId}>
-                        {selected?.client?.name ?? 'Unavailable linked client'}
-                      </option>
-                    )}
-                  {directory.clients.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <fieldset className="studio-project-events">
-                <legend>Linked events ({draft.eventIds.length} / 20)</legend>
-                {eventChoices.length === 0 && (
-                  <p>Create an event to link it here.</p>
-                )}
-                {eventChoices.map((event) => (
-                  <label key={event.id} className="studio-project-event-option">
-                    <input
-                      type="checkbox"
-                      checked={draft.eventIds.includes(event.id)}
-                      disabled={
-                        !draft.eventIds.includes(event.id) &&
-                        draft.eventIds.length >= 20
-                      }
-                      onChange={(change) =>
-                        edit({
-                          eventIds: change.target.checked
-                            ? [...draft.eventIds, event.id]
-                            : draft.eventIds.filter((id) => id !== event.id),
-                        })
-                      }
-                    />
-                    {event.title}
-                  </label>
-                ))}
+                  Save private project
+                </button>
               </fieldset>
-              <label>
-                Project stage
-                <select
-                  value={draft.stage}
-                  onChange={(event) => {
-                    edit({
-                      stage: event.target.value as ProjectFields['stage'],
-                    });
-                    setReason('');
-                  }}
-                >
-                  {PROJECT_STAGES.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {label(stage)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Reason for stage change
-                <input
-                  maxLength={160}
-                  value={reason}
-                  required={Boolean(backward)}
-                  disabled={Boolean(
-                    selected && selected.project.stage === draft.stage,
-                  )}
-                  onChange={(event) => setReason(event.target.value)}
-                />
-              </label>
-              {backward && (
-                <p>
-                  A reason is required when moving backward or restoring an
-                  archived project.
-                </p>
-              )}
-              <button
-                className="button"
-                disabled={
-                  conflict ||
-                  !draft.name.trim() ||
-                  Boolean(backward && !reason.trim()) ||
-                  (!selected && directory.totalCount >= directory.limit)
-                }
-              >
-                Save private project
-              </button>
               {selected?.project.stage === 'archived' && (
                 <button
                   type="button"

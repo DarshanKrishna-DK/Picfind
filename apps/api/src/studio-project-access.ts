@@ -1,4 +1,5 @@
 import { ApiError } from './auth.js';
+import { z } from 'zod';
 import type { LibraryRecord } from './library.js';
 import { savedProject } from '../../../packages/shared/src/studio-projects.js';
 
@@ -27,7 +28,10 @@ export function ownedProjectRecord(
     parsed.data.id !== id ||
     parsed.data.createdAt !== row.createdAt ||
     parsed.data.transitions.some((entry) => entry.actorId !== actorId) ||
-    !/^[a-f0-9]{64}$/.test(row.projectCommandDigest ?? '')
+    !/^[a-f0-9]{64}$/.test(row.projectCommandDigest ?? '') ||
+    (row.projectRemovalStartedAt !== undefined &&
+      (!z.iso.datetime().safeParse(row.projectRemovalStartedAt).success ||
+        parsed.data.stage !== 'archived'))
   )
     throw new ApiError(
       503,

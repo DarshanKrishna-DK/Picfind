@@ -185,6 +185,7 @@ export interface LibraryRecord {
   highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
   milestoneCommandDigest?: string;
+  projectRemovalStartedAt?: string;
   studioMilestone?: import('../../../packages/shared/src/studio-milestones.js').SavedMilestone;
   studioProject?: import('../../../packages/shared/src/studio-projects.js').SavedProject;
   projectCommandDigest?: string;

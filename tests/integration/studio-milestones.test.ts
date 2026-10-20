@@ -304,6 +304,9 @@ describe('private dated studio milestones', () => {
     f.archive();
     const realRemove = f.store.remove;
     f.store.remove = vi.fn(async (id) => {
+      expect(f.records.get(f.projectId)!.projectRemovalStartedAt).toEqual(
+        expect.any(String),
+      );
       if (id === second)
         throw new ApiError(503, 'OUTAGE', 'Synthetic cleanup outage.');
       await realRemove(id);
@@ -312,6 +315,28 @@ describe('private dated studio milestones', () => {
     expect(f.records.has(first)).toBe(false);
     expect(f.records.has(f.projectId)).toBe(true);
     expect(f.records.has(second)).toBe(true);
+    expect(f.records.get(f.projectId)!.projectRemovalStartedAt).toEqual(
+      expect.any(String),
+    );
+    const projects = await request(f.app)
+      .get('/api/studio/projects')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(projects.body.projects[0].removalPending).toBe(true);
+    await request(f.app)
+      .put(`/api/studio/projects/${f.projectId}`)
+      .set('Cookie', 'picfind_session=owner')
+      .set('Origin', origin)
+      .send({
+        ...blankProject(),
+        name: 'Restore',
+        stage: 'editing',
+        reason: 'Change my mind',
+        version: 2,
+      })
+      .expect(409);
+    expect(f.records.get(f.projectId)!.studioProject!.stage).toBe('archived');
+    await f.save(second, {}, 1).expect(409);
     f.store.remove = realRemove;
     await f.removeProject().expect(204);
     expect(f.records.has(second)).toBe(false);
@@ -319,6 +344,63 @@ describe('private dated studio milestones', () => {
     expect(f.records.has(unrelated)).toBe(true);
     expect(f.records.has(foreign)).toBe(true);
     expect(f.store.removeFile).not.toHaveBeenCalled();
+  });
+  it('rejects a changed parent before recording removal or deleting children', async () => {
+    const f = fixture(),
+      child = f.seed(),
+      get = f.store.get;
+    f.archive();
+    let reads = 0;
+    f.store.get = async (id) => {
+      const row = await get(id);
+      if (id === f.projectId && ++reads === 2) row.studioProject!.version++;
+      return row;
+    };
+    await f.removeProject().expect(409);
+    expect(f.records.has(child)).toBe(true);
+    expect(f.store.put).not.toHaveBeenCalled();
+    expect(f.store.remove).not.toHaveBeenCalled();
+  });
+  it('does not delete children when persisting removal intent fails', async () => {
+    const f = fixture(),
+      child = f.seed();
+    f.archive();
+    f.store.put = vi.fn(async () => {
+      throw new ApiError(503, 'OUTAGE', 'Synthetic intent failure.');
+    });
+    await f.removeProject().expect(503);
+    expect(f.records.has(child)).toBe(true);
+    expect(f.records.get(f.projectId)!.projectRemovalStartedAt).toBeUndefined();
+    expect(f.store.remove).not.toHaveBeenCalled();
+  });
+  it('checks persisted removal intent before each child deletion', async () => {
+    const f = fixture(),
+      child = f.seed(),
+      get = f.store.get;
+    f.archive();
+    f.store.get = async (id) => {
+      if (id === child)
+        delete f.records.get(f.projectId)!.projectRemovalStartedAt;
+      return get(id);
+    };
+    await f.removeProject().expect(409);
+    expect(f.records.has(child)).toBe(true);
+    expect(f.store.remove).not.toHaveBeenCalled();
+  });
+  it('finishes an authorized removal when the parent is already absent after child cleanup', async () => {
+    const f = fixture(),
+      child = f.seed(),
+      remove = f.store.remove;
+    f.archive();
+    f.store.remove = vi.fn(async (id) => {
+      if (!f.records.has(id))
+        throw new ApiError(404, 'NOT_FOUND', 'Already removed.');
+      await remove(id);
+      if (id === child) f.records.delete(f.projectId);
+    });
+    await f.removeProject().expect(204);
+    expect(f.records.has(child)).toBe(false);
+    expect(f.records.has(f.projectId)).toBe(false);
   });
   it('stops cleanup when a child changes scope during deletion', async () => {
     const f = fixture(),

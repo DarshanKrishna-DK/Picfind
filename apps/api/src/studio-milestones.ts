@@ -63,6 +63,7 @@ export async function removeProjectMilestones(
   store: LibraryStore,
   actorId: string,
   projectId: string,
+  assertRemoval: () => Promise<void>,
 ) {
   const belongs = (row: LibraryRecord) =>
     row.ownerId === actorId &&
@@ -86,6 +87,7 @@ export async function removeProjectMilestones(
         'Project work changed during removal. Reload and retry.',
       );
     if (fresh) {
+      await assertRemoval();
       try {
         await store.remove(row.id);
       } catch (failure) {
@@ -131,6 +133,12 @@ export function createStudioMilestones(
         'Choose an available project that you own.',
       );
     const { project } = ownedProjectRecord(row, actorId, id);
+    if (row.projectRemovalStartedAt)
+      throw new ApiError(
+        409,
+        'PROJECT_REMOVING',
+        'Project removal has started. Resume removal from Projects.',
+      );
     if (project.stage === 'archived')
       throw new ApiError(
         409,

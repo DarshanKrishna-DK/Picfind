@@ -160,6 +160,12 @@ export function createStudioProjects(
       .slice(0, PROJECT_LIMIT)
       .map((project) => ({
         project,
+        removalPending: jobs.some(
+          (row) =>
+            row.id === project.id &&
+            row.ownerId === accountId &&
+            !!row.projectRemovalStartedAt,
+        ),
         client: project.clientId
           ? {
               id: project.clientId,
@@ -202,6 +208,12 @@ export function createStudioProjects(
       .digest('hex');
     const project = await withAccountLock(accountId, async () => {
       const current = await find(id, accountId);
+      if (current?.row.projectRemovalStartedAt)
+        throw new ApiError(
+          409,
+          'PROJECT_REMOVING',
+          'Project removal has started. Reload the project and resume removal.',
+        );
       if (
         current?.project.version === version + 1 &&
         current.row.projectCommandDigest === digest
@@ -245,6 +257,12 @@ export function createStudioProjects(
       await validateLinks(fields, current?.project ?? null, accountId);
       const fresh = await find(id, accountId);
       if ((fresh?.project.version ?? 0) !== version) throw changed();
+      if (fresh?.row.projectRemovalStartedAt)
+        throw new ApiError(
+          409,
+          'PROJECT_REMOVING',
+          'Project removal has started. Reload the project and resume removal.',
+        );
       await getStore().put(
         {
           id,
@@ -284,7 +302,6 @@ export function createStudioProjects(
           'PROJECT_NOT_ARCHIVED',
           'Archive this project before removing its private record.',
         );
-      await removeProjectMilestones(getStore(), accountId, id);
       const fresh = await find(id, accountId);
       if (
         !fresh ||
@@ -292,7 +309,33 @@ export function createStudioProjects(
         fresh.project.stage !== 'archived'
       )
         throw changed();
-      await getStore().remove(id);
+      const removalStartedAt =
+        fresh.row.projectRemovalStartedAt ?? new Date().toISOString();
+      if (!fresh.row.projectRemovalStartedAt)
+        await getStore().put({
+          ...fresh.row,
+          projectRemovalStartedAt: removalStartedAt,
+        });
+      const assertRemoval = async () => {
+        const row = await find(id, accountId);
+        // Another completed removal is success, not a late version conflict.
+        if (!row) return;
+        if (
+          row.project.version !== body.data.version ||
+          row.project.stage !== 'archived' ||
+          row.row.projectRemovalStartedAt !== removalStartedAt
+        )
+          throw changed();
+      };
+      await assertRemoval();
+      await removeProjectMilestones(getStore(), accountId, id, assertRemoval);
+      await assertRemoval();
+      try {
+        await getStore().remove(id);
+      } catch (failure) {
+        if (!(failure instanceof ApiError && failure.status === 404))
+          throw failure;
+      }
     });
     res.status(204).end();
   });
