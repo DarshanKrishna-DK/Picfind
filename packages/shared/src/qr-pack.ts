@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const qrPackFields = z
   .object({
     eventId: z.uuid(),
-    destination: z.enum(['event', 'highlights']),
+    destination: z.enum(['event', 'highlights', 'invitation']),
     heading: z.string().trim().min(1).max(80),
     instruction: z.string().trim().max(160),
     copies: z.union([z.literal(1), z.literal(2), z.literal(4)]),
@@ -11,8 +11,7 @@ export const qrPackFields = z
   .strict();
 export type QrPackFields = z.infer<typeof qrPackFields>;
 
-export function qrPackDestination(origin: string, input: QrPackFields) {
-  const fields = qrPackFields.parse(input);
+export function qrPackOrigin(origin: string) {
   const url = new URL(origin);
   const localPreview =
     ['localhost', '[::1]'].includes(url.hostname) ||
@@ -25,8 +24,14 @@ export function qrPackDestination(origin: string, input: QrPackFields) {
     throw new Error(
       'Use the deployed HTTPS site, or a loopback origin for a local preview.',
     );
+  return { localPreview };
+}
+export function qrPackDestination(origin: string, input: QrPackFields) {
+  const fields = qrPackFields.parse(input),
+    { localPreview } = qrPackOrigin(origin);
+  const route = { event: 'e', highlights: 'highlights', invitation: 'invite' };
   return {
-    target: `${origin}/${fields.destination === 'event' ? 'e' : 'highlights'}/${fields.eventId}`,
+    target: `${origin}/${route[fields.destination]}/${fields.eventId}`,
     localPreview,
   };
 }
@@ -52,8 +57,15 @@ export function qrPackPrintHtml(
     throw new Error('The QR image could not be prepared safely.');
   const notice = destination.localPreview
     ? 'Local preview only. Generate your guest pack from the deployed PicFind site.'
-    : 'Sign in to view photos. An organizer access code may also be required.';
-  const card = `<article><h1>${escapeQrText(fields.heading)}</h1><p>${escapeQrText(fields.instruction)}</p><img src="${png}" alt="QR code for the ${fields.destination === 'event' ? 'full event gallery' : 'published highlights'}"><p class="access">${notice}</p><p class="fallback">Or open:<br><a href="${escapeQrText(destination.target)}" rel="noreferrer">${escapeQrText(destination.target)}</a></p></article>`;
+    : fields.destination === 'invitation'
+      ? 'Open the public invitation. This link does not grant access to event photos.'
+      : 'Sign in to view photos. An organizer access code may also be required.';
+  const label = {
+    event: 'full event gallery',
+    highlights: 'published highlights',
+    invitation: 'published invitation',
+  };
+  const card = `<article><h1>${escapeQrText(fields.heading)}</h1><p>${escapeQrText(fields.instruction)}</p><img src="${png}" alt="QR code for the ${label[fields.destination]}"><p class="access">${notice}</p><p class="fallback">Or open:<br><a href="${escapeQrText(destination.target)}" rel="noreferrer">${escapeQrText(destination.target)}</a></p></article>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>PicFind printable QR pack</title>
 <style>

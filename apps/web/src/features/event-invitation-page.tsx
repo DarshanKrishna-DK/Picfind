@@ -12,6 +12,7 @@ import {
   type InvitationPageSnapshot,
 } from '../../../../packages/shared/src/event-invitation-page';
 import './event-invitation-page.css';
+import { InvitationCalendar } from './invitation-calendar';
 import { GuestRsvp } from './guest-rsvp';
 
 const headers = (accountId: string) => ({
@@ -555,6 +556,10 @@ export function PublishedInvitationPage() {
       ) : (
         <>
           <InvitationCard fields={query.data.fields} />
+          <InvitationCalendar
+            key={`${eventId}:${query.data.revision}`}
+            page={query.data}
+          />
           <GuestRsvp eventId={eventId} seenRevision={query.data.revision} />
           <p className="invitation-refresh">
             Details can change. This page refreshes periodically while open.

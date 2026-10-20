@@ -55,7 +55,9 @@ export async function prepareQrPack(
         `Destination: ${destination.target}`,
         destination.localPreview
           ? 'LOCAL PREVIEW ONLY. This loopback link cannot be used by a guest on another device.'
-          : 'Guests must sign in. The organizer may also require an access code.',
+          : fields.destination === 'invitation'
+            ? 'The invitation is public. This link does not grant access to event photos.'
+            : 'Guests must sign in. The organizer may also require an access code.',
         'Printed links are static. Event expiry or withdrawn publication can make them unavailable.',
         'Check current access before distributing copies. No photos or passcodes are included in this pack.',
       ].join('\n'),

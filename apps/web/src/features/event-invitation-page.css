@@ -120,6 +120,28 @@
 .invitation-refresh {
   text-align: center;
 }
+.invitation-calendar {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid #adc5c0;
+  border-radius: 1rem;
+  background: #f8fcfa;
+  overflow-wrap: anywhere;
+}
+.invitation-calendar h2,
+.invitation-calendar p {
+  margin: 0;
+}
+.invitation-calendar label {
+  display: grid;
+  gap: 0.5rem;
+}
+.invitation-calendar select {
+  min-width: 0;
+  width: 100%;
+}
 @media (max-width: 850px) {
   .invitation-editor-grid {
     grid-template-columns: minmax(0, 1fr);
