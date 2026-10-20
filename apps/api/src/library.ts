@@ -65,6 +65,7 @@ import { createEventTools } from './event-tools.js';
 import { createPhotoNotes } from './photo-notes.js';
 import { createPhotoAttribution } from './photo-attribution.js';
 import { createHighlights } from './highlights.js';
+import { createStudioClients } from './studio-clients.js';
 import {
   ATTRIBUTION_HEADER,
   publishedAttribution,
@@ -143,6 +144,7 @@ export interface LibraryRecord {
     | 'proofing-submission'
     | 'retouching-task'
     | 'event-highlights'
+    | 'studio-client'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -177,6 +179,7 @@ export interface LibraryRecord {
   privatePhotoNote?: string;
   attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
   highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
+  studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
   submittedById?: string;
@@ -665,6 +668,7 @@ export function createLibraryRouter(
   router.use(createPhotoNotes(store, owner));
   router.use(createPhotoAttribution(store, owner));
   router.use(createHighlights(store, owner, sendPhoto));
+  router.use(createStudioClients(store, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(
@@ -1438,7 +1442,15 @@ export function createLibraryRouter(
     );
     const folderId = parseDriveFolderId(data.url);
     const job = await serial(user, async () => {
-      if (!limits.production && (await store().list(user, 'job')).length >= 20)
+      if (
+        !limits.production &&
+        (await store().list(user, 'job')).filter(
+          (row) =>
+            row.ownerId === user &&
+            row.kind === 'job' &&
+            (!row.purpose || row.purpose === 'import'),
+        ).length >= 20
+      )
         throw new ApiError(
           409,
           'JOB_LIMIT',
