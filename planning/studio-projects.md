@@ -23,7 +23,11 @@ Distributed CAS/uniqueness remains an activation requirement for multiple
 API writers; this feature does not promise a new transaction primitive.
 
 The API validates all newly selected client and event references against the
-same owner. Event moderators cannot attach an event they do not own. It stores
+same owner, with at most four concurrent reference reads in each validation
+pass. The second pass retains fresh reads after the first asynchronous batch;
+it is not a distributed transaction. Unchanged references require no new
+validation reads during a metadata-only edit.
+Event moderators cannot attach an event they do not own. It stores
 IDs only and resolves current names through safe owner projections. Deleted
 contacts/events render as unavailable. A previously valid unavailable reference
 may be removed or left unchanged so the owner can still finish or archive work;

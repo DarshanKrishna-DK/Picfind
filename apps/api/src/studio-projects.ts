@@ -122,28 +122,30 @@ export function createStudioProjects(
     current: SavedProject | null,
     actorId: string,
   ) {
-    if (
-      fields.clientId &&
-      fields.clientId !== current?.clientId &&
-      clientName(await maybe(fields.clientId), actorId, fields.clientId) ===
-        null
-    )
-      throw new ApiError(
-        404,
-        'PROJECT_LINK_UNAVAILABLE',
-        'Choose an available client from your own directory.',
-      );
+    const links: { id: string; kind: 'client' | 'event' }[] = [];
+    if (fields.clientId && fields.clientId !== current?.clientId)
+      links.push({ id: fields.clientId, kind: 'client' });
     for (const id of fields.eventIds) {
-      if (
-        !current?.eventIds.includes(id) &&
-        eventTitle(await maybe(id), actorId, id) === null
-      )
-        throw new ApiError(
-          404,
-          'PROJECT_LINK_UNAVAILABLE',
-          'Choose events that you own.',
-        );
+      if (!current?.eventIds.includes(id)) links.push({ id, kind: 'event' });
     }
+    for (let offset = 0; offset < links.length; offset += 4)
+      await Promise.all(
+        links.slice(offset, offset + 4).map(async (link) => {
+          const row = await maybe(link.id);
+          const value =
+            link.kind === 'client'
+              ? clientName(row, actorId, link.id)
+              : eventTitle(row, actorId, link.id);
+          if (value === null)
+            throw new ApiError(
+              404,
+              'PROJECT_LINK_UNAVAILABLE',
+              link.kind === 'client'
+                ? 'Choose an available client from your own directory.'
+                : 'Choose events that you own.',
+            );
+        }),
+      );
   }
   router.get('/studio/projects', async (req, res) => {
     const accountId = await actor(req);

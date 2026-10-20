@@ -252,6 +252,42 @@ describe('owner-only photographer projects', () => {
       expect(f.store.put).not.toHaveBeenCalled();
     },
   );
+  it('bounds reference read concurrency while retaining both freshness passes', async () => {
+    const f = fixture(),
+      get = f.store.get,
+      projectId = randomUUID();
+    const eventIds = [
+      f.eventId,
+      ...Array.from({ length: 19 }, () => randomUUID()),
+    ];
+    for (const id of eventIds.slice(1))
+      f.records.set(id, { ...f.records.get(f.eventId)!, id });
+    const references = new Set<string>([f.clientId, ...eventIds]);
+    const counts = new Map<string, number>();
+    let active = 0,
+      peak = 0;
+    f.store.get = async (id) => {
+      if (!references.has(id)) return get(id);
+      active++;
+      peak = Math.max(peak, active);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return await get(id);
+      } finally {
+        active--;
+      }
+    };
+    await f.save(projectId, { eventIds }).expect(200);
+    expect(peak).toBe(4);
+    expect(active).toBe(0);
+    expect([...counts.values()]).toEqual(Array.from({ length: 21 }, () => 2));
+    counts.clear();
+    await f
+      .save(projectId, { eventIds, name: 'Updated brief title' }, 1)
+      .expect(200);
+    expect(counts.size).toBe(0);
+  });
   it('bounds overcapacity reads while retaining archive and removal recovery', async () => {
     const f = fixture(),
       first = randomUUID();
