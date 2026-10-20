@@ -1,0 +1,100 @@
+.rsvp-panel {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  margin-top: 1.5rem;
+  border: 1px solid #b8cdc6;
+  border-radius: 1.2rem;
+  background: #f8fcfa;
+  color: #243d35;
+  overflow-wrap: anywhere;
+}
+.rsvp-panel h2,
+.rsvp-panel p {
+  margin: 0;
+}
+.rsvp-panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.rsvp-panel legend {
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+.rsvp-panel label {
+  display: grid;
+  gap: 0.4rem;
+}
+.rsvp-panel input:not([type='checkbox']),
+.rsvp-panel select,
+.rsvp-panel textarea {
+  width: 100%;
+  min-width: 0;
+}
+.rsvp-panel .rsvp-check {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 0.6rem;
+}
+.rsvp-check input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+.rsvp-removal {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #b19482;
+  border-radius: 0.75rem;
+}
+.rsvp-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.rsvp-totals div {
+  padding: 1rem;
+  border: 1px solid #b8cdc6;
+  border-radius: 0.75rem;
+}
+.rsvp-totals dt {
+  font-size: 0.85rem;
+}
+.rsvp-totals dd {
+  margin: 0.4rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.rsvp-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: 1rem;
+}
+.rsvp-list li {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #b8cdc6;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+.rsvp-list h3 {
+  margin: 0;
+}
+.rsvp-message {
+  white-space: pre-wrap;
+}
+@media (max-width: 700px) {
+  .rsvp-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -35,28 +35,7 @@ function active(event: LibraryRecord) {
     (!event.expiresAt || Date.parse(event.expiresAt) > Date.now())
   );
 }
-export function createEventInvitationPage(
-  getStore: () => LibraryStore,
-  actorOf: (req: Request) => Promise<string>,
-) {
-  const router = Router(),
-    root = '/events/:id/invitation-page';
-  function id(req: Request) {
-    const parsed = z.uuid().safeParse(req.params.id);
-    if (!parsed.success) throw missing();
-    return parsed.data;
-  }
-  async function actor(req: Request) {
-    const accountId = await actorOf(req),
-      expected = req.get('X-PicFind-Invitation-Actor');
-    if (expected && expected !== accountId)
-      throw new ApiError(
-        403,
-        'INVITATION_ACCOUNT_CHANGED',
-        'Your signed-in account changed. Reload the event.',
-      );
-    return accountId;
-  }
+export function invitationPageAccess(getStore: () => LibraryStore) {
   async function eventOf(eventId: string, accountId?: string) {
     const event = await getStore().get(eventId);
     if (
@@ -104,6 +83,47 @@ export function createEventInvitationPage(
       );
     return { page: parsed.data, createdAt: row.createdAt };
   }
+
+  async function published(eventId: string, expectedOwner?: string) {
+    const event = await eventOf(eventId, expectedOwner);
+    if (!active(event)) throw missing();
+    const { page } = await load(event);
+    if (!page?.published) throw missing();
+    const fresh = await eventOf(eventId, event.ownerId);
+    if (!active(fresh)) throw missing();
+    const latest = await load(fresh);
+    if (
+      JSON.stringify(latest.page?.published) !== JSON.stringify(page.published)
+    )
+      throw missing();
+    if (!active(await eventOf(eventId, event.ownerId))) throw missing();
+    return { event: fresh, publication: page.published };
+  }
+  return { eventOf, load, published };
+}
+export function createEventInvitationPage(
+  getStore: () => LibraryStore,
+  actorOf: (req: Request) => Promise<string>,
+) {
+  const router = Router(),
+    root = '/events/:id/invitation-page';
+  function id(req: Request) {
+    const parsed = z.uuid().safeParse(req.params.id);
+    if (!parsed.success) throw missing();
+    return parsed.data;
+  }
+  async function actor(req: Request) {
+    const accountId = await actorOf(req),
+      expected = req.get('X-PicFind-Invitation-Actor');
+    if (expected && expected !== accountId)
+      throw new ApiError(
+        403,
+        'INVITATION_ACCOUNT_CHANGED',
+        'Your signed-in account changed. Reload the event.',
+      );
+    return accountId;
+  }
+  const { eventOf, load, published } = invitationPageAccess(getStore);
   async function snapshot(eventId: string, accountId: string) {
     const event = await eventOf(eventId, accountId),
       { page } = await load(event);
@@ -214,19 +234,8 @@ export function createEventInvitationPage(
   });
   router.get('/public/invitations/:id', async (req, res) => {
     const eventId = id(req),
-      event = await eventOf(eventId);
-    if (!active(event)) throw missing();
-    const { page } = await load(event);
-    if (!page?.published) throw missing();
-    const fresh = await eventOf(eventId, event.ownerId);
-    if (!active(fresh)) throw missing();
-    const latest = await load(fresh);
-    if (
-      JSON.stringify(latest.page?.published) !== JSON.stringify(page.published)
-    )
-      throw missing();
-    if (!active(await eventOf(eventId, event.ownerId))) throw missing();
-    res.json({ eventId, ...page.published });
+      result = await published(eventId);
+    res.json({ eventId, ...result.publication });
   });
   return router;
 }
