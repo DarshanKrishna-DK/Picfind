@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EventSelection } from '../../../../packages/shared/src/proofing';
 import {
   compareSelections,
@@ -22,6 +22,8 @@ export function SelectionComparison({
   const [filter, setFilter] = useState<ComparisonFilter>('all');
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState('');
   const first = selections.find((item) => item.id === firstId);
@@ -44,6 +46,8 @@ export function SelectionComparison({
   async function exportComparison() {
     if (pending.current || !comparison) return;
     pending.current = true;
+    const abort = new AbortController();
+    controller.current = abort;
     setBusy(true);
     setError(null);
     setMessage('');
@@ -51,7 +55,9 @@ export function SelectionComparison({
       // Reauthorize and recheck retention before producing any downloadable list.
       const current = await api<{ selections: EventSelection[] }>(
         `/events/${eventId}/insights`,
+        { signal: abort.signal },
       );
+      abort.signal.throwIfAborted();
       const a = current.selections.find((item) => item.id === firstId);
       const b = current.selections.find((item) => item.id === secondId);
       if (!a || !b)
@@ -71,10 +77,11 @@ export function SelectionComparison({
         `${output.count} filenames exported from current availability.${output.duplicateNames ? ' Some filenames repeat; use photo IDs to distinguish them.' : ''}`,
       );
     } catch (failure) {
-      setError(failure);
+      if (!abort.signal.aborted) setError(failure);
     } finally {
       pending.current = false;
-      setBusy(false);
+      controller.current = null;
+      if (!abort.signal.aborted) setBusy(false);
     }
   }
 

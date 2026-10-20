@@ -475,3 +475,37 @@ test('comparison export fails when owner access is revoked', async ({
   await expect(comparison.getByRole('alert')).toContainText('Owner access');
   expect(downloads).toBe(0);
 });
+
+test('leaving an event cancels a pending comparison export', async ({
+  page,
+}) => {
+  const { eventId, selection, selections } = await fixture(page);
+  selections.push({ ...selection, id: 'second', name: 'Ravi' });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByText('Compare client selections', { exact: true }).click();
+  await chooseMenu(page, 'First selection request', /^1\. Asha/);
+  await chooseMenu(page, 'Second selection request', /^2\. Ravi/);
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  await page.route(`**/api/events/${eventId}/insights`, async (route) => {
+    started.resolve();
+    await release.promise;
+    await route.fulfill({ json: { selections } });
+  });
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  const cancelled = page.waitForEvent('requestfailed', {
+    predicate: (request) =>
+      new URL(request.url()).pathname === `/api/events/${eventId}/insights`,
+  });
+  try {
+    await page.getByRole('button', { name: 'Export comparison CSV' }).click();
+    await started.promise;
+    await page.getByRole('link', { name: 'All events', exact: true }).click();
+    await expect(page).toHaveURL('/app/events');
+    expect((await cancelled).failure()).not.toBeNull();
+  } finally {
+    release.resolve();
+  }
+  expect(downloads).toBe(0);
+});
