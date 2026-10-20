@@ -66,6 +66,7 @@ import { createPhotoNotes } from './photo-notes.js';
 import { createPhotoAttribution } from './photo-attribution.js';
 import { createHighlights } from './highlights.js';
 import { createStudioClients } from './studio-clients.js';
+import { createStudioProjects } from './studio-projects.js';
 import {
   ATTRIBUTION_HEADER,
   publishedAttribution,
@@ -145,6 +146,7 @@ export interface LibraryRecord {
     | 'retouching-task'
     | 'event-highlights'
     | 'studio-client'
+    | 'studio-project'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -180,6 +182,8 @@ export interface LibraryRecord {
   attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
   highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
+  studioProject?: import('../../../packages/shared/src/studio-projects.js').SavedProject;
+  projectCommandDigest?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
   submittedById?: string;
@@ -669,6 +673,7 @@ export function createLibraryRouter(
   router.use(createPhotoAttribution(store, owner));
   router.use(createHighlights(store, owner, sendPhoto));
   router.use(createStudioClients(store, owner));
+  router.use(createStudioProjects(store, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(
