@@ -239,7 +239,11 @@ export function Dashboard() {
       <details className="dashboard-guide glass-panel">
         <summary>User guide</summary>
         <div className="user-guide">
-          <div className="user-guide-tabs" role="tablist" aria-label="Use cases">
+          <div
+            className="user-guide-tabs"
+            role="tablist"
+            aria-label="Use cases"
+          >
             {(
               [
                 ['find', 'Find photos from an album'],

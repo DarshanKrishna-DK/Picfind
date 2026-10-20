@@ -172,6 +172,11 @@ async function fixture(page: Page) {
     if (path === '/api/discover/scans' && request.method() === 'POST') {
       state.scanCalls++;
       expect(request.postDataJSON().consent).toBe(true);
+      expect(request.postDataJSON().photoIds).toEqual([
+        'photo-0',
+        'photo-1',
+        'photo-2',
+      ]);
       return route.fulfill({ status: 201, json: { scan } });
     }
     if (path === '/api/discover/scans/test-scan/search') {
@@ -377,9 +382,10 @@ test('Discover presents synthetic returned matches as a downloadable gallery wit
 }) => {
   const { state, jpeg } = await fixture(page);
   await page.goto('/app/discover/new');
-  await page
-    .getByLabel('Google Drive folder link')
-    .fill('https://drive.google.com/drive/folders/test-folder');
+  await chooseMenu(page, 'Imported album', 'Personal library');
+  await expect(
+    page.getByRole('checkbox', { name: 'Event-only.jpg', exact: true }),
+  ).toHaveCount(0);
   await page.getByLabel('Reference selfie').setInputFiles({
     name: 'synthetic-reference.jpg',
     mimeType: 'image/jpeg',
@@ -401,7 +407,12 @@ test('Discover presents synthetic returned matches as a downloadable gallery wit
     page.getByRole('button', { name: 'Search again', exact: true }),
   ).toBeEnabled();
   expect(state.scanCalls).toBe(1);
-  await expect(page.getByLabel('Google Drive folder link')).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Imported album', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('checkbox', { name: 'Garden.jpg', exact: true }),
+  ).toBeDisabled();
   await page
     .getByRole('button', { name: 'Delete this search session' })
     .click();
@@ -457,7 +468,9 @@ test('event search keeps matches separate from the full gallery, including empty
   await expect(
     page.getByRole('button', { name: 'Open Reception.jpg' }),
   ).toHaveCount(0);
-  await expect(page.getByLabel('Sort photos')).toHaveValue('source');
+  await expect(
+    page.getByRole('button', { name: 'Sort photos', exact: true }),
+  ).toHaveText('Result order');
   await downloadArchive(page, /^Download all$/, 2);
   state.emptyMatches = true;
   await page.getByRole('button', { name: 'Search this gallery' }).click();
