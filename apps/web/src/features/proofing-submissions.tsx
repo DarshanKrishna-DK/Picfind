@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { SubmittedRoundExport } from './submitted-round-export';
+import { RetouchingChecklist } from './retouching-checklist';
 import { proofingCountHint } from '../../../../packages/shared/src/proofing-policy';
 import { useSelectionClosed, SelectionWindowNote } from './selection-window';
 import type {
@@ -40,13 +41,20 @@ function Snapshot({
         ))}
       </ul>
       {ownerRoot && (
-        <SubmittedRoundExport
-          root={ownerRoot}
-          submissionId={item.id}
-          round={item.round}
-          disabled={disabled}
-          refreshAccess={refreshAccess}
-        />
+        <>
+          <SubmittedRoundExport
+            root={ownerRoot}
+            submissionId={item.id}
+            round={item.round}
+            disabled={disabled}
+            refreshAccess={refreshAccess}
+          />
+          <RetouchingChecklist
+            key={`${ownerRoot}:${item.id}`}
+            root={`${ownerRoot}/${item.id}/retouching`}
+            disabled={disabled}
+          />
+        </>
       )}
     </article>
   );

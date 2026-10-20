@@ -10,6 +10,7 @@ import { createProofingDecisions } from './proofing-decisions.js';
 import { createProofingComments } from './proofing-comments.js';
 import { createProofingSubmissions } from './proofing-submissions.js';
 import { createSubmissionComparison } from './submission-comparison.js';
+import { createRetouchingChecklist } from './retouching-checklist.js';
 import {
   COLLECTION_INVITATION_LIMIT,
   type CollectionInvitation,
@@ -307,6 +308,9 @@ export function createCollectionInvitations(
   );
   router.use(
     createSubmissionComparison({ store, actorOf, access, ownerCollection }),
+  );
+  router.use(
+    createRetouchingChecklist({ store, actorOf, access, ownerCollection }),
   );
   return router;
 }
