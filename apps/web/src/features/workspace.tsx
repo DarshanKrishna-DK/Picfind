@@ -21,6 +21,7 @@ import {
   ScanFace,
   Settings,
   X,
+  Users,
 } from 'lucide-react';
 import { api, session, HttpError } from '../api';
 import { useLibrary } from '../hooks';
@@ -34,6 +35,7 @@ const destinations = [
   { to: '/app', title: 'Overview', icon: LayoutDashboard },
   { to: '/app/library', title: 'Photo library', icon: Images },
   { to: '/app/events', title: 'Events', icon: CalendarDays },
+  { to: '/app/clients', title: 'Clients', icon: Users },
   { to: '/app/import', title: 'Import photos', icon: CloudUpload },
   { to: '/app/discover/new', title: 'Find my photos', icon: ScanFace },
   { to: '/app/settings', title: 'Settings', icon: Settings },

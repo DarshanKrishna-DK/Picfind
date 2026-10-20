@@ -4,6 +4,7 @@ describe('authentication return destinations', () => {
   it.each([
     '/app',
     '/app/library',
+    '/app/clients',
     '/app/events/new',
     '/app/events/event-1',
     '/app/discover/new',

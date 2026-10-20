@@ -1,0 +1,49 @@
+.client-directory-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+.client-directory-grid fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.client-directory-grid label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.client-directory-grid .button {
+  margin: 0.25rem 0.5rem 0.25rem 0;
+}
+.client-directory-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.client-directory-list button {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d5d8dd;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fff;
+  color: #252a32;
+  overflow-wrap: anywhere;
+}
+.client-directory-list button[aria-pressed='true'] {
+  border: 2px solid #5a44c6;
+}
+.client-directory-list span {
+  font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+  .client-directory-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
