@@ -300,7 +300,7 @@ test('clears the local review when the authenticated account changes', async ({
   ).toHaveCount(0);
 });
 
-test('aborts an unfinished read when leaving the workspace and starts empty on return', async ({
+test('aborts an unfinished read and reopens an empty review through the studio navigation', async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -314,7 +314,14 @@ test('aborts an unfinished read when leaving the workspace and starts empty on r
     page.getByRole('heading', { name: 'Exact duplicate review' }),
   ).toHaveCount(0);
   f.state.release!();
-  await page.goBack();
+  if (await menu.isVisible()) await menu.click();
+  await page
+    .getByRole('link', { name: 'Duplicate review', exact: true })
+    .click();
+  await expect(page).toHaveURL('/app/duplicates');
+  await expect(
+    page.getByRole('heading', { name: 'Exact duplicate review' }),
+  ).toBeVisible();
   await expect(
     page.getByText(
       'No local review loaded. Select files to compare their exact bytes.',
