@@ -172,3 +172,89 @@ native boundary stubs, normalization, stable/scoped IDs, publication and failure
 handling. This establishes execution behavior only. It provides no real-face
 accuracy evidence, does not activate a local provider in PicFind, and does not
 remove the need for consented calibration, protected indexing and deletion.
+
+## Encrypted local evaluation index
+
+`local_index.py` stores validated photo extraction artifacts in a scope-bound
+SQLite database. It uses the separately pinned `requirements-index.txt` packages;
+OpenCV is unnecessary for index operations. Install once in the evaluation
+environment:
+
+```powershell
+uv pip install --python artifacts/face-eval-venv/Scripts/python.exe --require-hashes --only-binary :all: -r scripts/face-runtime/requirements-index.lock
+```
+
+The input version pins live in `requirements-index.txt`; the committed lock
+also pins SHA-256 hashes for the resolved packages. CI reinstalls and verifies
+those wheels rather than trusting a preinstalled copy. Dependency installation
+uses the network, while the tests use synthetic data without model downloads.
+An unavailable package registry fails the check; it does not bypass verification.
+Regenerate the lock deliberately when reviewing dependency updates:
+
+```powershell
+uv pip compile scripts/face-runtime/requirements-index.txt --python artifacts/face-eval-venv/Scripts/python.exe --generate-hashes --output-file scripts/face-runtime/requirements-index.lock
+```
+
+The index uses [PyCA authenticated encryption](https://cryptography.io/en/latest/hazmat/primitives/aead/)
+with a 256-bit locally generated key and a new random nonce for each write.
+Associated data binds the encrypted artifact to its database, scope, photo and
+pipeline. The raw 32-byte key stays in a separate file. This is a local storage
+key, not an AWS, paid service or hosted API credential. Losing it makes the
+encrypted data unreadable. Keep key backups separate from database backups.
+
+For real consented data, use an owner-private directory outside cloud-synced
+folders and protect its ACL. This checkout is under OneDrive, so ignored
+`artifacts/` is appropriate for generated fixtures, not a guarantee of
+local-only storage. The commands below illustrate generated-fixture evaluation;
+create their parent directories first. Neither file may already exist:
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py keygen --key-file artifacts/private-evaluation/index.key
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py init --key-file artifacts/private-evaluation/index.key --database artifacts/private-evaluation/index.sqlite
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py import --key-file artifacts/private-evaluation/index.key --database artifacts/private-evaluation/index.sqlite --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00 --artifact artifacts/private-evaluation/photo-faces.json
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py stats --key-file artifacts/private-evaluation/index.key --database artifacts/private-evaluation/index.sqlite --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00
+```
+
+The importer requires the artifact's scope to match the explicit scope and
+accepts only photo-mode artifacts from the current pinned extractor profile.
+Reference images cannot populate the gallery index. One scope uses one pipeline.
+The same artifact is an idempotent import. A changed extraction for an existing
+photo requires `--expected-digest` with the current `artifact_digest` returned
+by its earlier import. A stale digest fails instead of overwriting newer work.
+Changed extractor/model profiles require a separate evaluation database.
+
+Each scope allows 5,000 retained photo identifiers, including removed-photo
+markers, and 20,000 live face vectors. An artifact is at most 512 KiB. Existing
+database files over 2 GiB are rejected on open; this is a development safeguard,
+not an operating-system disk quota. SQLite transaction locks serialize writers
+across processes with a five-second busy timeout. No external database or API
+key is needed.
+
+Scope/photo IDs, pipeline and artifact digests, counts and removal markers remain
+plaintext metadata. Face vectors, detection coordinates and consent references
+are encrypted before entering SQLite or its journal. Encryption does not cover
+the plaintext input artifact, an unlocked process, a compromised OS account or
+backups that include both key and database. No values are uploaded or sent to
+PicFind by these commands.
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py erase-photo --key-file artifacts/private-evaluation/index.key --database artifacts/private-evaluation/index.sqlite --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00 --photo-id 6087f37f-a5c7-4db8-a905-11764fb343ac
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/local_index.py erase-scope --key-file artifacts/private-evaluation/index.key --database artifacts/private-evaluation/index.sqlite --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00
+```
+
+Photo erasure clears ciphertext and retains its identifier, including an
+as-yet-unimported photo in an existing scope when capacity permits. Scope erasure
+also records a tombstone for an as-yet-uncreated scope. Later imports into those
+identifiers are rejected. Rebuilding retired data is an explicit new-database
+evaluation, not an automatic retry. These operations remove active index data;
+they do not promise forensic erasure from SSDs, snapshots, backups or original
+extraction artifacts. Retire and remove those separately under the evaluation
+retention plan.
+
+Tests use synthetic vectors and temporary keys to verify restart recovery,
+scope isolation, authenticated reads, tamper rejection, transaction rollback,
+concurrent imports, capacity and non-resurrection after erasure. The public CLI
+prints counts, status and artifact/pipeline digests only. The internal
+`read_scope` method is for the next scoped-search implementation; it is not an
+HTTP endpoint. Production matching remains disabled pending calibrated search,
+authenticated service integration, consent and operational lifecycle review.
