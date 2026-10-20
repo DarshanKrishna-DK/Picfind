@@ -31,6 +31,7 @@ import { RawJpegPairing } from './raw-jpeg-pairing';
 import { HighlightsEditor } from './highlights';
 import { QrPrintPack } from './qr-print-pack';
 import { EventDayReadiness } from './event-readiness';
+import { EventCoverage } from './event-coverage';
 
 export function EventForm({
   existing,
@@ -418,6 +419,7 @@ export function EventDetail() {
         {[
           'photos',
           'readiness',
+          'coverage',
           'collections',
           'editing',
           'highlights',
@@ -448,6 +450,9 @@ export function EventDetail() {
           eventId={event.id}
           onAction={setTab}
         />
+      )}
+      {tab === 'coverage' && (
+        <EventCoverage key={event.id} eventId={event.id} photos={photos} />
       )}
       {tab === 'photos' && (
         <>
