@@ -3,13 +3,14 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { withAccountLock } from './locks.js';
+import { ownedProjectRecord as read } from './studio-project-access.js';
+import { removeProjectMilestones } from './studio-milestones.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { savedClient } from '../../../packages/shared/src/studio-clients.js';
 import {
   advanceProject,
   PROJECT_LIMIT,
   projectWrite,
-  savedProject,
   type SavedProject,
   type ProjectFields,
   type ProjectView,
@@ -53,32 +54,6 @@ export function createStudioProjects(
       if (failure instanceof ApiError && failure.status === 404) return null;
       throw failure;
     }
-  }
-  function read(row: LibraryRecord, actorId: string, id = row.id) {
-    if (
-      row.id !== id ||
-      row.ownerId !== actorId ||
-      row.kind !== 'job' ||
-      row.purpose !== 'studio-project' ||
-      row.eventId ||
-      row.deletionStartedAt ||
-      row.deletionCompletedAt
-    )
-      throw missing();
-    const parsed = savedProject.safeParse(row.studioProject);
-    if (
-      !parsed.success ||
-      parsed.data.id !== id ||
-      parsed.data.createdAt !== row.createdAt ||
-      parsed.data.transitions.some((entry) => entry.actorId !== actorId) ||
-      !/^[a-f0-9]{64}$/.test(row.projectCommandDigest ?? '')
-    )
-      throw new ApiError(
-        503,
-        'PROJECT_METADATA_INVALID',
-        'A project record needs metadata repair.',
-      );
-    return { row, project: parsed.data };
   }
   async function find(id: string, actorId: string) {
     const row = await maybe(id);
@@ -185,6 +160,12 @@ export function createStudioProjects(
       .slice(0, PROJECT_LIMIT)
       .map((project) => ({
         project,
+        removalPending: jobs.some(
+          (row) =>
+            row.id === project.id &&
+            row.ownerId === accountId &&
+            !!row.projectRemovalStartedAt,
+        ),
         client: project.clientId
           ? {
               id: project.clientId,
@@ -227,6 +208,12 @@ export function createStudioProjects(
       .digest('hex');
     const project = await withAccountLock(accountId, async () => {
       const current = await find(id, accountId);
+      if (current?.row.projectRemovalStartedAt)
+        throw new ApiError(
+          409,
+          'PROJECT_REMOVING',
+          'Project removal has started. Reload the project and resume removal.',
+        );
       if (
         current?.project.version === version + 1 &&
         current.row.projectCommandDigest === digest
@@ -270,6 +257,12 @@ export function createStudioProjects(
       await validateLinks(fields, current?.project ?? null, accountId);
       const fresh = await find(id, accountId);
       if ((fresh?.project.version ?? 0) !== version) throw changed();
+      if (fresh?.row.projectRemovalStartedAt)
+        throw new ApiError(
+          409,
+          'PROJECT_REMOVING',
+          'Project removal has started. Reload the project and resume removal.',
+        );
       await getStore().put(
         {
           id,
@@ -309,7 +302,40 @@ export function createStudioProjects(
           'PROJECT_NOT_ARCHIVED',
           'Archive this project before removing its private record.',
         );
-      await getStore().remove(id);
+      const fresh = await find(id, accountId);
+      if (
+        !fresh ||
+        fresh.project.version !== body.data.version ||
+        fresh.project.stage !== 'archived'
+      )
+        throw changed();
+      const removalStartedAt =
+        fresh.row.projectRemovalStartedAt ?? new Date().toISOString();
+      if (!fresh.row.projectRemovalStartedAt)
+        await getStore().put({
+          ...fresh.row,
+          projectRemovalStartedAt: removalStartedAt,
+        });
+      const assertRemoval = async () => {
+        const row = await find(id, accountId);
+        // Another completed removal is success, not a late version conflict.
+        if (!row) return;
+        if (
+          row.project.version !== body.data.version ||
+          row.project.stage !== 'archived' ||
+          row.row.projectRemovalStartedAt !== removalStartedAt
+        )
+          throw changed();
+      };
+      await assertRemoval();
+      await removeProjectMilestones(getStore(), accountId, id, assertRemoval);
+      await assertRemoval();
+      try {
+        await getStore().remove(id);
+      } catch (failure) {
+        if (!(failure instanceof ApiError && failure.status === 404))
+          throw failure;
+      }
     });
     res.status(204).end();
   });

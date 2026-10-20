@@ -67,6 +67,7 @@ import { createPhotoAttribution } from './photo-attribution.js';
 import { createHighlights } from './highlights.js';
 import { createStudioClients } from './studio-clients.js';
 import { createStudioProjects } from './studio-projects.js';
+import { createStudioMilestones } from './studio-milestones.js';
 import {
   ATTRIBUTION_HEADER,
   publishedAttribution,
@@ -147,6 +148,7 @@ export interface LibraryRecord {
     | 'event-highlights'
     | 'studio-client'
     | 'studio-project'
+    | 'studio-milestone'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -182,6 +184,9 @@ export interface LibraryRecord {
   attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
   highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
+  milestoneCommandDigest?: string;
+  projectRemovalStartedAt?: string;
+  studioMilestone?: import('../../../packages/shared/src/studio-milestones.js').SavedMilestone;
   studioProject?: import('../../../packages/shared/src/studio-projects.js').SavedProject;
   projectCommandDigest?: string;
   privatePhotoNoteVersion?: number;
@@ -674,6 +679,7 @@ export function createLibraryRouter(
   router.use(createHighlights(store, owner, sendPhoto));
   router.use(createStudioClients(store, owner));
   router.use(createStudioProjects(store, owner));
+  router.use(createStudioMilestones(store, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(

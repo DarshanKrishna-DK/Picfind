@@ -83,6 +83,7 @@ export type SavedProject = z.infer<typeof savedProject>;
 export const projectView = z
   .object({
     project: savedProject,
+    removalPending: z.boolean().optional(),
     client: z
       .object({ id: z.uuid(), name: z.string().max(100).nullable() })
       .strict()
