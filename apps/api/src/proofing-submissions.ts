@@ -5,6 +5,11 @@ import type { LibraryRecord } from './library.js';
 import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
 import {
+  readProofingPolicy,
+  requireProofingSubmission,
+} from './proofing-policy.js';
+import { selectionWindow } from '../../../packages/shared/src/selection-window.js';
+import {
   readProofingDecisions,
   type ProofingAccessDependencies,
 } from './proofing-decisions.js';
@@ -119,6 +124,7 @@ export function createProofingSubmissions(
     const { invitation, collection, event } = grant;
     const state = submissionState(invitation);
     const saved = readProofingDecisions(invitation);
+    const policy = readProofingPolicy(collection);
     const rows = (await store().list(invitation.ownerId, 'job')).filter(
       (row) =>
         row.ownerId === invitation.ownerId &&
@@ -183,6 +189,16 @@ export function createProofingSubmissions(
       canReopen: Boolean(
         state.current && state.round < 20 && active(invitation, event),
       ),
+      requirements: {
+        policy,
+        window: selectionWindow(policy.closesAt ?? undefined),
+        favoriteCount: saved.entries.filter(
+          (entry) => entry.status === 'favorite',
+        ).length,
+        unavailableCount: saved.entries.filter(
+          (entry) => entry.status === 'favorite' && !byId.has(entry.photoId),
+        ).length,
+      },
     };
   }
   router.get(clientRoot, async (req, res) => {
@@ -270,13 +286,19 @@ export function createProofingSubmissions(
         submissionState(latest.invitation).current
       )
         throw conflict();
+      const submittedAt = Date.now();
+      requireProofingSubmission(
+        latest.collection,
+        favoriteIds.length,
+        submittedAt,
+      );
       const row: LibraryRecord = {
         ...latest.invitation,
         proofingRound: round,
         proofingSubmission: {
           id: input.id,
           round,
-          submittedAt: new Date().toISOString(),
+          submittedAt: new Date(submittedAt).toISOString(),
           decisionVersion: input.decisionVersion,
           collectionVersion: input.collectionVersion,
           favoriteIds,

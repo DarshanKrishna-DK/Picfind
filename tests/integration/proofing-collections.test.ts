@@ -99,6 +99,126 @@ function fixture() {
 }
 
 describe('private named proofing collections', () => {
+  it('persists collection-specific rules, preserves omitted policy updates and permits explicit repair', async () => {
+    const f = fixture();
+    const body = {
+      title: 'Policy',
+      photoIds: f.photos.map((photo) => photo.id),
+    };
+    const submissionPolicy = {
+      minimum: 1,
+      maximum: 2,
+      closesAt: '2026-01-01T12:00:00.123Z',
+    };
+    const created = (await f.create({ ...body, submissionPolicy }).expect(201))
+      .body.collection;
+    expect(created.submissionPolicy).toEqual(submissionPolicy);
+    expect(f.records.get(created.id)!.submissionPolicy).toEqual(
+      submissionPolicy,
+    );
+    const changed = (
+      await f
+        .patch(created.id, { ...body, title: 'Renamed', version: 1 })
+        .expect(200)
+    ).body.collection;
+    expect(changed.submissionPolicy).toEqual(submissionPolicy);
+    expect(
+      (await f.read(`${f.root}/${created.id}`).expect(200)).body.collection
+        .submissionPolicy,
+    ).toEqual(submissionPolicy);
+    Object.assign(f.records.get(created.id)!, { submissionPolicy: null });
+    await f.read(`${f.root}/${created.id}`).expect(503);
+    await f.patch(created.id, { ...body, version: 2 }).expect(503);
+    const repaired = { minimum: 0, maximum: 100, closesAt: null };
+    await f
+      .patch(created.id, { ...body, version: 2, submissionPolicy: repaired })
+      .expect(200);
+    expect(f.records.get(created.id)!.submissionPolicy).toEqual(repaired);
+  });
+  it.each([
+    null,
+    {},
+    { minimum: -1, maximum: 2, closesAt: null },
+    { minimum: 1.5, maximum: 2, closesAt: null },
+    { minimum: 2, maximum: 1, closesAt: null },
+    { minimum: 0, maximum: 101, closesAt: null },
+    { minimum: 0, maximum: 0, closesAt: null },
+    { minimum: '1', maximum: 2, closesAt: null },
+    { minimum: 0, maximum: 2, closesAt: '' },
+    { minimum: 0, maximum: 2, closesAt: '2026-10-20' },
+    { minimum: 0, maximum: 2, closesAt: '2026-10-20T12:00:00+05:30' },
+    { minimum: 0, maximum: 2, closesAt: '2026-02-30T12:00:00.000Z' },
+    { minimum: 0, maximum: 2, closesAt: null, hidden: true },
+  ])(
+    'rejects malformed policy without writing: %j',
+    async (submissionPolicy) => {
+      const f = fixture();
+      const body = {
+        title: 'Policy',
+        photoIds: f.photos.map((photo) => photo.id),
+      };
+      await f.create({ ...body, submissionPolicy }).expect(400);
+      expect(
+        [...f.records.values()].filter(
+          (row) => row.purpose === 'proofing-collection',
+        ),
+      ).toHaveLength(0);
+      const row = (await f.create(body).expect(201)).body.collection;
+      const before = structuredClone(f.records.get(row.id));
+      await f
+        .patch(row.id, { ...body, version: 1, submissionPolicy })
+        .expect(400);
+      expect(f.records.get(row.id)).toEqual(before);
+    },
+  );
+  it('checks the minimum against unique photos and prevents shrinking an existing constrained collection', async () => {
+    const f = fixture();
+    const submissionPolicy = { minimum: 2, maximum: 2, closesAt: null };
+    await f
+      .create({
+        title: 'Duplicates',
+        photoIds: [f.photos[0]!.id, f.photos[0]!.id],
+        submissionPolicy,
+      })
+      .expect(400);
+    const created = (
+      await f
+        .create({
+          title: 'Both',
+          photoIds: f.photos.map((p) => p.id),
+          submissionPolicy,
+        })
+        .expect(201)
+    ).body.collection;
+    await f
+      .patch(created.id, {
+        title: 'One',
+        photoIds: [f.photos[0]!.id],
+        version: 1,
+      })
+      .expect(400);
+    expect(f.records.get(created.id)!.collectionVersion).toBe(1);
+  });
+  it.each(['client', 'moderator', 'stranger'])(
+    'does not let %s change collection rules',
+    async (actor) => {
+      const f = fixture();
+      const collection = (await f.create().expect(201)).body.collection;
+      const before = structuredClone(f.records.get(collection.id));
+      await request(f.app)
+        .patch(`${f.root}/${collection.id}`)
+        .set('Origin', origin)
+        .set('Cookie', `picfind_session=${actor}`)
+        .send({
+          title: 'Hijack',
+          version: 1,
+          photoIds: f.photos.map((p) => p.id),
+          submissionPolicy: { minimum: 0, maximum: 100, closesAt: null },
+        })
+        .expect(404);
+      expect(f.records.get(collection.id)).toEqual(before);
+    },
+  );
   it('normalizes missing filenames and hides deleting photos in the owner picker source', async () => {
     const f = fixture();
     delete f.photos[0]!.filename;

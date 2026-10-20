@@ -7,6 +7,7 @@ export interface ProofingCollection {
   photoIds: string[];
   photos: { id: string; filename: string }[];
   unavailableCount: number;
+  submissionPolicy?: import('./proofing-policy.js').ProofingSubmissionPolicy;
 }
 export const PROOFING_COLLECTION_LIMIT = 50;
 export const PROOFING_COLLECTION_PHOTO_LIMIT = 100;

@@ -535,6 +535,125 @@ test('final proofing submission locks saved choices, retries safely and preserve
   ).toHaveCount(0);
 });
 
+test('collection final submission requirements refresh counts and close on server-relative time', async ({
+  page,
+}) => {
+  const { photos, jpeg } = await fixture(page);
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const root = `/api/proofing-invitations/${invitationId}`;
+  const now = Date.now();
+  let posts = 0;
+  const requirements = {
+    policy: { minimum: 1, maximum: 2, closesAt: null as string | null },
+    window: {
+      closesAt: null as string | null,
+      serverNow: new Date(now).toISOString(),
+      closed: false,
+      invalid: false,
+    },
+    favoriteCount: 0,
+    unavailableCount: 0,
+  };
+  await page.route(`**${root}**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes('/photos/'))
+      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+    if (path.endsWith('/decisions'))
+      return route.fulfill({
+        json: {
+          version: 1,
+          updatedAt: null,
+          unavailableCount: 0,
+          decisions: photos.map((photo) => ({
+            photoId: photo.id,
+            filename: photo.filename,
+            status: 'favorite',
+          })),
+        },
+      });
+    if (path.endsWith('/submission')) {
+      if (route.request().method() === 'POST') {
+        posts += 1;
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'SUBMISSION_CLOSED',
+              message: 'The deadline changed. Refresh submission.',
+            },
+          },
+        });
+      }
+      return route.fulfill({
+        json: {
+          round: 1,
+          decisionVersion: 1,
+          collectionVersion: 1,
+          current: null,
+          history: [],
+          reopenReason: null,
+          canReopen: false,
+          requirements,
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        title: 'Policy collection',
+        eventTitle: 'Wedding',
+        expiresAt: new Date(now + 86400000).toISOString(),
+        photos,
+      },
+    });
+  });
+  await page.clock.install({ time: now });
+  await page.goto(`/proofing/${invitationId}`);
+  const panel = page.getByRole('region', {
+    name: 'Your final submission',
+    exact: true,
+  });
+  await panel.getByRole('button', { name: 'Review final submission' }).click();
+  const submit = panel.getByRole('button', { name: 'Submit final favorites' });
+  const refresh = panel.getByRole('button', { name: 'Refresh submission' });
+  await expect(panel).toContainText('Save 1 more favorites before submitting.');
+  await expect(submit).toBeDisabled();
+  requirements.favoriteCount = 3;
+  await refresh.click();
+  await expect(panel).toContainText('Remove 1 favorites before submitting.');
+  await expect(submit).toBeDisabled();
+  requirements.favoriteCount = 2;
+  requirements.unavailableCount = 1;
+  await refresh.click();
+  await expect(panel).toContainText('1 saved favorites are unavailable.');
+  await expect(submit).toBeDisabled();
+  requirements.unavailableCount = 0;
+  requirements.policy.closesAt = new Date(now + 2000).toISOString();
+  requirements.window.closesAt = requirements.policy.closesAt;
+  await refresh.click();
+  await expect(submit).toBeEnabled();
+  await expect(panel).toContainText('Shown in your device time zone.');
+  await page.clock.runFor(2100);
+  await expect(submit).toBeDisabled();
+  await expect(panel).toContainText('Final submissions are closed.');
+  await expect(
+    page.getByLabel(`Decision for ${photos[0]!.filename}`),
+  ).toBeEnabled();
+  expect(posts).toBe(0);
+  requirements.policy.closesAt = null;
+  requirements.window.closesAt = null;
+  await refresh.click();
+  await expect(submit).toBeEnabled();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await submit.click();
+  await expect(panel).toContainText(
+    'The deadline changed. Refresh submission.',
+  );
+  await expect(submit).toBeDisabled();
+  expect(posts).toBe(1);
+  await refresh.click();
+  await expect(submit).toBeEnabled();
+});
+
 async function fixture(page: Page) {
   const jpeg = await sharp({
     create: { width: 80, height: 60, channels: 3, background: '#50796a' },
@@ -1388,6 +1507,7 @@ test('named collections persist, recover conflicts, remove unavailable photos an
           ...collection!,
           title: 'Changed in another tab',
           version: collection!.version + 1,
+          submissionPolicy: { minimum: 0, maximum: 1, closesAt: null },
         };
         return route.fulfill({
           status: 409,
@@ -1407,6 +1527,7 @@ test('named collections persist, recover conflicts, remove unavailable photos an
         createdAt: '2026-10-20T12:00:00.000Z',
         updatedAt: '2026-10-20T12:00:00.000Z',
         photoIds: body.photoIds,
+        submissionPolicy: body.submissionPolicy,
         unavailableCount: 0,
         photos: photos
           .filter((photo) => body.photoIds.includes(photo.id))
@@ -1428,6 +1549,11 @@ test('named collections persist, recover conflicts, remove unavailable photos an
     .fill('Album round');
   await editor.getByLabel('Ceremony.jpg', { exact: true }).check();
   await editor.getByLabel('Garden.jpg', { exact: true }).check();
+  await editor.getByLabel('Minimum final favorites').fill('1');
+  await editor.getByLabel('Maximum final favorites').fill('2');
+  await editor
+    .getByLabel('Final submission deadline', { exact: true })
+    .fill('2030-01-02T12:30');
   const editorWidth = await editor.evaluate((element) => ({
     visible: element.clientWidth,
     content: element.scrollWidth,
@@ -1445,6 +1571,13 @@ test('named collections persist, recover conflicts, remove unavailable photos an
     .getByRole('button', { name: 'Edit Album round', exact: true })
     .click();
   await expect(editor.getByLabel('Garden.jpg', { exact: true })).toBeChecked();
+  await expect(editor.getByLabel('Minimum final favorites')).toHaveValue('1');
+  await expect(editor.getByLabel('Maximum final favorites')).toHaveValue('2');
+  await expect(
+    editor.getByLabel('Final submission deadline', { exact: true }),
+  ).toHaveValue('2030-01-02T12:30');
+  expect(collection!.submissionPolicy?.closesAt).toMatch(/Z$/);
+  await editor.getByLabel('Maximum final favorites').fill('3');
   await editor
     .getByLabel('Collection name', { exact: true })
     .fill('My revision');
@@ -1469,6 +1602,11 @@ test('named collections persist, recover conflicts, remove unavailable photos an
   await expect(
     editor.getByLabel('Collection name', { exact: true }),
   ).toHaveValue('Changed in another tab');
+  await expect(editor.getByLabel('Minimum final favorites')).toHaveValue('0');
+  await expect(editor.getByLabel('Maximum final favorites')).toHaveValue('1');
+  await expect(
+    editor.getByLabel('Final submission deadline', { exact: true }),
+  ).toHaveValue('');
   await editor
     .getByLabel('Collection name', { exact: true })
     .fill('Retouch round');

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { SubmittedRoundExport } from './submitted-round-export';
+import { proofingCountHint } from '../../../../packages/shared/src/proofing-policy';
+import { useSelectionClosed, SelectionWindowNote } from './selection-window';
 import type {
   ProofingSubmission,
   ProofingSubmissionState,
@@ -128,6 +130,14 @@ function SubmissionForm({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
+  const requirements = query.data?.requirements;
+  const closed = useSelectionClosed(requirements?.window);
+  const invalidCount = Boolean(
+    requirements &&
+    (requirements.favoriteCount < requirements.policy.minimum ||
+      requirements.favoriteCount > requirements.policy.maximum ||
+      requirements.unavailableCount > 0),
+  );
   useEffect(
     () => () => {
       pending.current?.abort();
@@ -167,11 +177,12 @@ function SubmissionForm({
     )
       return;
     if (owner ? !state.canReopen : Boolean(state.current)) return;
+    if (!owner && (closed || invalidCount)) return;
     if (
       !window.confirm(
         owner
           ? 'Reopen this submitted round? The submitted set stays in private history and the client can edit again.'
-          : 'Submit your saved favorites as the final set, including zero if no favorites are saved? Choices will lock until your photographer reopens this round.',
+          : 'Submit your saved favorites as the final set? Choices will lock until your photographer reopens this round. Only a collection with a minimum of zero accepts an empty set.',
       )
     )
       return;
@@ -255,6 +266,39 @@ function SubmissionForm({
             {query.data.reopenReason && (
               <p>Photographer reopening reason: {query.data.reopenReason}</p>
             )}
+            {requirements && (
+              <div aria-label="Collection submission requirements">
+                <p>
+                  Final favorites: {requirements.policy.minimum} to{' '}
+                  {requirements.policy.maximum}.
+                </p>
+                <SelectionWindowNote window={requirements.window} />
+                {closed && (
+                  <p>
+                    Final submissions are closed. The photographer must extend
+                    or clear the deadline to accept another submission. Draft
+                    choices remain editable after reopening.
+                  </p>
+                )}
+                {!owner && !query.data.current && (
+                  <p role="status">
+                    {proofingCountHint(
+                      requirements.favoriteCount,
+                      requirements.policy,
+                    )}
+                  </p>
+                )}
+                {!owner &&
+                  !query.data.current &&
+                  requirements.unavailableCount > 0 && (
+                    <p>
+                      {requirements.unavailableCount} saved favorites are
+                      unavailable. Review and save the current choices before
+                      submitting.
+                    </p>
+                  )}
+              </div>
+            )}
             {query.data.current && (
               <Snapshot
                 item={query.data.current}
@@ -290,7 +334,13 @@ function SubmissionForm({
                 </label>
                 <button
                   className="button"
-                  disabled={busy || disabled || conflict || query.isFetching}
+                  disabled={
+                    busy ||
+                    disabled ||
+                    conflict ||
+                    query.isFetching ||
+                    (!owner && (closed || invalidCount))
+                  }
                 >
                   {owner ? 'Reopen submitted round' : 'Submit final favorites'}
                 </button>
