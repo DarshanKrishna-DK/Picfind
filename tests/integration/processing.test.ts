@@ -131,6 +131,9 @@ describe('durable event processing integration without live AWS', () => {
     });
     await f.enqueue();
     await f.worker.processNext();
+    for (const photo of f.photos) {
+      f.rows.get(photo.id)!.modelVersion = 'synthetic-face-model';
+    }
     for (const method of Object.values(f.matcher))
       vi.mocked(method).mockClear();
     vi.mocked(f.store.file).mockClear();
@@ -141,9 +144,14 @@ describe('durable event processing integration without live AWS', () => {
     expect(second.body.readiness).toMatchObject({
       status: 'ready',
       counts: { total: 2, waiting: 0, prepared: 2 },
-      models: [{ version: 'synthetic', photos: 2 }],
+      models: [{ version: 'synthetic-face-model', photos: 2 }],
     });
-    expect(JSON.stringify(second.body.readiness)).not.toContain('face-');
+    const serialized = JSON.stringify(second.body.readiness);
+    for (const photo of f.photos) {
+      const saved = f.rows.get(photo.id)!;
+      for (const identifier of [...saved.faceIds!, saved.externalImageId!])
+        expect(serialized).not.toContain(identifier);
+    }
     for (const method of Object.values(f.matcher))
       expect(method).not.toHaveBeenCalled();
     expect(f.store.file).not.toHaveBeenCalled();
