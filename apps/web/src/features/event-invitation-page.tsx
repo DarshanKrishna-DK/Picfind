@@ -12,6 +12,7 @@ import {
   type InvitationPageSnapshot,
 } from '../../../../packages/shared/src/event-invitation-page';
 import './event-invitation-page.css';
+import { GuestRsvp } from './guest-rsvp';
 
 const headers = (accountId: string) => ({
   'X-PicFind-Invitation-Actor': accountId,
@@ -554,6 +555,7 @@ export function PublishedInvitationPage() {
       ) : (
         <>
           <InvitationCard fields={query.data.fields} />
+          <GuestRsvp eventId={eventId} seenRevision={query.data.revision} />
           <p className="invitation-refresh">
             Details can change. This page refreshes periodically while open.
           </p>

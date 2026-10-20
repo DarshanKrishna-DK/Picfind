@@ -33,6 +33,7 @@ import { QrPrintPack } from './qr-print-pack';
 import { EventDayReadiness } from './event-readiness';
 import { EventCoverage } from './event-coverage';
 import { EventInvitationEditor } from './event-invitation-page';
+import { HostRsvp } from './host-rsvp';
 
 export function EventForm({
   existing,
@@ -422,6 +423,7 @@ export function EventDetail() {
           'readiness',
           'coverage',
           'invitation',
+          'responses',
           'collections',
           'editing',
           'highlights',
@@ -459,6 +461,7 @@ export function EventDetail() {
       {tab === 'invitation' && (
         <EventInvitationEditor key={event.id} eventId={event.id} />
       )}
+      {tab === 'responses' && <HostRsvp key={event.id} eventId={event.id} />}
       {tab === 'photos' && (
         <>
           {!event.archived && (
