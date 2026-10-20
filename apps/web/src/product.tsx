@@ -17,6 +17,7 @@ import { InvitedCollectionPage } from './features/collection-invitations';
 import { HighlightsPage } from './features/highlights';
 import { HighlightWall } from './features/highlight-wall';
 import { StudioClients } from './features/studio-clients';
+import { StudioProjects } from './features/studio-projects';
 import './features/billing.css';
 
 export function Product() {
@@ -67,6 +68,7 @@ export function Product() {
         <Route index element={<Dashboard />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="clients" element={<StudioClients />} />
+        <Route path="projects" element={<StudioProjects />} />
         <Route path="events" element={<EventList />} />
         <Route path="events/new" element={<NewEvent />} />
         <Route path="events/:eventId" element={<EventDetail />} />

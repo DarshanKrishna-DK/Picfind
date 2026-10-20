@@ -12,7 +12,7 @@ export function studioReturnPath(value: unknown): string {
     extra !== undefined ||
     !path ||
     (!validGallery &&
-      !/^\/app(?:\/(?:library|clients|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?$/.test(
+      !/^\/app(?:\/(?:library|clients|projects|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?$/.test(
         path,
       ))
   )
