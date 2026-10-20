@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import { ApiError } from '../../apps/api/src/auth';
 import { portfolioFixture as fixture } from '../fixtures/studio-portfolio';
 import { portfolioRecordId } from '../../apps/api/src/studio-portfolio';
 import {
@@ -230,6 +231,105 @@ describe('explicit photographer portfolio publication', () => {
     };
     const response = await f.media().expect(404);
     expect(response.headers['content-type']).not.toContain('image/jpeg');
+  });
+  it.each(['withdraw', 'expire'] as const)(
+    'denies %s between initial media authorization and the route photo read',
+    async (action) => {
+      const f = await fixture();
+      await f.publish().expect(200);
+      const get = f.store.get.bind(f.store),
+        file = vi.spyOn(f.store, 'file');
+      let reads = 0;
+      vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+        if (id === f.photos[0]!.id && ++reads === 2) {
+          if (action === 'withdraw')
+            f.stored().studioPortfolio!.published = null;
+          else f.photos[0]!.expiresAt = '2000-01-01T00:00:00.000Z';
+        }
+        return get(id);
+      });
+      await f.media().expect(404);
+      expect(file).not.toHaveBeenCalled();
+    },
+  );
+  it.each([401, 403])(
+    'normalizes an initial store authorization denial %i across anonymous routes',
+    async (status) => {
+      const f = await fixture(),
+        get = f.store.get.bind(f.store);
+      vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+        if (id === f.id)
+          throw new ApiError(
+            status,
+            'PRIVATE_BACKEND_DETAIL',
+            'Private backend detail.',
+          );
+        return get(id);
+      });
+      for (const response of [
+        await f.publicRead().expect(404),
+        await f.media().expect(404),
+      ])
+        expect(JSON.stringify(response.body)).not.toContain(
+          'Private backend detail',
+        );
+    },
+  );
+  it('preserves operational store failures rather than disguising them as missing portfolios', async () => {
+    const f = await fixture();
+    vi.spyOn(f.store, 'get').mockRejectedValue(
+      new ApiError(
+        503,
+        'STORE_UNAVAILABLE',
+        'Storage is temporarily unavailable.',
+      ),
+    );
+    await f.publicRead().expect(503);
+    await f.media().expect(503);
+  });
+  it('bounds concurrent source reads while preserving all ordered selections and repeated freshness passes', async () => {
+    const f = await fixture(),
+      photos = [...f.photos];
+    for (let i = photos.length; i < 24; i++) {
+      const photo = {
+        ...f.photos[0]!,
+        id: randomUUID(),
+        filename: `Portfolio ${i}.jpg`,
+      };
+      f.records.set(photo.id, photo);
+      photos.push(photo);
+    }
+    const get = f.store.get.bind(f.store),
+      sourceIds = new Set([f.event.id, ...photos.map((photo) => photo.id)]);
+    let pending = 0,
+      peak = 0;
+    const counts = new Map<string, number>();
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      if (!sourceIds.has(id)) return get(id);
+      pending++;
+      peak = Math.max(peak, pending);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        return await get(id);
+      } finally {
+        pending--;
+      }
+    });
+    const fields = {
+      ...f.fields,
+      photos: photos.map((photo) => ({ id: photo.id, caption: '' })),
+    };
+    await f
+      .save({ action: 'publish', permission: PORTFOLIO_CONSENT, fields })
+      .expect(200);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(8);
+    for (const photo of photos) expect(counts.get(photo.id)).toBe(3);
+    const live = publicPortfolio.parse((await f.publicRead().expect(200)).body);
+    expect(live.photos.map((photo) => photo.id)).toEqual(
+      fields.photos.map((photo) => photo.id),
+    );
   });
   it('rechecks source ownership after asynchronous file retrieval', async () => {
     const f = await fixture();

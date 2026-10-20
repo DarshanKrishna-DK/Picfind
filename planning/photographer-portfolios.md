@@ -82,3 +82,16 @@ file retrieval, source ownership changes and account erasure. Public media
 uses the existing accounted delivery helper and rejects attachment query
 parameters that would expose private source filenames. No provider activation,
 external messages or production deployment occurred.
+
+Shipwright follow-up bounds selected-photo reads to batches of eight while
+retaining both publication freshness passes and ordered results. Tests verify
+the concurrency ceiling and all 24 selections. Initial storage authorization
+denials now receive the same unavailable response on both anonymous routes;
+operational storage failures remain visible as service failures.
+
+The reported gap between initial media authorization and the route photo read
+was tested directly. Withdrawal and expiry in that interval both return 404
+before any file fetch, because the delivery helper authorizes again. Existing
+tests also cover withdrawal and ownership changes during file retrieval.
+All 31 portfolio API tests, all 16 desktop/mobile browser cases, type checking
+and focused lint passed after these review improvements.

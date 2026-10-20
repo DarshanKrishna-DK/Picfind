@@ -118,12 +118,27 @@ export function createStudioPortfolio(
       return null;
     return photo;
   }
+  async function availableSelection(ids: string[], owner: string) {
+    const values: Array<LibraryRecord | null> = [];
+    for (let offset = 0; offset < ids.length; offset += 8)
+      values.push(
+        ...(await Promise.all(
+          ids.slice(offset, offset + 8).map((id) => available(id, owner)),
+        )),
+      );
+    return values;
+  }
   async function snapshot(owner: string) {
     const loaded = await load(owner);
     const value = loaded?.value;
     const unavailableIds: string[] = [];
-    for (const photo of value?.draft.photos ?? [])
-      if (!(await available(photo.id, owner))) unavailableIds.push(photo.id);
+    const selection = value?.draft.photos ?? [];
+    const availablePhotos = await availableSelection(
+      selection.map((photo) => photo.id),
+      owner,
+    );
+    for (let index = 0; index < selection.length; index++)
+      if (!availablePhotos[index]) unavailableIds.push(selection[index]!.id);
     return {
       accountId: owner,
       id: portfolioRecordId(owner),
@@ -234,22 +249,34 @@ export function createStudioPortfolio(
         // Publishing requires a current, owned event photo for every selected ID.
         const assertPhotos = async () => {
           if (action !== 'publish') return;
-          for (const photo of fields.photos)
-            if (!(await available(photo.id, owner)))
-              throw new ApiError(
-                409,
-                'PORTFOLIO_PHOTO_UNAVAILABLE',
-                'Remove unavailable photographs before publishing.',
-              );
+          const photos = await availableSelection(
+            fields.photos.map((photo) => photo.id),
+            owner,
+          );
+          if (photos.some((photo) => !photo))
+            throw new ApiError(
+              409,
+              'PORTFOLIO_PHOTO_UNAVAILABLE',
+              'Remove unavailable photographs before publishing.',
+            );
         };
         // A private draft must not become a way to probe or retain foreign IDs.
         if (action === 'save') {
           const existing = new Set(
             current?.draft.photos.map((photo) => photo.id),
           );
-          for (const photo of fields.photos)
-            if (!existing.has(photo.id) && !(await available(photo.id, owner)))
-              throw missing();
+          const added = fields.photos.filter(
+            (photo) => !existing.has(photo.id),
+          );
+          if (
+            (
+              await availableSelection(
+                added.map((photo) => photo.id),
+                owner,
+              )
+            ).some((photo) => !photo)
+          )
+            throw missing();
         }
         await assertPhotos();
         const now = new Date(
@@ -297,7 +324,14 @@ export function createStudioPortfolio(
     );
   });
   async function ownerOf(id: string) {
-    const row = await optional(id);
+    let row: LibraryRecord | null;
+    try {
+      row = await optional(id);
+    } catch (failure) {
+      if (failure instanceof ApiError && [401, 403].includes(failure.status))
+        throw missing();
+      throw failure;
+    }
     if (
       !row ||
       row.id !== id ||
@@ -334,8 +368,12 @@ export function createStudioPortfolio(
       await publicLock(owner, async () => {
         const publication = await published(owner);
         const photos = [];
-        for (const selection of publication.fields.photos) {
-          const photo = await available(selection.id, owner);
+        const availablePhotos = await availableSelection(
+          publication.fields.photos.map((photo) => photo.id),
+          owner,
+        );
+        for (const [index, selection] of publication.fields.photos.entries()) {
+          const photo = availablePhotos[index];
           if (photo)
             photos.push({
               id: photo.id,
