@@ -318,6 +318,12 @@ export function HighlightsPage() {
             query.data && (
               <>
                 <h1>{query.data.title}</h1>
+                <Link
+                  className="button secondary"
+                  to={`/highlights/${eventId}/wall`}
+                >
+                  Open photo wall
+                </Link>
                 <p>
                   {query.data.photos.length} selected photos. Downloads include
                   only this published selection.

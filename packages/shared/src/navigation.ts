@@ -2,12 +2,19 @@
 export function studioReturnPath(value: unknown): string {
   if (typeof value !== 'string' || value.length > 1024) return '/app';
   const [path, search, extra] = value.split('?');
+  const galleryPath =
+    /^\/(e|proofing|highlights)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}(\/wall)?$/.exec(
+      path ?? '',
+    );
+  const validGallery =
+    galleryPath && (!galleryPath[2] || galleryPath[1] === 'highlights');
   if (
     extra !== undefined ||
     !path ||
-    !/^(?:\/app(?:\/(?:library|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?|\/(?:e|proofing|highlights)\/[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$/.test(
-      path,
-    )
+    (!validGallery &&
+      !/^\/app(?:\/(?:library|import|settings|billing|discover\/new|events(?:\/(?:[A-Za-z0-9_-]+))?))?\/?$/.test(
+        path,
+      ))
   )
     return '/app';
   if (search === undefined) return path;
