@@ -133,6 +133,7 @@ describe('guest selection receipts', () => {
         });
     await submit('guest-a').expect(201);
     await submit('guest-b').expect(201);
+    await submit('owner').expect(201);
     const rows = [...f.records.values()].filter(
       (row) => row.purpose === 'selection',
     );
@@ -168,7 +169,22 @@ describe('guest selection receipts', () => {
       .get(`/api/public/events/${f.event.id}/my-selections`)
       .set('Cookie', 'picfind_session=owner')
       .expect(200);
-    expect(ownerHistory.body.receipts).toEqual([]);
+    expect(
+      ownerHistory.body.receipts.map((row: { id: string }) => row.id),
+    ).toEqual([rows.find((row) => row.submittedById === 'owner')!.id]);
+    const secondGuestHistory = await request(f.app)
+      .get(`/api/public/events/${f.event.id}/my-selections`)
+      .set('Cookie', 'picfind_session=guest-b')
+      .expect(200);
+    expect(
+      secondGuestHistory.body.receipts.map((row: { id: string }) => row.id),
+    ).toEqual([rows.find((row) => row.submittedById === 'guest-b')!.id]);
+    // The subtree session gate still precedes validation of a malformed body.
+    await request(f.app)
+      .post(`/api/public/events/${f.event.id}/selections`)
+      .set('Origin', origin)
+      .send({})
+      .expect(401);
     await request(f.app)
       .post(`/api/public/events/${f.event.id}/selections`)
       .set('Origin', origin)
