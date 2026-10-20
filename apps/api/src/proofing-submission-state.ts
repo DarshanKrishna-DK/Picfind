@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isDeepStrictEqual } from 'node:util';
 import { ApiError } from './auth.js';
 import type { LibraryRecord } from './library.js';
+import { submissionArchiveId } from './proofing-archive.js';
 
 export const proofingText = z
   .string()
@@ -94,14 +95,22 @@ export function readSubmissionHistory(
     return submissionMetadataInvalid();
   const archives = rows.map((row) => {
     const item = readSubmission(row.proofingSubmission);
-    if (row.kind !== 'job' || item.id !== row.id || item.round > state.round)
+    if (
+      row.kind !== 'job' ||
+      (item.id !== row.id &&
+        submissionArchiveId(invitation.id, item.id) !== row.id) ||
+      item.round > state.round
+    )
       return submissionMetadataInvalid();
     return item;
   });
   const rounds = new Set<number>();
+  const ids = new Set<string>();
   for (const item of archives) {
-    if (rounds.has(item.round)) return submissionMetadataInvalid();
+    if (rounds.has(item.round) || ids.has(item.id))
+      return submissionMetadataInvalid();
     rounds.add(item.round);
+    ids.add(item.id);
     if (
       item.round === state.round &&
       (!state.current || !isDeepStrictEqual(item, state.current))
@@ -110,6 +119,9 @@ export function readSubmissionHistory(
   }
   return {
     ...state,
+    archiveIds: new Map(
+      archives.map((item, index) => [item.id, rows[index]!.id]),
+    ),
     history: archives
       .filter((item) => item.id !== state.current?.id)
       .sort((a, b) => b.round - a.round),
