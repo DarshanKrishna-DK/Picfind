@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { api, HttpError, session } from '../api';
+import { api, HttpError, saveFile, session } from '../api';
+import {
+  exportStudioCalendar,
+  filterAppointments,
+  scheduleFilters,
+  type ScheduleFilters,
+} from '../../../../packages/shared/src/studio-calendar';
 import { ErrorNote, Loading } from '../components/ui';
 import { dateInZone } from '../../../../packages/shared/src/studio-milestones';
 import {
@@ -97,10 +103,11 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
   const [draft, setDraft] = useState<AppointmentFields>(blank);
   const [newId, setNewId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('scheduled');
+  const [status, setStatus] = useState<ScheduleFilters['status']>('scheduled');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [includePrivateDetails, setIncludePrivateDetails] = useState(false);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -226,6 +233,30 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
     event.preventDefault();
     await persist(resolved);
   }
+  async function downloadCalendar() {
+    const filters: ScheduleFilters = {
+      search,
+      status,
+      projectId: projectFilter,
+      from,
+      through: to,
+    };
+    const privateDetails = includePrivateDetails;
+    await run(async (signal) => {
+      const latest = await readSchedule(initial.accountId, signal);
+      signal.throwIfAborted();
+      const output = exportStudioCalendar(latest, filters, privateDetails);
+      signal.throwIfAborted();
+      saveFile(
+        new Blob([output.content], { type: 'text/calendar;charset=utf-8' }),
+        'picfind-studio-schedule.ics',
+      );
+      setSchedule(latest);
+      setMessage(
+        `${output.count} saved appointments exported. Your editor draft was preserved. This file does not synchronize your calendar.`,
+      );
+    });
+  }
   async function remove() {
     if (!selected || !confirmDelete || conflict || denied) return;
     const target = selected.appointment;
@@ -281,18 +312,15 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
       view.appointment.projectId,
       view.project?.name ?? 'Unavailable project',
     );
-  const visible = schedule.appointments.filter((view) => {
-    const row = view.appointment;
-    return (
-      (status === 'all' || row.status === status) &&
-      (!projectFilter || row.projectId === projectFilter) &&
-      (!from || row.endLocal > `${from}T00:00`) &&
-      (!to || row.startLocal.slice(0, 10) <= to) &&
-      `${row.title} ${row.note} ${view.project?.name ?? ''}`
-        .toLowerCase()
-        .includes(search.trim().toLowerCase())
-    );
-  });
+  const filters: ScheduleFilters = {
+    search,
+    status,
+    projectId: projectFilter,
+    from,
+    through: to,
+  };
+  const validFilters = scheduleFilters.safeParse(filters).success;
+  const visible = filterAppointments(schedule.appointments, filters);
   return (
     <section className="glass-panel studio-schedule">
       <h1>Private schedule</h1>
@@ -341,6 +369,8 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
           <label>
             Search appointments
             <input
+              disabled={busy}
+              maxLength={1000}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -349,7 +379,10 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
             Appointment filter
             <select
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              disabled={busy}
+              onChange={(event) =>
+                setStatus(event.target.value as ScheduleFilters['status'])
+              }
             >
               <option value="scheduled">Scheduled</option>
               <option value="cancelled">Cancelled</option>
@@ -359,6 +392,7 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
           <label>
             Schedule project filter
             <select
+              disabled={busy}
               value={projectFilter}
               onChange={(event) => setProjectFilter(event.target.value)}
             >
@@ -374,6 +408,7 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
             From date
             <input
               type="date"
+              disabled={busy}
               value={from}
               onChange={(event) => setFrom(event.target.value)}
             />
@@ -382,6 +417,7 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
             Through date
             <input
               type="date"
+              disabled={busy}
               value={to}
               onChange={(event) => setTo(event.target.value)}
             />
@@ -393,6 +429,39 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
           {from && to && from > to && (
             <p role="alert">Choose a through date on or after the from date.</p>
           )}
+          <div className="studio-calendar-export">
+            <h2>Calendar file</h2>
+            <p>
+              Export saved appointments matching these filters. This is a
+              snapshot for manual import, not ongoing synchronization. Unsaved
+              edits are excluded.
+            </p>
+            <label className="studio-calendar-choice">
+              <input
+                type="checkbox"
+                checked={includePrivateDetails}
+                disabled={busy}
+                onChange={(event) =>
+                  setIncludePrivateDetails(event.target.checked)
+                }
+              />
+              Include private notes and project names in the file
+            </label>
+            <p>
+              Appointment titles and times are always included. Choose All
+              retained to include cancellation records. Imported copies require
+              manual management, especially after deleting an appointment from
+              PicFind.
+            </p>
+            <button
+              type="button"
+              className="button"
+              disabled={busy || !validFilters}
+              onClick={() => void downloadCalendar()}
+            >
+              Export filtered calendar (.ics)
+            </button>
+          </div>
           <p>{visible.length} matching appointments</p>
           <ul className="studio-schedule-list" aria-label="Appointments">
             {visible.map((view) => (
