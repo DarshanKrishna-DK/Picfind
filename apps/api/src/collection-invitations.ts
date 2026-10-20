@@ -8,6 +8,7 @@ import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
 import { createProofingDecisions } from './proofing-decisions.js';
 import { createProofingComments } from './proofing-comments.js';
+import { createProofingSubmissions } from './proofing-submissions.js';
 import {
   COLLECTION_INVITATION_LIMIT,
   type CollectionInvitation,
@@ -299,6 +300,9 @@ export function createCollectionInvitations(
   );
   router.use(
     createProofingComments({ store, actorOf, access, ownerCollection }),
+  );
+  router.use(
+    createProofingSubmissions({ store, actorOf, access, ownerCollection }),
   );
   return router;
 }

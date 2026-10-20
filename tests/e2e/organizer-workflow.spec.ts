@@ -6,8 +6,261 @@ import { chooseMenu } from './menu';
 import type { ProofingCollection } from '../../packages/shared/src/proofing-collection';
 import type { ProofingDecisions } from '../../packages/shared/src/proofing-decisions';
 import type { ProofingComment } from '../../packages/shared/src/proofing-comments';
+import type { ProofingSubmissionState } from '../../packages/shared/src/proofing-submission';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
+test('final proofing submission locks saved choices, retries safely and preserves reopened history', async ({
+  page,
+}) => {
+  const { eventId, photos, jpeg } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const ownerRoot = `/api/events/${eventId}/proofing-collections`;
+  const clientRoot = `/api/proofing-invitations/${invitationId}`;
+  const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+  let actor = 'client',
+    denied = false,
+    failAfterSave = true;
+  let releaseSave: (() => void) | undefined;
+  const requests: Record<string, unknown>[] = [];
+  const decisions: ProofingDecisions = {
+    version: 1,
+    updatedAt: expiresAt,
+    unavailableCount: 0,
+    decisions: [
+      {
+        photoId: photos[0]!.id,
+        filename: photos[0]!.filename,
+        status: 'favorite',
+      },
+    ],
+  };
+  const state: ProofingSubmissionState = {
+    round: 1,
+    decisionVersion: 1,
+    collectionVersion: 1,
+    current: null,
+    history: [],
+    reopenReason: null,
+    canReopen: false,
+  };
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: actor,
+          name: actor,
+          email: `${actor}@example.test`,
+          emailVerified: true,
+        },
+      },
+    }),
+  );
+  await page.route(`**${ownerRoot}`, (route) =>
+    route.fulfill({
+      json: {
+        limit: 50,
+        collections: [
+          {
+            id: collectionId,
+            title: 'Final album',
+            version: 1,
+            createdAt: expiresAt,
+            updatedAt: expiresAt,
+            photoIds: photos.map((photo) => photo.id),
+            photos,
+            unavailableCount: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${ownerRoot}/${collectionId}/invitations`, (route) =>
+    route.fulfill({
+      json: {
+        invitations: [
+          {
+            id: invitationId,
+            email: 'client@example.test',
+            createdAt: expiresAt,
+            expiresAt,
+            revokedAt: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${clientRoot}**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes('/photos/'))
+      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+    return route.fulfill({
+      json: {
+        title: 'Final album',
+        eventTitle: 'Garden wedding',
+        expiresAt,
+        photos,
+      },
+    });
+  });
+  await page.route('**/api/**/decisions', (route) => {
+    if (route.request().method() === 'PATCH') {
+      const input = route.request().postDataJSON();
+      expect(state.current).toBeNull();
+      expect(input.version).toBe(decisions.version);
+      decisions.version += 1;
+      state.decisionVersion = decisions.version;
+      decisions.decisions = [
+        {
+          photoId: input.photoId,
+          filename: photos[0]!.filename,
+          status: input.status,
+        },
+      ];
+    }
+    return route.fulfill({ json: decisions });
+  });
+  await page.route('**/api/**/submission', async (route) => {
+    const owner = new URL(route.request().url()).pathname.startsWith(ownerRoot);
+    if (denied)
+      return route.fulfill({
+        status: 404,
+        json: { error: { message: 'Submission unavailable.' } },
+      });
+    if (route.request().method() === 'POST') {
+      const input = route.request().postDataJSON();
+      requests.push(input);
+      if (owner) {
+        expect(input.submissionId).toBe(state.current!.id);
+        state.history.unshift(state.current!);
+        state.current = null;
+        state.round += 1;
+        decisions.version += 1;
+        state.decisionVersion = decisions.version;
+        state.reopenReason = input.reason;
+        delete decisions.submitted;
+        return route.fulfill({ json: { reopened: true } });
+      }
+      if (!state.current)
+        state.current = {
+          id: input.id,
+          round: state.round,
+          submittedAt: new Date().toISOString(),
+          decisionVersion: input.decisionVersion,
+          collectionVersion: input.collectionVersion,
+          note: input.note,
+          favoriteCount: 1,
+          unavailableCount: 0,
+          photos: [{ photoId: photos[0]!.id, filename: photos[0]!.filename }],
+        };
+      expect(input.id).toBe(state.current.id);
+      decisions.submitted = {
+        id: state.current.id,
+        round: state.round,
+        submittedAt: state.current.submittedAt,
+      };
+      if (failAfterSave) {
+        failAfterSave = false;
+        await new Promise<void>((resolve) => {
+          releaseSave = resolve;
+        });
+        return route.fulfill({
+          status: 503,
+          json: {
+            error: { message: 'Response interrupted. Retry the submission.' },
+          },
+        });
+      }
+      return route.fulfill({ json: { submitted: true, id: input.id } });
+    }
+    return route.fulfill({
+      json: { ...state, canReopen: owner && Boolean(state.current) },
+    });
+  });
+  await page.goto(`/proofing/${invitationId}`);
+  const choice = page.getByLabel(`Decision for ${photos[0]!.filename}`);
+  const panel = page.getByRole('region', {
+    name: 'Your final submission',
+    exact: true,
+  });
+  await expect(choice).toHaveValue('favorite');
+  await panel.getByRole('button', { name: 'Review final submission' }).click();
+  await panel
+    .getByLabel('Final submission note')
+    .fill('Please keep <b>the original colors</b>.');
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await panel.getByRole('button', { name: 'Submit final favorites' }).click();
+  expect(requests).toHaveLength(0);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await panel.getByRole('button', { name: 'Submit final favorites' }).click();
+  await expect.poll(() => Boolean(releaseSave)).toBe(true);
+  await expect(choice).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Refresh saved decisions' }),
+  ).toBeDisabled();
+  releaseSave!();
+  await expect(
+    panel.getByText('Response interrupted. Retry the submission.'),
+  ).toBeVisible();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await panel.getByRole('button', { name: 'Submit final favorites' }).click();
+  expect(requests[1]).toEqual(requests[0]);
+  await expect(
+    panel.getByText('This round is submitted and locked.'),
+  ).toBeVisible();
+  await expect(choice).toBeDisabled();
+  await expect(panel.locator('b')).toHaveCount(0);
+  await page.reload();
+  await expect(choice).toBeDisabled();
+  await panel.getByRole('button', { name: 'Review final submission' }).click();
+  await expect(
+    panel.getByRole('article', { name: 'Submitted round 1' }),
+  ).toContainText('1 submitted favorites');
+
+  actor = 'owner';
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Final album' })
+    .click();
+  await page
+    .getByRole('button', { name: 'View decisions from client@example.test' })
+    .click();
+  const history = page.getByRole('region', {
+    name: 'Client submission history',
+    exact: true,
+  });
+  await history.getByRole('button', { name: 'View submitted rounds' }).click();
+  await history
+    .getByLabel('Reason to reopen')
+    .fill('Please choose a different cover.');
+  page.once('dialog', (dialog) => void dialog.accept());
+  await history.getByRole('button', { name: 'Reopen submitted round' }).click();
+  await expect(
+    history.getByText('Round 2 is open for saved draft choices.'),
+  ).toBeVisible();
+  await expect(
+    history.getByRole('article', { name: 'Submitted round 1' }),
+  ).toBeVisible();
+  actor = 'client';
+  await page.goto(`/proofing/${invitationId}`);
+  await expect(choice).toBeEnabled();
+  await panel.getByRole('button', { name: 'Review final submission' }).click();
+  await expect(panel).toContainText(
+    'Photographer reopening reason: Please choose a different cover.',
+  );
+  await expect(
+    panel.getByRole('article', { name: 'Submitted round 1' }),
+  ).toBeVisible();
+  denied = true;
+  await panel.getByRole('button', { name: 'Refresh submission' }).click();
+  await expect(panel.getByText('Submission unavailable.')).toBeVisible();
+  await expect(panel.getByRole('article')).toHaveCount(0);
+  await expect(
+    panel.getByRole('button', { name: 'Submit final favorites' }),
+  ).toHaveCount(0);
+});
+
 async function fixture(page: Page) {
   const jpeg = await sharp({
     create: { width: 80, height: 60, channels: 3, background: '#50796a' },

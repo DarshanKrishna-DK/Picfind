@@ -4,6 +4,7 @@ import { ApiError } from './auth.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
+import { submissionState } from './proofing-submission-state.js';
 import {
   PROOFING_DECISIONS,
   type ProofingDecisions,
@@ -30,7 +31,7 @@ function invitationId(req: Request) {
   if (!parsed.success) throw missing();
   return parsed.data;
 }
-function persisted(row: LibraryRecord) {
+export function readProofingDecisions(row: LibraryRecord) {
   const entries = storedSchema.safeParse(row.proofingDecisions ?? []);
   const version = versionSchema.safeParse(row.proofingDecisionVersion ?? 0);
   const untouched =
@@ -58,7 +59,7 @@ function persisted(row: LibraryRecord) {
   };
 }
 
-export function createProofingDecisions(dependencies: {
+export interface ProofingAccessDependencies {
   store: () => LibraryStore;
   actorOf: (req: Request) => Promise<string>;
   access: (
@@ -73,7 +74,10 @@ export function createProofingDecisions(dependencies: {
     req: Request,
     actor: string,
   ) => Promise<{ event: LibraryRecord; collection: LibraryRecord }>;
-}) {
+}
+export function createProofingDecisions(
+  dependencies: ProofingAccessDependencies,
+) {
   const { store, actorOf, access, ownerCollection } = dependencies;
   const router = Router();
   async function photosOf(collection: LibraryRecord) {
@@ -91,7 +95,8 @@ export function createProofingDecisions(dependencies: {
     row: LibraryRecord,
     photos: LibraryRecord[],
   ): ProofingDecisions {
-    const saved = persisted(row);
+    const saved = readProofingDecisions(row);
+    const { current } = submissionState(row);
     const byId = new Map(
       photos
         .filter((photo) => photoAvailable(photo))
@@ -108,6 +113,15 @@ export function createProofingDecisions(dependencies: {
       updatedAt: saved.updatedAt,
       decisions,
       unavailableCount: saved.entries.length - decisions.length,
+      ...(current
+        ? {
+            submitted: {
+              id: current.id,
+              round: current.round,
+              submittedAt: current.submittedAt,
+            },
+          }
+        : {}),
     };
   }
   const clientRoot = '/proofing-invitations/:invitationId/decisions';
@@ -148,7 +162,13 @@ export function createProofingDecisions(dependencies: {
       initial.invitation.ownerId,
       async () => {
         const grant = await access(id, actor);
-        const saved = persisted(grant.invitation);
+        const saved = readProofingDecisions(grant.invitation);
+        if (submissionState(grant.invitation).current)
+          throw new ApiError(
+            409,
+            'PROOFING_SUBMITTED',
+            'These choices are submitted. Ask your photographer to reopen this round.',
+          );
         if (saved.version !== input.data.version)
           throw new ApiError(
             409,
