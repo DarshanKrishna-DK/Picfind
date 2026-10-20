@@ -299,3 +299,82 @@ test('signed-in guests unlock a gallery and send a selection without purchasing'
   ).toBeVisible();
   expect(state.selections).toBe(1);
 });
+
+test('guests see count limits and recover when the organizer changes them', async ({
+  page,
+}) => {
+  const { state, jpeg } = await fixture(page);
+  state.unlocked = true;
+  let rules = { minimum: 2, maximum: 2 };
+  await page.route('**/api/public/events/event1/access', (route) =>
+    route.fulfill({
+      json: { brandingName: '', accentColor: '#173f37', selectionRules: rules },
+    }),
+  );
+  await page.route('**/api/public/events/event1', (route) =>
+    route.fulfill({
+      json: {
+        event: {
+          id: 'event1',
+          title: 'Count rules gallery',
+          visibility: 'link',
+          date: '',
+          description: '',
+        },
+        photos: ['p1', 'p2'].map((id) => ({
+          id,
+          filename: `${id}.jpg`,
+          width: 32,
+          height: 24,
+          bytes: jpeg.length,
+          createdAt: '2026-09-20T00:00:00Z',
+        })),
+      },
+    }),
+  );
+  let submissions = 0;
+  await page.route('**/api/public/events/event1/selections', (route) => {
+    submissions++;
+    if (submissions === 1) {
+      rules = { minimum: 1, maximum: 1 };
+      return route.fulfill({
+        status: 400,
+        json: {
+          error: {
+            code: 'SELECTION_COUNT_REQUIRED',
+            message: 'Choose exactly 1 different photo.',
+          },
+        },
+      });
+    }
+    expect(route.request().postDataJSON().photoIds).toEqual(['p1']);
+    return route.fulfill({
+      status: 201,
+      json: { message: 'Your selection was sent.' },
+    });
+  });
+  await page.goto('/e/event1');
+  await page
+    .getByRole('button', { name: 'Choose favorites for organizer' })
+    .click();
+  await expect(
+    page.getByText('Choose 2 more photos to send this request.'),
+  ).toBeVisible();
+  await page.getByLabel('p1.jpg', { exact: true }).check();
+  await expect(
+    page.getByRole('button', { name: 'Send 1 favorites' }),
+  ).toBeDisabled();
+  await page.getByLabel('p2.jpg', { exact: true }).check();
+  await page.getByLabel('Your name', { exact: true }).fill('Guest');
+  await page.getByRole('button', { name: 'Send 2 favorites' }).click();
+  await expect(page.getByText('Remove 1 photo before sending.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Send 2 favorites' }),
+  ).toBeDisabled();
+  await page.getByLabel('p2.jpg', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Send 1 favorites' }).click();
+  await expect(
+    page.getByText('Your selection was sent.', { exact: true }),
+  ).toBeVisible();
+  expect(submissions).toBe(2);
+});
