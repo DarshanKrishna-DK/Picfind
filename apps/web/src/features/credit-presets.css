@@ -1,0 +1,91 @@
+.credit-desk {
+  max-width: 1100px;
+  min-width: 0;
+}
+.credit-card {
+  padding: 1.4rem;
+  margin-top: 1.5rem;
+  border: 1px solid var(--line, #d9d4c8);
+  border-radius: 18px;
+}
+.credit-desk fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.credit-desk label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+  font-weight: 600;
+}
+.credit-desk input:not([type='checkbox']),
+.credit-desk select {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem;
+  border: 1px solid var(--line, #d9d4c8);
+  border-radius: 10px;
+  background: var(--paper, #fffdf8);
+  color: inherit;
+  font: inherit;
+}
+.credit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.credit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 1rem 0;
+}
+.credit-desk .credit-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.credit-check input {
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+}
+.credit-photo-list {
+  max-height: 380px;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--line, #d9d4c8);
+  border-radius: 12px;
+}
+.credit-preview-list {
+  list-style: none;
+  padding: 0;
+  max-height: 420px;
+  overflow: auto;
+}
+.credit-preview-list li {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line, #d9d4c8);
+  overflow-wrap: anywhere;
+}
+.credit-preview-list span {
+  display: inline-block;
+  margin-left: 0.8rem;
+  font-weight: 600;
+}
+@media (max-width: 650px) {
+  .credit-grid {
+    grid-template-columns: 1fr;
+  }
+  .credit-card {
+    padding: 1rem;
+  }
+  .credit-actions .button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
