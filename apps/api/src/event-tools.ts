@@ -19,6 +19,28 @@ import {
   type EventSelection,
   type SelectionReview,
 } from '../../../packages/shared/src/proofing.js';
+import {
+  DEFAULT_SELECTION_RULES,
+  validSelectionRules,
+  type SelectionCountRules,
+} from '../../../packages/shared/src/selection-rules.js';
+
+function selectionRules(
+  event: LibraryRecord,
+  allowRepair = false,
+): SelectionCountRules {
+  const rules = {
+    minimum: event.selectionMinimum ?? DEFAULT_SELECTION_RULES.minimum,
+    maximum: event.selectionMaximum ?? DEFAULT_SELECTION_RULES.maximum,
+  };
+  if (!validSelectionRules(rules) && !allowRepair)
+    throw new ApiError(
+      409,
+      'SELECTION_RULES_INVALID',
+      'The organizer must update this event selection policy before submissions can continue.',
+    );
+  return rules;
+}
 
 function reviewOf(row: LibraryRecord): SelectionReview {
   return {
@@ -152,10 +174,39 @@ export function createEventTools(
   });
   router.get('/public/events/:id/access', async (req, res) => {
     const event = await eventOf(req.params.id);
+    const rules = selectionRules(event, true);
     res.json({
       brandingName: event.brandingName ?? '',
       accentColor: event.accentColor ?? '#173f37',
+      selectionRules: validSelectionRules(rules) ? rules : null,
     });
+  });
+  router.patch('/events/:id/selection-rules', async (req, res) => {
+    const user = await owner(req);
+    const parsed = z
+      .object({
+        minimum: z.number().int().min(1).max(100),
+        maximum: z.number().int().min(1).max(100),
+      })
+      .strict()
+      .refine(validSelectionRules)
+      .safeParse(req.body);
+    if (!parsed.success)
+      throw new ApiError(
+        400,
+        'INVALID_SELECTION_RULES',
+        'Choose a minimum and maximum from 1 to 100, with the minimum no greater than the maximum.',
+      );
+    await withAccountLock(user, async () => {
+      const event = await eventOf(req.params.id, user);
+      const patch = {
+        selectionMinimum: parsed.data.minimum,
+        selectionMaximum: parsed.data.maximum,
+      };
+      if (saveEvent) await saveEvent(user, event.id, patch);
+      else await getStore().put({ ...event, ...patch });
+    });
+    res.json({ selectionRules: parsed.data });
   });
   router.patch('/events/:id/presentation', async (req, res) => {
     const user = await owner(req);
@@ -220,6 +271,7 @@ export function createEventTools(
       hasPasscode: Boolean(event.passcodeHash),
       brandingName: event.brandingName ?? '',
       accentColor: event.accentColor ?? '#173f37',
+      selectionRules: selectionRules(event, true),
       selections: selections.map((row): EventSelection => ({
         id: row.id,
         name: row.visitorName ?? '',
@@ -352,6 +404,15 @@ export function createEventTools(
             401,
             'GALLERY_LOCKED',
             'Unlock this gallery again.',
+          );
+        const rules = selectionRules(current);
+        if (ids.length < rules.minimum || ids.length > rules.maximum)
+          throw new ApiError(
+            400,
+            'SELECTION_COUNT_REQUIRED',
+            rules.minimum === rules.maximum
+              ? `Choose exactly ${rules.minimum} different photos for this request.`
+              : `Choose between ${rules.minimum} and ${rules.maximum} different photos for this request.`,
           );
         const photos = await getStore().list(event.ownerId, 'photo');
         if (

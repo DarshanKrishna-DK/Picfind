@@ -145,6 +145,31 @@ async function fixture(plan?: PlanId) {
   return { app, store, owner, billing, library, create, patch };
 }
 describe('organizer event entitlement and atomic live capacity, synthetic payments only', () => {
+  it('persists selection count metadata through the billing event transaction', async () => {
+    const f = await fixture('organizer-starter-monthly');
+    const created = await f
+      .create({ title: 'Proofing', expiresAt: expiry(7) })
+      .expect(201);
+    const id = created.body.event.id as string;
+    await request(f.app)
+      .patch(`/api/events/${id}/selection-rules`)
+      .set('Origin', origin)
+      .set('Cookie', `picfind_session=${f.owner}`)
+      .send({ minimum: 5, maximum: 12 })
+      .expect(200);
+    expect(f.store.events.get(id)).toMatchObject({
+      selectionMinimum: 5,
+      selectionMaximum: 12,
+      title: 'Proofing',
+      expiresAt: expiry(7),
+      visibility: 'private',
+    });
+    const insights = await request(f.app)
+      .get(`/api/events/${id}/insights`)
+      .set('Cookie', `picfind_session=${f.owner}`)
+      .expect(200);
+    expect(insights.body.selectionRules).toEqual({ minimum: 5, maximum: 12 });
+  });
   it.each([undefined, 'personal-1000'] as const)(
     'does not let %s personal credit host events',
     async (plan) => {

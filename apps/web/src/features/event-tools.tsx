@@ -6,6 +6,12 @@ import { ErrorNote, Loading } from '../components/ui';
 import './sources.css';
 import { SelectionInbox } from './selection-review';
 import type { EventSelection } from '../../../../packages/shared/src/proofing';
+import {
+  DEFAULT_SELECTION_RULES,
+  selectionCountHint,
+  type SelectionCountRules,
+} from '../../../../packages/shared/src/selection-rules';
+import { SelectionRulesForm } from './selection-rules';
 
 export function GalleryAccess({
   eventId,
@@ -18,9 +24,11 @@ export function GalleryAccess({
   const access = useQuery({
     queryKey: ['gallery-access', eventId],
     queryFn: () =>
-      api<{ brandingName: string; accentColor: string }>(
-        `/public/events/${eventId}/access`,
-      ),
+      api<{
+        brandingName: string;
+        accentColor: string;
+        selectionRules?: SelectionCountRules | null;
+      }>(`/public/events/${eventId}/access`),
     retry: false,
     enabled: Boolean(account.data),
   });
@@ -111,11 +119,31 @@ export function GalleryAccess({
         </p>
       )}
       {children}
-      <GuestSelections eventId={eventId} />
+      <GuestSelections
+        key={eventId}
+        eventId={eventId}
+        rules={
+          access.data?.selectionRules === null
+            ? null
+            : (access.data?.selectionRules ?? DEFAULT_SELECTION_RULES)
+        }
+        refreshRules={async () => {
+          const result = await access.refetch();
+          if (result.error) throw result.error;
+        }}
+      />
     </div>
   );
 }
-function GuestSelections({ eventId }: { eventId: string }) {
+function GuestSelections({
+  eventId,
+  rules,
+  refreshRules,
+}: {
+  eventId: string;
+  rules: SelectionCountRules | null;
+  refreshRules: () => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const photos = useQuery({
     queryKey: ['selection-photos', eventId],
@@ -127,6 +155,17 @@ function GuestSelections({ eventId }: { eventId: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState<unknown>(null);
+  async function refreshPolicy() {
+    setBusy(true);
+    setError(null);
+    try {
+      await refreshRules();
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -149,10 +188,36 @@ function GuestSelections({ eventId }: { eventId: string }) {
       setSelected([]);
     } catch (failure) {
       setError(failure);
+      if (
+        failure instanceof HttpError &&
+        (failure.code === 'SELECTION_COUNT_REQUIRED' ||
+          failure.code === 'SELECTION_RULES_INVALID')
+      )
+        await refreshRules().catch(() => {});
     } finally {
       setBusy(false);
     }
   }
+  if (!rules)
+    return (
+      <section className="wrap">
+        <div className="source-panel">
+          <h2>Favorites submissions are paused.</h2>
+          <p>
+            You can still view the gallery. The photographer needs to repair
+            this event selection policy before accepting requests.
+          </p>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void refreshPolicy()}
+          >
+            Refresh selection limits
+          </button>
+          <ErrorNote error={error} />
+        </div>
+      </section>
+    );
   return (
     <section className="wrap">
       <div className="source-panel">
@@ -175,7 +240,8 @@ function GuestSelections({ eventId }: { eventId: string }) {
                     type="checkbox"
                     disabled={
                       busy ||
-                      (selected.length >= 100 && !selected.includes(photo.id))
+                      (selected.length >= rules.maximum &&
+                        !selected.includes(photo.id))
                     }
                     checked={selected.includes(photo.id)}
                     onChange={(event) =>
@@ -199,9 +265,21 @@ function GuestSelections({ eventId }: { eventId: string }) {
               ))}
             </div>
             <p className="field-help">
-              {selected.length} of 100 favorites selected. Send another
-              selection if you need more.
+              {selected.length} selected. This request requires{' '}
+              {rules.minimum === rules.maximum
+                ? `exactly ${rules.minimum}`
+                : `${rules.minimum} to ${rules.maximum}`}{' '}
+              favorites.
             </p>
+            <p role="status">{selectionCountHint(selected.length, rules)}</p>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => void refreshPolicy()}
+            >
+              Refresh selection limits
+            </button>
             <label>
               Your name
               <input name="name" maxLength={100} required />
@@ -210,7 +288,14 @@ function GuestSelections({ eventId }: { eventId: string }) {
               Note for the organizer
               <textarea name="note" maxLength={500} />
             </label>
-            <button className="button" disabled={busy || !selected.length}>
+            <button
+              className="button"
+              disabled={
+                busy ||
+                selected.length < rules.minimum ||
+                selected.length > rules.maximum
+              }
+            >
               {busy ? 'Sending...' : `Send ${selected.length} favorites`}
             </button>
             <p role="status">{message}</p>
@@ -229,6 +314,7 @@ type Insights = {
   brandingName: string;
   accentColor: string;
   selections: EventSelection[];
+  selectionRules?: SelectionCountRules;
 };
 export function OrganizerTools({ eventId }: { eventId: string }) {
   const client = useQueryClient();
@@ -353,6 +439,15 @@ export function OrganizerTools({ eventId }: { eventId: string }) {
               Export selections CSV
             </button>
           </div>
+          <SelectionRulesForm
+            key={eventId}
+            eventId={eventId}
+            rules={insights.data.selectionRules ?? DEFAULT_SELECTION_RULES}
+            refresh={async () => {
+              const result = await insights.refetch();
+              if (result.error) throw result.error;
+            }}
+          />
           <SelectionInbox
             eventId={eventId}
             selections={insights.data.selections}

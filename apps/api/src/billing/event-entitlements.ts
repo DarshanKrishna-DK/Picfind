@@ -48,6 +48,8 @@ export type EventPatch = Partial<
     | 'brandingName'
     | 'accentColor'
     | 'members'
+    | 'selectionMinimum'
+    | 'selectionMaximum'
   >
 >;
 const DAY = 86400000;

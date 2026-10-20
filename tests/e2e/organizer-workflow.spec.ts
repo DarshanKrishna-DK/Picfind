@@ -67,6 +67,7 @@ async function fixture(page: Page) {
   const state = {
     conflict: false,
     failDownload: false,
+    selectionRules: { minimum: 1, maximum: 100 },
     writes: [] as { path: string; body: Record<string, unknown> }[],
     unexpectedWrites: [] as string[],
   };
@@ -128,9 +129,17 @@ async function fixture(page: Page) {
           hasPasscode: false,
           brandingName: '',
           accentColor: '#173f37',
+          selectionRules: state.selectionRules,
           selections,
         },
       });
+    if (
+      path === `/api/events/${eventId}/selection-rules` &&
+      method === 'PATCH'
+    ) {
+      state.selectionRules = request.postDataJSON();
+      return route.fulfill({ json: { selectionRules: state.selectionRules } });
+    }
     if (
       path === `/api/events/${eventId}/selections/${selection.id}` &&
       method === 'PATCH'
@@ -397,6 +406,35 @@ test('a revoked owner session blocks filename export', async ({ page }) => {
     card.getByRole('button', { name: 'Export filenames TXT' }),
   ).toBeEnabled();
   expect(downloads).toBe(0);
+});
+
+test('organizers save selection count rules and see them after reload', async ({
+  page,
+}) => {
+  const { eventId, state } = await fixture(page);
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByText('Selection count rules', { exact: true }).click();
+  await page.getByLabel('Minimum favorites per request').fill('3');
+  await page.getByLabel('Maximum favorites per request').fill('2');
+  await page.getByRole('button', { name: 'Save selection limits' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'minimum must be no greater',
+  );
+  expect(state.selectionRules).toEqual({ minimum: 1, maximum: 100 });
+  await page.getByLabel('Maximum favorites per request').fill('3');
+  await page.getByRole('button', { name: 'Save selection limits' }).click();
+  await expect(
+    page.getByText('Selection limits saved for future submissions.'),
+  ).toBeVisible();
+  expect(state.selectionRules).toEqual({ minimum: 3, maximum: 3 });
+  await page.reload();
+  await page.getByText('Selection count rules', { exact: true }).click();
+  await expect(page.getByLabel('Minimum favorites per request')).toHaveValue(
+    '3',
+  );
+  await expect(page.getByLabel('Maximum favorites per request')).toHaveValue(
+    '3',
+  );
 });
 
 test('compare requests, filter shared favorites and export current availability', async ({

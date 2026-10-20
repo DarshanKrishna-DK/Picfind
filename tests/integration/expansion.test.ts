@@ -470,6 +470,124 @@ describe('gallery protection and client proofing', () => {
   it('protects CSV consumers from formulas and quotes', () => {
     expect(safeCsv('=IMPORTDATA("x")')).toBe('"\'=IMPORTDATA(""x"")"');
   });
+  it('persists owner count rules, exposes only the policy to guests, and counts unique IDs', async () => {
+    const { app, event, photo, records } = fixture();
+    const second = { ...photo, id: randomUUID() };
+    records.set(second.id, second);
+    const route = `/api/events/${event.id}/selection-rules`;
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .send({ minimum: 2, maximum: 2 })
+      .expect(401);
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=other')
+      .send({ minimum: 2, maximum: 2 })
+      .expect(404);
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send({ minimum: 2, maximum: 2 })
+      .expect(200);
+    expect(records.get(event.id)).toMatchObject({
+      selectionMinimum: 2,
+      selectionMaximum: 2,
+    });
+    const access = await request(app)
+      .get(`/api/public/events/${event.id}/access`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
+    expect(access.body).toEqual({
+      brandingName: '',
+      accentColor: '#173f37',
+      selectionRules: { minimum: 2, maximum: 2 },
+    });
+    const submit = (ids: string[]) =>
+      request(app)
+        .post(`/api/public/events/${event.id}/selections`)
+        .set('Origin', origin)
+        .set('Cookie', 'picfind_session=guest')
+        .send({ name: 'Guest', photoIds: ids });
+    const rejected = await submit([photo.id, photo.id]).expect(400);
+    expect(rejected.body.error.code).toBe('SELECTION_COUNT_REQUIRED');
+    await submit([photo.id, second.id]).expect(201);
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send({ minimum: 1, maximum: 1 })
+      .expect(200);
+    await submit([photo.id, second.id]).expect(400);
+    const insights = await request(app)
+      .get(`/api/events/${event.id}/insights`)
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(insights.body.selectionRules).toEqual({ minimum: 1, maximum: 1 });
+    expect(insights.body.selections).toHaveLength(1);
+    expect(insights.body.selections[0].photoIds).toEqual([photo.id, second.id]);
+  });
+  it.each([
+    { minimum: 0, maximum: 10 },
+    { minimum: 2, maximum: 1 },
+    { minimum: 1, maximum: 101 },
+    { minimum: 1.5, maximum: 2 },
+    { minimum: '1', maximum: 2 },
+    { minimum: 1, maximum: 2, ownerId: 'other' },
+  ])(
+    'rejects invalid rules without changing stored data: %j',
+    async (rules) => {
+      const { app, event, records } = fixture();
+      await request(app)
+        .patch(`/api/events/${event.id}/selection-rules`)
+        .set('Origin', origin)
+        .set('Cookie', 'picfind_session=owner')
+        .send(rules)
+        .expect(400);
+      expect(records.get(event.id)?.selectionMinimum).toBeUndefined();
+    },
+  );
+  it('fails closed on invalid persisted rules while allowing the owner to repair them', async () => {
+    const { app, event, photo, records } = fixture();
+    records.set(event.id, {
+      ...event,
+      selectionMinimum: 20,
+      selectionMaximum: 2,
+    });
+    const access = await request(app)
+      .get(`/api/public/events/${event.id}/access`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
+    expect(access.body.selectionRules).toBeNull();
+    await request(app)
+      .get(`/api/public/events/${event.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
+    await request(app)
+      .post(`/api/public/events/${event.id}/selections`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=guest')
+      .send({ name: 'Guest', photoIds: [photo.id] })
+      .expect(409);
+    await request(app)
+      .get(`/api/events/${event.id}/insights`)
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    await request(app)
+      .patch(`/api/events/${event.id}/selection-rules`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send({ minimum: 1, maximum: 100 })
+      .expect(200);
+    await request(app)
+      .post(`/api/public/events/${event.id}/selections`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=guest')
+      .send({ name: 'Guest', photoIds: [photo.id] })
+      .expect(201);
+  });
 });
 describe('provider erasure and retryability', () => {
   it('retains event and photos after failed provider cleanup', async () => {
