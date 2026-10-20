@@ -29,6 +29,7 @@ import type { OrganizerEventPolicy } from '../../../../packages/shared/src/event
 import { ProofingCollections } from './proofing-collections';
 import { RawJpegPairing } from './raw-jpeg-pairing';
 import { HighlightsEditor } from './highlights';
+import { QrPrintPack } from './qr-print-pack';
 
 export function EventForm({
   existing,
@@ -588,6 +589,7 @@ export function EventDetail() {
           )}
         </div>
       )}
+      {tab === 'sharing' && <QrPrintPack key={event.id} eventId={event.id} />}
       {tab === 'members' && <EventMembersPanel eventId={event.id} />}
       {tab === 'settings' && (
         <>
