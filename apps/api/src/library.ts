@@ -53,6 +53,7 @@ import {
 import { mapFaceError } from './face-errors.js';
 import { createEventTools } from './event-tools.js';
 import { createPhotoNotes } from './photo-notes.js';
+import { createProofingCollections } from './proofing-collections.js';
 import { createEventMembershipRouter } from './event-membership-router.js';
 import { memberEvents, requireEventAccess } from './event-membership-access.js';
 import { PHOTO_PLANS } from '../../../packages/shared/src/plans.js';
@@ -117,12 +118,15 @@ export interface LibraryRecord {
     | 'event-index'
     | 'usage'
     | 'selection'
+    | 'proofing-collection'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
   brandingName?: string;
   accentColor?: string;
   selectedIds?: string[];
+  collectionVersion?: number;
+  collectionUpdatedAt?: string;
   privatePhotoNote?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
@@ -610,6 +614,7 @@ export function createLibraryRouter(
   router.use(createFolderSyncRouter(owner, options.folderSyncControls));
   router.use(createEventTools(auth, store, owner, saveEvent));
   router.use(createPhotoNotes(store, owner));
+  router.use(createProofingCollections(store, owner));
   router.use(
     createEventMembershipRouter(auth, store, owner, options.billing, limits),
   );
@@ -702,9 +707,12 @@ export function createLibraryRouter(
       store().list(user, 'photo'),
       store().list(user, 'job'),
     ]);
-    const libraryPhotos = photos.filter(
-      (photo) => !photo.scanId && photoAvailable(photo),
-    );
+    const libraryPhotos = photos
+      .filter(
+        (photo) =>
+          !photo.scanId && !photo.deletionStartedAt && photoAvailable(photo),
+      )
+      .map((photo) => ({ ...photo, filename: photo.filename ?? 'photo.jpg' }));
     const imports = jobs.filter(
       (job) => !job.purpose || job.purpose === 'import',
     );

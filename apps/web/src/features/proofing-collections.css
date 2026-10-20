@@ -1,0 +1,31 @@
+.proofing-photo-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.proofing-photo-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.proofing-photo-choice input {
+  flex: 0 0 auto;
+  width: auto;
+}
+.proofing-photo-choice img {
+  flex: 0 0 80px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.proofing-photo-choice span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 360px) {
+  .proofing-photo-options {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px;
+  }
+}
