@@ -260,7 +260,10 @@ function CollectionEditor({
         body: JSON.stringify({
           title,
           photoIds: ids,
-          submissionPolicy: parsePolicyDraft(policy),
+          ...(!initial ||
+          JSON.stringify(policy) !== JSON.stringify(baseline.policy)
+            ? { submissionPolicy: parsePolicyDraft(policy) }
+            : {}),
           ...(initial ? { version } : {}),
         }),
       });

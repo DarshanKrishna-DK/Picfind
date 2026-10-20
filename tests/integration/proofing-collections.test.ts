@@ -134,6 +134,13 @@ describe('private named proofing collections', () => {
       .patch(created.id, { ...body, version: 2, submissionPolicy: repaired })
       .expect(200);
     expect(f.records.get(created.id)!.submissionPolicy).toEqual(repaired);
+    expect(
+      (await f.read(`${f.root}/${created.id}`).expect(200)).body.collection
+        .submissionPolicy,
+    ).toEqual(repaired);
+    expect(
+      (await f.read().expect(200)).body.collections[0].submissionPolicy,
+    ).toEqual(repaired);
   });
   it.each([
     null,

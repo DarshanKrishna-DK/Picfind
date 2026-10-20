@@ -24,8 +24,8 @@ export function proofingCountHint(
   policy: ProofingSubmissionPolicy,
 ) {
   if (count < policy.minimum)
-    return `Save ${policy.minimum - count} more favorites before submitting.`;
+    return `Mark ${policy.minimum - count} more ${policy.minimum - count === 1 ? 'photo' : 'photos'} as Favorite using the photo decision controls above.`;
   if (count > policy.maximum)
-    return `Remove ${count - policy.maximum} favorites before submitting.`;
+    return `Change ${count - policy.maximum} ${count - policy.maximum === 1 ? 'favorite' : 'favorites'} using the photo decision controls above before submitting.`;
   return `${count} saved favorites meet the submission count.`;
 }

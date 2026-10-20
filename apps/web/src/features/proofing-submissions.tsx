@@ -57,6 +57,7 @@ export function ProofingSubmissions({
   accountId,
   owner = false,
   disabled = false,
+  decisionVersion,
   onBusy,
   onChanged,
 }: {
@@ -64,6 +65,7 @@ export function ProofingSubmissions({
   accountId: string;
   owner?: boolean;
   disabled?: boolean;
+  decisionVersion?: number;
   onBusy?: (value: boolean) => void;
   onChanged: () => Promise<unknown>;
 }) {
@@ -87,6 +89,7 @@ export function ProofingSubmissions({
           accountId={accountId}
           owner={owner}
           disabled={disabled}
+          decisionVersion={decisionVersion}
           onBusy={onBusy}
           onChanged={onChanged}
         />
@@ -100,6 +103,7 @@ function SubmissionForm({
   accountId,
   owner,
   disabled,
+  decisionVersion,
   onBusy,
   onChanged,
 }: {
@@ -107,6 +111,7 @@ function SubmissionForm({
   accountId: string;
   owner: boolean;
   disabled: boolean;
+  decisionVersion: number | undefined;
   onBusy: ((value: boolean) => void) | undefined;
   onChanged: () => Promise<unknown>;
 }) {
@@ -124,12 +129,16 @@ function SubmissionForm({
     note: string;
   } | null>(null);
   const query = useQuery({
-    queryKey: ['proofing-submission', root, accountId],
+    queryKey: ['proofing-submission', root, accountId, decisionVersion],
     queryFn: ({ signal }) => api<ProofingSubmissionState>(root, { signal }),
     gcTime: 0,
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
+  useEffect(() => {
+    retry.current = null;
+    setConflict(false);
+  }, [decisionVersion]);
   const requirements = query.data?.requirements;
   const closed = useSelectionClosed(requirements?.window);
   const invalidCount = Boolean(

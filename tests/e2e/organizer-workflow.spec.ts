@@ -543,6 +543,12 @@ test('collection final submission requirements refresh counts and close on serve
   const root = `/api/proofing-invitations/${invitationId}`;
   const now = Date.now();
   let posts = 0;
+  let decisionVersion = 1;
+  const savedDecisions = photos.map((photo) => ({
+    photoId: photo.id,
+    filename: photo.filename,
+    status: 'maybe',
+  }));
   const requirements = {
     policy: { minimum: 1, maximum: 2, closesAt: null as string | null },
     window: {
@@ -558,19 +564,26 @@ test('collection final submission requirements refresh counts and close on serve
     const path = new URL(route.request().url()).pathname;
     if (path.includes('/photos/'))
       return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
-    if (path.endsWith('/decisions'))
+    if (path.endsWith('/decisions')) {
+      if (route.request().method() === 'PATCH') {
+        const input = route.request().postDataJSON();
+        expect(input.version).toBe(decisionVersion);
+        savedDecisions.find((item) => item.photoId === input.photoId)!.status =
+          input.status;
+        requirements.favoriteCount = savedDecisions.filter(
+          (item) => item.status === 'favorite',
+        ).length;
+        decisionVersion += 1;
+      }
       return route.fulfill({
         json: {
-          version: 1,
+          version: decisionVersion,
           updatedAt: null,
           unavailableCount: 0,
-          decisions: photos.map((photo) => ({
-            photoId: photo.id,
-            filename: photo.filename,
-            status: 'favorite',
-          })),
+          decisions: savedDecisions,
         },
       });
+    }
     if (path.endsWith('/submission')) {
       if (route.request().method() === 'POST') {
         posts += 1;
@@ -587,7 +600,7 @@ test('collection final submission requirements refresh counts and close on serve
       return route.fulfill({
         json: {
           round: 1,
-          decisionVersion: 1,
+          decisionVersion,
           collectionVersion: 1,
           current: null,
           history: [],
@@ -615,11 +628,24 @@ test('collection final submission requirements refresh counts and close on serve
   await panel.getByRole('button', { name: 'Review final submission' }).click();
   const submit = panel.getByRole('button', { name: 'Submit final favorites' });
   const refresh = panel.getByRole('button', { name: 'Refresh submission' });
-  await expect(panel).toContainText('Save 1 more favorites before submitting.');
+  await expect(panel).toContainText(
+    'Mark 1 more photo as Favorite using the photo decision controls above.',
+  );
+  await expect(submit).toBeDisabled();
+  const decision = page.getByLabel(`Decision for ${photos[0]!.filename}`);
+  await decision.selectOption('favorite');
+  await expect(panel).toContainText(
+    '1 saved favorites meet the submission count.',
+  );
+  await expect(submit).toBeEnabled();
+  await decision.selectOption('maybe');
+  await expect(panel).toContainText('Mark 1 more photo as Favorite');
   await expect(submit).toBeDisabled();
   requirements.favoriteCount = 3;
   await refresh.click();
-  await expect(panel).toContainText('Remove 1 favorites before submitting.');
+  await expect(panel).toContainText(
+    'Change 1 favorite using the photo decision controls above before submitting.',
+  );
   await expect(submit).toBeDisabled();
   requirements.favoriteCount = 2;
   requirements.unavailableCount = 1;
@@ -1527,7 +1553,7 @@ test('named collections persist, recover conflicts, remove unavailable photos an
         createdAt: '2026-10-20T12:00:00.000Z',
         updatedAt: '2026-10-20T12:00:00.000Z',
         photoIds: body.photoIds,
-        submissionPolicy: body.submissionPolicy,
+        submissionPolicy: body.submissionPolicy ?? collection?.submissionPolicy,
         unavailableCount: 0,
         photos: photos
           .filter((photo) => body.photoIds.includes(photo.id))

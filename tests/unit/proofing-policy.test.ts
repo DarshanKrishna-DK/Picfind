@@ -33,9 +33,9 @@ describe('collection policy editing', () => {
   });
   it('gives boundary-specific instructions including explicitly allowed empty submissions', () => {
     const policy = { minimum: 1, maximum: 2, closesAt: null };
-    expect(proofingCountHint(0, policy)).toContain('Save 1 more');
+    expect(proofingCountHint(0, policy)).toContain('Mark 1 more photo');
     expect(proofingCountHint(2, policy)).toContain('meet the submission count');
-    expect(proofingCountHint(3, policy)).toContain('Remove 1');
+    expect(proofingCountHint(3, policy)).toContain('Change 1 favorite');
     expect(proofingCountHint(0, { ...policy, minimum: 0 })).toContain(
       'meet the submission count',
     );
