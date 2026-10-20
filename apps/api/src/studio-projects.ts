@@ -5,6 +5,7 @@ import { ApiError } from './auth.js';
 import { withAccountLock } from './locks.js';
 import { ownedProjectRecord as read } from './studio-project-access.js';
 import { removeProjectStudioWork } from './studio-project-cleanup.js';
+import { withQuestionnaireCleanupLocks } from './questionnaire-cleanup.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { savedClient } from '../../../packages/shared/src/studio-clients.js';
 import {
@@ -292,51 +293,62 @@ export function createStudioProjects(
         'INVALID_PROJECT',
         'Load the current archived project before removing it.',
       );
-    await withAccountLock(accountId, async () => {
-      const current = await find(id, accountId);
-      if (!current) throw missing();
-      if (current.project.version !== body.data.version) throw changed();
-      if (current.project.stage !== 'archived')
-        throw new ApiError(
-          409,
-          'PROJECT_NOT_ARCHIVED',
-          'Archive this project before removing its private record.',
-        );
-      const fresh = await find(id, accountId);
-      if (
-        !fresh ||
-        fresh.project.version !== body.data.version ||
-        fresh.project.stage !== 'archived'
-      )
-        throw changed();
-      const removalStartedAt =
-        fresh.row.projectRemovalStartedAt ?? new Date().toISOString();
-      if (!fresh.row.projectRemovalStartedAt)
-        await getStore().put({
-          ...fresh.row,
-          projectRemovalStartedAt: removalStartedAt,
-        });
-      const assertRemoval = async () => {
-        const row = await find(id, accountId);
-        // Another completed removal is success, not a late version conflict.
-        if (!row) return;
+    await withQuestionnaireCleanupLocks(
+      getStore(),
+      accountId,
+      id,
+      async (lockedAccounts) => {
+        const current = await find(id, accountId);
+        if (!current) throw missing();
+        if (current.project.version !== body.data.version) throw changed();
+        if (current.project.stage !== 'archived')
+          throw new ApiError(
+            409,
+            'PROJECT_NOT_ARCHIVED',
+            'Archive this project before removing its private record.',
+          );
+        const fresh = await find(id, accountId);
         if (
-          row.project.version !== body.data.version ||
-          row.project.stage !== 'archived' ||
-          row.row.projectRemovalStartedAt !== removalStartedAt
+          !fresh ||
+          fresh.project.version !== body.data.version ||
+          fresh.project.stage !== 'archived'
         )
           throw changed();
-      };
-      await assertRemoval();
-      await removeProjectStudioWork(getStore(), accountId, id, assertRemoval);
-      await assertRemoval();
-      try {
-        await getStore().remove(id);
-      } catch (failure) {
-        if (!(failure instanceof ApiError && failure.status === 404))
-          throw failure;
-      }
-    });
+        const removalStartedAt =
+          fresh.row.projectRemovalStartedAt ?? new Date().toISOString();
+        if (!fresh.row.projectRemovalStartedAt)
+          await getStore().put({
+            ...fresh.row,
+            projectRemovalStartedAt: removalStartedAt,
+          });
+        const assertRemoval = async () => {
+          const row = await find(id, accountId);
+          // Another completed removal is success, not a late version conflict.
+          if (!row) return;
+          if (
+            row.project.version !== body.data.version ||
+            row.project.stage !== 'archived' ||
+            row.row.projectRemovalStartedAt !== removalStartedAt
+          )
+            throw changed();
+        };
+        await assertRemoval();
+        await removeProjectStudioWork(
+          getStore(),
+          accountId,
+          id,
+          assertRemoval,
+          lockedAccounts,
+        );
+        await assertRemoval();
+        try {
+          await getStore().remove(id);
+        } catch (failure) {
+          if (!(failure instanceof ApiError && failure.status === 404))
+            throw failure;
+        }
+      },
+    );
     res.status(204).end();
   });
   return router;

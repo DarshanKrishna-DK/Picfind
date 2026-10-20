@@ -13,6 +13,10 @@ import { authenticate, sessionCookieName, trustedOrigin } from './security.js';
 import { markDeletedAccount, withAccountLock } from './locks.js';
 import type { LibraryStore } from './library.js';
 import { studioReturnPath } from '../../../packages/shared/src/navigation.js';
+import {
+  removeQuestionnaireResponse,
+  withQuestionnaireCleanupLocks,
+} from './questionnaire-cleanup.js';
 
 const password = z.string().min(8).max(256);
 const emailCode = z.string().regex(/^\d{6}$/);
@@ -272,22 +276,36 @@ export function createAccountRouter(
     } finally {
       await provider().logout(temporary.secret);
     }
+    // Preserve billing and credential guards before participant discovery reads.
+    // Repeat inside the complete lock set because the owner lock is released
+    // while discovering recipients in globally ordered acquisition.
     await withAccountLock(user.id, async () => {
       await lifecycle.beforeCleanup?.(user.id);
-      const events = await store.list(user.id, 'event');
-      for (const event of events)
-        await store.put({ ...event, archived: true, visibility: 'private' });
-      for (const photo of await store.list(user.id, 'photo')) {
-        await store.removeFile(photo.id);
-        await store.remove(photo.id);
-      }
-      for (const event of events) await store.remove(event.id);
-      for (const job of await store.list(user.id, 'job'))
-        await store.remove(job.id);
-      await lifecycle.afterCleanup?.(user.id);
-      await deleteUser(user.id);
-      markDeletedAccount(user.id);
     });
+    await withQuestionnaireCleanupLocks(
+      store,
+      user.id,
+      undefined,
+      async (lockedAccounts) => {
+        await lifecycle.beforeCleanup?.(user.id);
+        const events = await store.list(user.id, 'event');
+        for (const event of events)
+          await store.put({ ...event, archived: true, visibility: 'private' });
+        for (const photo of await store.list(user.id, 'photo')) {
+          await store.removeFile(photo.id);
+          await store.remove(photo.id);
+        }
+        for (const event of events) await store.remove(event.id);
+        for (const job of await store.list(user.id, 'job')) {
+          if (job.purpose === 'studio-questionnaire')
+            await removeQuestionnaireResponse(store, job, lockedAccounts);
+          await store.remove(job.id);
+        }
+        await lifecycle.afterCleanup?.(user.id);
+        await deleteUser(user.id);
+        markDeletedAccount(user.id);
+      },
+    );
     clearAccountCookies(req, res, auth.secureCookies);
     res.clearCookie(sessionCookieName(auth), cookie);
     res.status(204).end();

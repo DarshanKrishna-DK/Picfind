@@ -505,6 +505,13 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
           </form>
           {selected && (
             <section aria-label="Project history">
+              <p>
+                <Link
+                  to={`/app/projects/${selected.project.id}/questionnaires`}
+                >
+                  Client questionnaires
+                </Link>
+              </p>
               <h3>Recent stage history</h3>
               <p>
                 {selected.project.transitions.length} of{' '}

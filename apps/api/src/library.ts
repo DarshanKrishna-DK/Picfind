@@ -70,6 +70,7 @@ import { createEventInvitationPage } from './event-invitation-page.js';
 import { createEventRsvp } from './event-rsvp.js';
 import { createStudioClients } from './studio-clients.js';
 import { createStudioProjects } from './studio-projects.js';
+import { createStudioQuestionnaires } from './studio-questionnaires.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
 import {
@@ -159,6 +160,8 @@ export interface LibraryRecord {
     | 'studio-project'
     | 'studio-milestone'
     | 'studio-appointment'
+    | 'studio-questionnaire'
+    | 'questionnaire-response'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -200,6 +203,10 @@ export interface LibraryRecord {
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
   appointmentCommandDigest?: string;
   studioAppointment?: import('../../../packages/shared/src/studio-appointments.js').SavedAppointment;
+  studioQuestionnaire?: import('../../../packages/shared/src/studio-questionnaires.js').SavedQuestionnaire;
+  questionnaireResponse?: import('../../../packages/shared/src/studio-questionnaires.js').StoredQuestionnaireResponse;
+  questionnaireCommandDigest?: string;
+  questionnaireRemovalStartedAt?: string;
   milestoneCommandDigest?: string;
   projectRemovalStartedAt?: string;
   studioMilestone?: import('../../../packages/shared/src/studio-milestones.js').SavedMilestone;
@@ -698,6 +705,7 @@ export function createLibraryRouter(
   router.use(createEventRsvp(store, owner, auth.secureCookies));
   router.use(createStudioClients(store, owner));
   router.use(createStudioProjects(store, owner));
+  router.use(createStudioQuestionnaires(auth, store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
   router.use(createEventReadiness(options, owner));

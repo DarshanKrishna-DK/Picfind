@@ -18,6 +18,7 @@ import { HighlightsPage } from './features/highlights';
 import { HighlightWall } from './features/highlight-wall';
 import { StudioClients } from './features/studio-clients';
 import { StudioProjects } from './features/studio-projects';
+import { ProjectQuestionnaires } from './features/project-questionnaires';
 import { StudioWork } from './features/studio-work';
 import { StudioSchedule } from './features/studio-schedule';
 import { DuplicateReview } from './features/duplicate-review';
@@ -55,6 +56,10 @@ export function Product() {
         <Route path="invite/:eventId/response" element={<GuestRsvpPage />} />
         <Route path="highlights/:eventId" element={<HighlightsPage />} />
         <Route
+          path="questionnaires/:id"
+          element={<ProjectQuestionnaires client />}
+        />
+        <Route
           path="proofing/:invitationId"
           element={<InvitedCollectionPage />}
         />
@@ -76,6 +81,10 @@ export function Product() {
         <Route path="library" element={<LibraryPage />} />
         <Route path="clients" element={<StudioClients />} />
         <Route path="projects" element={<StudioProjects />} />
+        <Route
+          path="projects/:projectId/questionnaires"
+          element={<ProjectQuestionnaires />}
+        />
         <Route path="work" element={<StudioWork />} />
         <Route path="schedule" element={<StudioSchedule />} />
         <Route path="duplicates" element={<DuplicateReview />} />
