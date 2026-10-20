@@ -1,0 +1,116 @@
+.duplicate-review {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.duplicate-review > p,
+.duplicate-group p {
+  margin: 0;
+}
+.duplicate-local-note {
+  padding: 1rem;
+  border-left: 3px solid var(--accent, #477c79);
+  background: rgba(71, 124, 121, 0.07);
+}
+.duplicate-file-input {
+  display: grid;
+  gap: 0.5rem;
+}
+.duplicate-file-input input {
+  max-width: 100%;
+}
+.duplicate-progress {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+.duplicate-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.duplicate-totals > div {
+  border: 1px solid rgba(71, 124, 121, 0.25);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+.duplicate-totals dt {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+.duplicate-totals dd {
+  margin: 0.3rem 0 0;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.duplicate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.duplicate-actions .button.danger {
+  color: #912e16;
+  background: #fff4f1;
+  border: 1px solid #d4a79a;
+}
+.duplicate-filter,
+.duplicate-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 0.7rem;
+}
+.duplicate-filter input,
+.duplicate-choice input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+}
+.duplicate-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.duplicate-group {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+  padding: 1rem;
+  border: 1px solid rgba(71, 124, 121, 0.3);
+  border-radius: 1rem;
+  min-width: 0;
+}
+.duplicate-group h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.duplicate-group code,
+.duplicate-choice span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.duplicate-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+.duplicate-choice small {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  opacity: 0.75;
+}
+@media (max-width: 700px) {
+  .duplicate-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .duplicate-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .duplicate-actions .button {
+    width: 100%;
+  }
+}

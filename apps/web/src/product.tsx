@@ -20,6 +20,7 @@ import { StudioClients } from './features/studio-clients';
 import { StudioProjects } from './features/studio-projects';
 import { StudioWork } from './features/studio-work';
 import { StudioSchedule } from './features/studio-schedule';
+import { DuplicateReview } from './features/duplicate-review';
 import './features/billing.css';
 
 export function Product() {
@@ -73,6 +74,7 @@ export function Product() {
         <Route path="projects" element={<StudioProjects />} />
         <Route path="work" element={<StudioWork />} />
         <Route path="schedule" element={<StudioSchedule />} />
+        <Route path="duplicates" element={<DuplicateReview />} />
         <Route path="events" element={<EventList />} />
         <Route path="events/new" element={<NewEvent />} />
         <Route path="events/:eventId" element={<EventDetail />} />

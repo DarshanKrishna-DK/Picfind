@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 31 pushed after review, 39 merged and
-reviewed, and 39 opened. This is a
+on 2026-10-20, Picfind had 32 pushed after review, 40 merged and
+reviewed, and 40 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 The table records completed merges only. The PR carrying a ledger update is
 excluded until GitHub confirms its merge; it is recorded in a later update.
@@ -53,8 +53,9 @@ excluded until GitHub confirms its merge; it is recorded in a later update.
 | [38](https://github.com/DarshanKrishna-DK/Picfind/pull/38) | Private projects with linked events and stage history | Reviewed, bounded concurrent reference reads added after review with ownership-race evidence, re-reviewed, all CI passed, merged                 |
 | [39](https://github.com/DarshanKrishna-DK/Picfind/pull/39) | Dated studio milestones and private work queue        | Reviewed, durable project removal and clock-rollback handling fixed after review, re-reviewed with evidence replies, all CI passed, merged       |
 | [40](https://github.com/DarshanKrishna-DK/Picfind/pull/40) | Private event-day readiness snapshot                  | Reviewed, direct session/header-spoofing regressions added after review, re-reviewed, all CI passed, merged                                      |
+| [41](https://github.com/DarshanKrishna-DK/Picfind/pull/41) | Private timezone-aware project reservations           | Reviewed, year-boundary and pending-removal cancellation evidence added after review, re-reviewed, all CI passed, merged                         |
 
-GitHub currently proves thirty-nine merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39 and #40 were visibly
+GitHub currently proves forty merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40 and #41 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
