@@ -69,6 +69,8 @@ async function fixture(page: Page) {
   const state = {
     failDownload: false,
     failUpload: false,
+    failAfterUploadCommit: false,
+    photoLimit: 20,
     uploadCalls: 0,
     scanCalls: 0,
     searchCalls: 0,
@@ -113,7 +115,7 @@ async function fixture(page: Page) {
           events,
           jobs: [],
           scans: [],
-          photoLimit: 20,
+          photoLimit: state.photoLimit,
         },
       });
     if (path === '/api/capabilities')
@@ -204,6 +206,9 @@ async function fixture(page: Page) {
           status: 503,
           json: { error: { message: 'Temporary upload failure.' } },
         });
+      const committed = photos.find((photo) => photo.id === 'uploaded');
+      if (committed)
+        return route.fulfill({ status: 201, json: { photo: committed } });
       photos.push({
         id: 'uploaded',
         filename: 'New-photo.jpg',
@@ -213,6 +218,11 @@ async function fixture(page: Page) {
         bytes: jpeg.length,
         eventId: '',
       });
+      if (state.failAfterUploadCommit)
+        return route.fulfill({
+          status: 503,
+          json: { error: { message: 'Upload acknowledgement lost.' } },
+        });
       return route.fulfill({ status: 201, json: { photo: photos.at(-1) } });
     }
     if (
@@ -374,6 +384,35 @@ test('failed uploads can be retried without repeating successful photos', async 
   await expect(
     page.getByRole('button', { name: 'Open New-photo.jpg' }),
   ).toBeVisible();
+  expect(state.uploadCalls).toBe(2);
+});
+
+test('a committed upload with a lost reply can be retried at zero remaining capacity', async ({
+  page,
+}) => {
+  const { state, jpeg } = await fixture(page);
+  state.photoLimit = 5;
+  state.failAfterUploadCommit = true;
+  await page.goto('/app/library');
+  await page.getByRole('button', { name: 'Add photos' }).click();
+  await page.getByLabel('Choose photos', { exact: true }).setInputFiles({
+    name: 'New-photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: jpeg,
+  });
+  await expect(
+    page.getByText('Upload acknowledgement lost.', { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel('Choose photos', { exact: true }),
+  ).toBeDisabled();
+  const retry = page.getByRole('button', { name: 'Retry 1 failed upload' });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Open New-photo.jpg' }),
+  ).toHaveCount(1);
   expect(state.uploadCalls).toBe(2);
 });
 

@@ -6,7 +6,7 @@ import { createApp } from '../../apps/api/src/app';
 import { ApiError } from '../../apps/api/src/auth';
 import type { LibraryRecord, LibraryStore } from '../../apps/api/src/library';
 const origin = 'http://localhost:5173';
-function setup() {
+function setup(eventIndexMax = 20) {
   const records = new Map<string, LibraryRecord>();
   const files = new Map<string, Uint8Array>();
   const store: LibraryStore = {
@@ -52,7 +52,7 @@ function setup() {
         }),
       },
     },
-    { store },
+    { store, eventIndexMax },
   );
   const event = (user = 'owner'): LibraryRecord => ({
     id: randomUUID(),
@@ -64,6 +64,36 @@ function setup() {
     archived: false,
   });
   return { app, store, records, files, event };
+}
+async function replayFixture(inEvent = false) {
+  const f = setup(1);
+  const event = f.event();
+  if (inEvent) f.records.set(event.id, event);
+  const bytes = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: '#234543' },
+  })
+    .png()
+    .toBuffer();
+  const send = (
+    input = bytes,
+    destination = inEvent ? event.id : '',
+    actor = 'owner',
+  ) =>
+    request(f.app)
+      .post('/api/photos' + (destination ? `?eventId=${destination}` : ''))
+      .set('Cookie', `picfind_session=${actor}`)
+      .set('Origin', origin)
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-File-Name', 'original.png')
+      .send(input);
+  const first = await send().expect(201);
+  return {
+    ...f,
+    event,
+    bytes,
+    send,
+    photo: f.records.get(first.body.photo.id)!,
+  };
 }
 describe('photo library isolation and bounded processing, no external calls', () => {
   it('requires authentication and rejects cross-origin writes', async () => {
@@ -179,6 +209,146 @@ describe('photo library isolation and bounded processing, no external calls', ()
     expect(response.body.error.code).toBe('PHOTO_LIMIT');
     expect(store.upload).not.toHaveBeenCalled();
   });
+  it('recovers a byte-identical last-slot upload without creating another object', async () => {
+    const { app, records, store } = setup();
+    for (let i = 0; i < 19; i++) {
+      const id = randomUUID();
+      records.set(id, {
+        id,
+        ownerId: 'owner',
+        kind: 'photo',
+        createdAt: new Date().toISOString(),
+      });
+    }
+    const bytes = await sharp({
+      create: { width: 32, height: 24, channels: 3, background: '#143529' },
+    })
+      .png()
+      .toBuffer();
+    const send = (name: string) =>
+      request(app)
+        .post('/api/photos')
+        .set('Cookie', 'picfind_session=owner')
+        .set('Origin', origin)
+        .set('Content-Type', 'application/octet-stream')
+        .set('X-File-Name', name)
+        .send(bytes);
+    const first = await send('first.png').expect(201);
+    const again = await send('renamed.png').expect(201);
+    expect(again.body.photo.id).toBe(first.body.photo.id);
+    expect(again.body.photo.filename).toBe('first.png');
+    expect(again.body.photo.expiresAt).toBe(first.body.photo.expiresAt);
+    expect(records.size).toBe(20);
+    expect(store.upload).toHaveBeenCalledOnce();
+  });
+  it('replays at the event limit while keeping unknown files behind the quota', async () => {
+    const f = await replayFixture(true);
+    expect((await f.send().expect(201)).body.photo.id).toBe(f.photo.id);
+    const other = await f
+      .send(Buffer.from('not decoded at capacity'))
+      .expect(409);
+    expect(other.body.error.code).toBe('EVENT_PHOTO_LIMIT');
+    expect(f.store.upload).toHaveBeenCalledOnce();
+  });
+  it.each(['expired', 'deleting', 'deleted'])(
+    'never replays an %s photo at the library limit',
+    async (state) => {
+      const f = await replayFixture();
+      for (let index = 0; index < 19; index++) {
+        const id = randomUUID();
+        f.records.set(id, {
+          id,
+          ownerId: 'owner',
+          kind: 'photo',
+          createdAt: new Date().toISOString(),
+        });
+      }
+      if (state === 'expired') f.photo.expiresAt = '2000-01-01T00:00:00.000Z';
+      if (state === 'deleting')
+        f.photo.deletionStartedAt = new Date().toISOString();
+      if (state === 'deleted')
+        f.photo.deletionCompletedAt = new Date().toISOString();
+      await f.send().expect(409);
+      expect(f.store.upload).toHaveBeenCalledOnce();
+    },
+  );
+  it.each([false, true])(
+    'projects safe metadata for raw and legacy optimized duplicate paths (legacy=%s)',
+    async (legacy) => {
+      const f = await replayFixture();
+      const inputDigest = f.photo.uploadInputDigest;
+      expect(inputDigest).toMatch(/^[0-9a-f]{64}$/);
+      if (legacy) delete f.photo.uploadInputDigest;
+      f.photo.privatePhotoNote = 'Private retouch instructions';
+      f.photo.faceIds = ['private-face-id'];
+      const again = await f.send().expect(201);
+      expect(again.body.photo.id).toBe(f.photo.id);
+      expect(again.body.photo).not.toHaveProperty('uploadInputDigest');
+      expect(again.body.photo).not.toHaveProperty('digest');
+      expect(JSON.stringify(again.body)).not.toMatch(
+        /Private retouch|private-face/,
+      );
+      const library = await request(f.app)
+        .get('/api/library')
+        .set('Cookie', 'picfind_session=owner')
+        .expect(200);
+      expect(JSON.stringify(library.body)).not.toContain(inputDigest);
+      expect(f.store.upload).toHaveBeenCalledOnce();
+    },
+  );
+  it('does not infer an original-input digest for legacy photos at capacity', async () => {
+    const f = await replayFixture(true);
+    delete f.photo.uploadInputDigest;
+    await f.send().expect(409);
+    expect(f.photo.uploadInputDigest).toBeUndefined();
+  });
+  it('keeps identical bytes isolated across event, personal and account scopes', async () => {
+    const f = await replayFixture(true);
+    const other = { ...f.event, id: randomUUID() };
+    f.records.set(other.id, other);
+    const second = await f.send(f.bytes, other.id).expect(201);
+    const personal = await f.send(f.bytes, '').expect(201);
+    const stranger = await f.send(f.bytes, '', 'stranger').expect(201);
+    expect(
+      new Set([
+        f.photo.id,
+        second.body.photo.id,
+        personal.body.photo.id,
+        stranger.body.photo.id,
+      ]).size,
+    ).toBe(4);
+    await f.send(f.bytes, f.event.id, 'stranger').expect(404);
+    expect(f.store.upload).toHaveBeenCalledTimes(4);
+  });
+  it.each(['archived', 'expired', 'deleted'])(
+    'denies replay after the event is %s',
+    async (state) => {
+      const f = await replayFixture(true);
+      if (state === 'archived') f.event.archived = true;
+      if (state === 'expired') f.event.expiresAt = '2000-01-01T00:00:00.000Z';
+      if (state === 'deleted')
+        f.event.deletionStartedAt = new Date().toISOString();
+      await f.send().expect(state === 'deleted' ? 404 : 409);
+      expect(f.store.upload).toHaveBeenCalledOnce();
+    },
+  );
+  it.each(['photo', 'event'])(
+    'rechecks changing %s state before acknowledging a replay',
+    async (target) => {
+      const f = await replayFixture(true);
+      const get = f.store.get;
+      f.store.get = async (id) => {
+        if (id === f.photo.id) {
+          if (target === 'photo')
+            f.photo.deletionStartedAt = new Date().toISOString();
+          else f.event.archived = true;
+        }
+        return get(id);
+      };
+      await f.send().expect(409);
+      expect(f.store.upload).toHaveBeenCalledOnce();
+    },
+  );
   it('revokes link access before deleting event photos', async () => {
     const { app, records, files, event } = setup();
     const row = { ...event(), visibility: 'link' as const };

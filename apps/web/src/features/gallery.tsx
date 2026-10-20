@@ -52,7 +52,7 @@ export function UploadBox({
       (library.data?.photoLimit ?? 20) -
         (library.data?.storedPhotoCount ?? library.data?.photos.length ?? 0),
   );
-  async function upload(files: File[]) {
+  async function upload(files: File[], retry = false) {
     if (busy) return;
     if (!destinationReady) {
       setErrors([
@@ -64,11 +64,11 @@ export function UploadBox({
     setErrors([]);
     const failures: string[] = [];
     const failedFiles: File[] = [];
-    if (files.length > remaining)
+    if (!retry && files.length > remaining)
       failures.push(
         `Only the first ${remaining} photos will be uploaded to stay within this destination's remaining capacity.`,
       );
-    const candidates = files.slice(0, remaining);
+    const candidates = retry ? files : files.slice(0, remaining);
     for (const [index, file] of candidates.entries()) {
       setProgress(
         `Uploading ${index + 1} of ${candidates.length}: ${file.name}`,
@@ -167,8 +167,8 @@ export function UploadBox({
       {!!retryFiles.length && (
         <button
           className="button secondary upload-retry"
-          disabled={busy || remaining === 0 || !destinationReady}
-          onClick={() => void upload(retryFiles)}
+          disabled={busy || !destinationReady}
+          onClick={() => void upload(retryFiles, true)}
         >
           Retry {retryFiles.length} failed upload
           {retryFiles.length === 1 ? '' : 's'}
