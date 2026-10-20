@@ -96,6 +96,54 @@ async function replayFixture(inEvent = false) {
   };
 }
 describe('photo library isolation and bounded processing, no external calls', () => {
+  it('accepts an upload and replay for the authenticated expected actor', async () => {
+    const f = await replayFixture();
+    const replay = await f
+      .send()
+      .set('X-PicFind-Upload-Actor', 'owner')
+      .expect(201);
+    expect(replay.body.photo.id).toBe(f.photo.id);
+    const bytes = await sharp({
+      create: { width: 20, height: 20, channels: 3, background: '#861228' },
+    })
+      .png()
+      .toBuffer();
+    const uploaded = await f
+      .send(bytes)
+      .set('X-PicFind-Upload-Actor', 'owner')
+      .expect(201);
+    expect(uploaded.body.photo.ownerId).toBe('owner');
+    expect(uploaded.body.photo.id).not.toBe(f.photo.id);
+    expect(f.store.upload).toHaveBeenCalledTimes(2);
+  });
+  it('rejects a queued upload when the actual signed-in actor differs from its expected actor', async () => {
+    const { app, store, records } = setup();
+    const result = await request(app)
+      .post('/api/photos')
+      .set('Cookie', 'picfind_session=other')
+      .set('Origin', origin)
+      .set('X-PicFind-Upload-Actor', 'owner')
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.from('not processed'))
+      .expect(409);
+    expect(result.body.error.code).toBe('UPLOAD_ACCOUNT_CHANGED');
+    expect(store.upload).not.toHaveBeenCalled();
+    expect(records.size).toBe(0);
+  });
+  it('accepts the current actor header without granting access to another owner event', async () => {
+    const { app, store, records, event } = setup();
+    const destination = event('owner');
+    records.set(destination.id, destination);
+    await request(app)
+      .post(`/api/photos?eventId=${destination.id}`)
+      .set('Cookie', 'picfind_session=other')
+      .set('Origin', origin)
+      .set('X-PicFind-Upload-Actor', 'other')
+      .set('Content-Type', 'application/octet-stream')
+      .send(Buffer.from('not processed'))
+      .expect(404);
+    expect(store.upload).not.toHaveBeenCalled();
+  });
   it('requires authentication and rejects cross-origin writes', async () => {
     const { app } = setup();
     await request(app).get('/api/library').expect(401);

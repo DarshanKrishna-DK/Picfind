@@ -21,6 +21,7 @@ import { useLibrary } from '../hooks';
 import { ErrorNote, Loading, PageTitle, errorMessage } from '../components/ui';
 
 import { PhotoGrid } from '../components/photo-grid';
+import { SavedUploadQueue } from './saved-upload-queue';
 export { PhotoGrid } from '../components/photo-grid';
 
 export function UploadBox({
@@ -34,6 +35,8 @@ export function UploadBox({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [queueBusy, setQueueBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [retryFiles, setRetryFiles] = useState<File[]>([]);
@@ -53,7 +56,7 @@ export function UploadBox({
         (library.data?.storedPhotoCount ?? library.data?.photos.length ?? 0),
   );
   async function upload(files: File[], retry = false) {
-    if (busy) return;
+    if (busy || queueBusy) return;
     if (!destinationReady) {
       setErrors([
         'This destination is unavailable or expired. No photos were uploaded.',
@@ -123,7 +126,8 @@ export function UploadBox({
         onDrop={(event) => {
           event.preventDefault();
           setDrag(false);
-          if (!busy) void upload(Array.from(event.dataTransfer.files));
+          if (!busy && !queueBusy)
+            void upload(Array.from(event.dataTransfer.files));
         }}
       >
         <CloudUpload size={32} strokeWidth={1.4} />
@@ -140,14 +144,14 @@ export function UploadBox({
           multiple
           className="visually-hidden"
           aria-label="Choose photos"
-          disabled={busy || remaining === 0 || !destinationReady}
+          disabled={busy || queueBusy || remaining === 0 || !destinationReady}
           onChange={(event) =>
             void upload(Array.from(event.target.files ?? []))
           }
         />
         <button
           className="button secondary"
-          disabled={busy || remaining === 0 || !destinationReady}
+          disabled={busy || queueBusy || remaining === 0 || !destinationReady}
           onClick={() => input.current?.click()}
         >
           <Plus size={17} />
@@ -174,7 +178,7 @@ export function UploadBox({
           )}
           <button
             className="button secondary upload-retry"
-            disabled={busy || !destinationReady}
+            disabled={busy || queueBusy || !destinationReady}
             onClick={() => void upload(retryFiles, true)}
           >
             Retry {retryFiles.length} failed upload
@@ -187,6 +191,21 @@ export function UploadBox({
           {error}
         </p>
       ))}
+      <button
+        className="button secondary"
+        disabled={busy}
+        aria-expanded={queueOpen}
+        onClick={() => setQueueOpen(!queueOpen)}
+      >
+        {queueOpen ? 'Close saved upload queue' : 'Use saved upload queue'}
+      </button>
+      {queueOpen && (
+        <SavedUploadQueue
+          eventId={eventId}
+          available={destinationReady}
+          onBusy={setQueueBusy}
+        />
+      )}
     </div>
   );
 }
