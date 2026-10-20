@@ -203,13 +203,14 @@ def initialize(database, key):
 
 
 class LocalIndex:
-    def __init__(self, database, key):
+    def __init__(self, database, key, read_only=False):
         database = Path(database)
         if database.is_symlink() or not database.is_file():
             raise ValueError("INDEX_FILE_REQUIRED")
         if database.stat().st_size > MAX_DATABASE_BYTES:
             raise ValueError("INDEX_SIZE_EXCEEDED")
-        self.connection = sqlite3.connect(database.resolve().as_uri() + "?mode=rw", uri=True, timeout=5, isolation_level=None)
+        mode = "ro" if read_only else "rw"
+        self.connection = sqlite3.connect(database.resolve().as_uri() + f"?mode={mode}", uri=True, timeout=5, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
         self.key = key
         try:
@@ -222,13 +223,14 @@ class LocalIndex:
             if unseal(key, metadata["verifier"], metadata["database_id"].encode()) != b"picfind-local-index-v1":
                 raise ValueError("INDEX_AUTHENTICATION_FAILED")
             self.database_id = metadata["database_id"]
-            page_size = self.connection.execute("PRAGMA page_size").fetchone()[0]
-            page_limit = MAX_DATABASE_BYTES // page_size
-            if self.connection.execute(f"PRAGMA max_page_count={page_limit}").fetchone()[0] > page_limit:
-                raise ValueError("INDEX_SIZE_EXCEEDED")
             self.connection.execute("PRAGMA foreign_keys=ON")
-            self.connection.execute("PRAGMA secure_delete=ON")
-            self.connection.execute("PRAGMA synchronous=FULL")
+            if not read_only:
+                page_size = self.connection.execute("PRAGMA page_size").fetchone()[0]
+                page_limit = MAX_DATABASE_BYTES // page_size
+                if self.connection.execute(f"PRAGMA max_page_count={page_limit}").fetchone()[0] > page_limit:
+                    raise ValueError("INDEX_SIZE_EXCEEDED")
+                self.connection.execute("PRAGMA secure_delete=ON")
+                self.connection.execute("PRAGMA synchronous=FULL")
         except BaseException:
             self.connection.close()
             raise
