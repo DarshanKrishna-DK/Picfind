@@ -485,8 +485,15 @@ test('leaving an event cancels a pending comparison export', async ({
   await page.getByText('Compare client selections', { exact: true }).click();
   await chooseMenu(page, 'First selection request', /^1\. Asha/);
   await chooseMenu(page, 'Second selection request', /^2\. Ravi/);
-  const started = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+  const started = deferred();
+  const release = deferred();
   await page.route(`**/api/events/${eventId}/insights`, async (route) => {
     started.resolve();
     await release.promise;
