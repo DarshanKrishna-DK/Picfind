@@ -71,6 +71,9 @@ async function fixture(page: Page) {
     failUpload: false,
     failAfterUploadCommit: false,
     photoLimit: 20,
+    externalPhotoCount: 0,
+    consumeSlotAfterFailure: false,
+    uploadBodies: [] as Buffer[],
     uploadCalls: 0,
     scanCalls: 0,
     searchCalls: 0,
@@ -80,6 +83,26 @@ async function fixture(page: Page) {
     holdDownloads: false,
     releaseDownload: null as (() => void) | null,
   };
+  const committedUploads: { id: string; bytes: Buffer }[] = [];
+  const observedBodies: Buffer[] = [];
+  await page.exposeFunction('recordSyntheticUploadBytes', (bytes: number[]) => {
+    observedBodies.push(Buffer.from(bytes));
+  });
+  // Observe the synthetic Blob so byte checks do not depend on interception support.
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, options) => {
+      if (input === '/api/photos' && options?.body instanceof Blob) {
+        const recorder = window as unknown as {
+          recordSyntheticUploadBytes: (bytes: number[]) => Promise<void>;
+        };
+        await recorder.recordSyntheticUploadBytes([
+          ...new Uint8Array(await options.body.arrayBuffer()),
+        ]);
+      }
+      return original(input, options);
+    };
+  });
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -116,6 +139,7 @@ async function fixture(page: Page) {
           jobs: [],
           scans: [],
           photoLimit: state.photoLimit,
+          storedPhotoCount: photos.length + 1 + state.externalPhotoCount,
         },
       });
     if (path === '/api/capabilities')
@@ -201,16 +225,43 @@ async function fixture(page: Page) {
       return route.fulfill({ status: 204 });
     if (path === '/api/photos' && request.method() === 'POST') {
       state.uploadCalls++;
-      if (state.failUpload)
+      const input = observedBodies[state.uploadCalls - 1];
+      if (!input) throw new Error('Synthetic upload body was not observed.');
+      const intercepted = request.postDataBuffer();
+      if (intercepted?.length) expect(intercepted.equals(input)).toBe(true);
+      state.uploadBodies.push(input);
+      if (state.failUpload) {
+        if (state.consumeSlotAfterFailure) {
+          state.externalPhotoCount++;
+          state.consumeSlotAfterFailure = false;
+        }
         return route.fulfill({
           status: 503,
           json: { error: { message: 'Temporary upload failure.' } },
         });
-      const committed = photos.find((photo) => photo.id === 'uploaded');
+      }
+      const committed = committedUploads.find((upload) =>
+        upload.bytes.equals(input),
+      );
       if (committed)
-        return route.fulfill({ status: 201, json: { photo: committed } });
+        return route.fulfill({
+          status: 201,
+          json: { photo: photos.find((photo) => photo.id === committed.id) },
+        });
+      if (photos.length + 1 + state.externalPhotoCount >= state.photoLimit)
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'PHOTO_LIMIT',
+              message:
+                'This destination is full. Free space before uploading new photos.',
+            },
+          },
+        });
+      const id = `uploaded-${state.uploadCalls}`;
       photos.push({
-        id: 'uploaded',
+        id,
         filename: 'New-photo.jpg',
         createdAt: '2026-09-20T00:00:00.000Z',
         width: 160,
@@ -218,6 +269,7 @@ async function fixture(page: Page) {
         bytes: jpeg.length,
         eventId: '',
       });
+      committedUploads.push({ id, bytes: input });
       if (state.failAfterUploadCommit)
         return route.fulfill({
           status: 503,
@@ -385,6 +437,7 @@ test('failed uploads can be retried without repeating successful photos', async 
     page.getByRole('button', { name: 'Open New-photo.jpg' }),
   ).toBeVisible();
   expect(state.uploadCalls).toBe(2);
+  expect(state.uploadBodies.every((bytes) => bytes.equals(jpeg))).toBe(true);
 });
 
 test('a committed upload with a lost reply can be retried at zero remaining capacity', async ({
@@ -413,6 +466,45 @@ test('a committed upload with a lost reply can be retried at zero remaining capa
   await expect(
     page.getByRole('button', { name: 'Open New-photo.jpg' }),
   ).toHaveCount(1);
+  expect(state.uploadCalls).toBe(2);
+  expect(state.uploadBodies).toHaveLength(2);
+  expect(state.uploadBodies.every((bytes) => bytes.equals(jpeg))).toBe(true);
+});
+
+test('an uncommitted retry at zero capacity shows the quota error without inventing success', async ({
+  page,
+}) => {
+  const { state, jpeg } = await fixture(page);
+  state.photoLimit = 5;
+  state.failUpload = true;
+  state.consumeSlotAfterFailure = true;
+  await page.goto('/app/library');
+  await page.getByRole('button', { name: 'Add photos' }).click();
+  await page.getByLabel('Choose photos', { exact: true }).setInputFiles({
+    name: 'New-photo.jpg',
+    mimeType: 'image/jpeg',
+    buffer: jpeg,
+  });
+  const retry = page.getByRole('button', { name: 'Retry 1 failed upload' });
+  await expect(retry).toBeVisible();
+  await expect(
+    page.getByText(
+      'Retry can recover an upload whose reply was lost. Files that were not stored still need free space.',
+    ),
+  ).toBeVisible();
+  state.failUpload = false;
+  await retry.click();
+  await expect(
+    page.getByText(
+      'New-photo.jpg: This destination is full. Free space before uploading new photos.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Open New-photo.jpg' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('Choose photos', { exact: true }),
+  ).toBeDisabled();
   expect(state.uploadCalls).toBe(2);
 });
 

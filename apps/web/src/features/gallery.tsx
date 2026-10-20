@@ -165,14 +165,22 @@ export function UploadBox({
         {progress}
       </p>
       {!!retryFiles.length && (
-        <button
-          className="button secondary upload-retry"
-          disabled={busy || !destinationReady}
-          onClick={() => void upload(retryFiles, true)}
-        >
-          Retry {retryFiles.length} failed upload
-          {retryFiles.length === 1 ? '' : 's'}
-        </button>
+        <>
+          {remaining === 0 && (
+            <p className="field-help">
+              Retry can recover an upload whose reply was lost. Files that were
+              not stored still need free space.
+            </p>
+          )}
+          <button
+            className="button secondary upload-retry"
+            disabled={busy || !destinationReady}
+            onClick={() => void upload(retryFiles, true)}
+          >
+            Retry {retryFiles.length} failed upload
+            {retryFiles.length === 1 ? '' : 's'}
+          </button>
+        </>
       )}
       {errors.map((error) => (
         <p role="alert" className="error-note" key={error}>

@@ -66,7 +66,7 @@ function setup(eventIndexMax = 20) {
   return { app, store, records, files, event };
 }
 async function replayFixture(inEvent = false) {
-  const f = setup(1);
+  const f = setup(inEvent ? 1 : 20);
   const event = f.event();
   if (inEvent) f.records.set(event.id, event);
   const bytes = await sharp({
