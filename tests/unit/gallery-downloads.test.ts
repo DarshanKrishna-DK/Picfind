@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unzipSync } from 'fflate';
-import { ATTRIBUTION_HEADER } from '../../packages/shared/src/photo-attribution';
+import {
+  ATTRIBUTION_HEADER,
+  attributionCsv,
+} from '../../packages/shared/src/photo-attribution';
 import {
   archiveFilename,
   collectPhotoFiles,
@@ -18,6 +21,71 @@ const jpeg = () =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('device-only gallery downloads', () => {
+  it.each(['invalid', 'over-budget'])(
+    'cancels %s credit responses before reading image bodies or fetching another photo',
+    async (reason) => {
+      const response = jpeg();
+      response.headers.set(
+        ATTRIBUTION_HEADER,
+        reason === 'invalid'
+          ? '%bad'
+          : encodeURIComponent(JSON.stringify({ name: 'Studio', website: '' })),
+      );
+      const read = vi.spyOn(response.body!, 'getReader');
+      const cancel = vi.spyOn(response.body!, 'cancel');
+      const fetcher = vi.fn(async () => response);
+      vi.stubGlobal('fetch', fetcher);
+      await expect(
+        collectPhotoFiles(
+          photos,
+          new AbortController().signal,
+          () => {},
+          reason === 'invalid' ? 1000 : 8,
+        ),
+      ).rejects.toThrow();
+      expect(read).not.toHaveBeenCalled();
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetcher).toHaveBeenCalledOnce();
+    },
+  );
+  it('includes each credit row once and enforces the exact combined image and manifest limit', async () => {
+    const credit = { name: 'Studio', website: '' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = jpeg();
+        response.headers.set(
+          ATTRIBUTION_HEADER,
+          encodeURIComponent(JSON.stringify(credit)),
+        );
+        return response;
+      }),
+    );
+    const csv = attributionCsv(
+      photos.map((photo, index) => ({
+        archiveName: archiveFilename(photo.filename, index),
+        photoId: photo.id,
+        filename: photo.filename,
+        credit,
+      })),
+    );
+    const limit = new TextEncoder().encode(csv).byteLength + 8;
+    const result = await collectPhotoFiles(
+      photos,
+      new AbortController().signal,
+      () => {},
+      limit,
+    );
+    expect(new TextDecoder().decode(result['credits.csv'])).toBe(csv);
+    await expect(
+      collectPhotoFiles(
+        photos,
+        new AbortController().signal,
+        () => {},
+        limit - 1,
+      ),
+    ).rejects.toThrow('too large');
+  });
   it('includes current published response credits in the ZIP without changing JPEG bytes', async () => {
     const credit = { name: '=Asha, "Studio"', website: 'https://example.test' };
     let calls = 0;

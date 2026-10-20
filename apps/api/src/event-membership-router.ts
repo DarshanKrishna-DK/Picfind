@@ -126,19 +126,20 @@ export function createEventMembershipRouter(
           createdAt,
           expiresAt,
           attribution,
-        }) => ({
-          id,
-          eventId,
-          filename,
-          width,
-          height,
-          bytes: bytes ?? 0,
-          createdAt,
-          ...(expiresAt ? { expiresAt } : {}),
-          ...(publishedAttribution(attribution)
-            ? { credit: publishedAttribution(attribution) }
-            : {}),
-        }),
+        }) => {
+          const credit = publishedAttribution(attribution);
+          return {
+            id,
+            eventId,
+            filename,
+            width,
+            height,
+            bytes: bytes ?? 0,
+            createdAt,
+            ...(expiresAt ? { expiresAt } : {}),
+            ...(credit ? { credit } : {}),
+          };
+        },
       ),
       remainingUploads: Math.max(
         0,

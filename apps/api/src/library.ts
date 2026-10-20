@@ -1242,6 +1242,11 @@ export function createLibraryRouter(
           'NOT_FOUND',
           'This photograph is no longer available.',
         );
+      if (current.eventId) {
+        const event = await owned(current.eventId, current.ownerId, 'event');
+        assertEventImportOpen(event);
+      }
+      await authorize?.();
       const credit = publishedAttribution(current.attribution);
       if (credit)
         res.setHeader(
@@ -1250,6 +1255,7 @@ export function createLibraryRouter(
         );
     }
     const deliveryAttempt = randomUUID();
+    await authorize?.();
     assertPhotoAvailable(photo);
     if (photo.eventId) {
       const event = await owned(photo.eventId, photo.ownerId, 'event');
@@ -1261,7 +1267,6 @@ export function createLibraryRouter(
           'This photo has an invalid collection.',
         );
     }
-    await authorize?.();
     if (req.method === 'HEAD') {
       await creditHeader();
       res.type('image/jpeg');
@@ -1313,7 +1318,6 @@ export function createLibraryRouter(
         'Photo storage returned an unexpected file size. Please retry later.',
       );
     }
-    await authorize?.();
     await creditHeader();
     res.type('image/jpeg');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1329,7 +1333,8 @@ export function createLibraryRouter(
     const photo = await store().get(id(req));
     if (photo.kind !== 'photo')
       throw new ApiError(404, 'NOT_FOUND', 'This photograph is not available.');
-    if (photo.ownerId !== user) {
+    async function authorizePhoto() {
+      if (photo.ownerId === user) return;
       if (!photo.eventId || photo.scanId)
         throw new ApiError(
           404,
@@ -1349,7 +1354,7 @@ export function createLibraryRouter(
           'This photograph is not available.',
         );
     }
-    await sendPhoto(photo, req, res);
+    await sendPhoto(photo, req, res, authorizePhoto);
   });
   router.get('/public/events/:id', async (req, res) => {
     const event = await store().get(id(req));
@@ -1371,18 +1376,19 @@ export function createLibraryRouter(
           bytes,
           expiresAt,
           attribution,
-        }) => ({
-          id,
-          filename,
-          width,
-          height,
-          createdAt,
-          bytes: bytes ?? 0,
-          ...(expiresAt ? { expiresAt } : {}),
-          ...(publishedAttribution(attribution)
-            ? { credit: publishedAttribution(attribution) }
-            : {}),
-        }),
+        }) => {
+          const credit = publishedAttribution(attribution);
+          return {
+            id,
+            filename,
+            width,
+            height,
+            createdAt,
+            bytes: bytes ?? 0,
+            ...(expiresAt ? { expiresAt } : {}),
+            ...(credit ? { credit } : {}),
+          };
+        },
       );
     res.json({
       event: {
@@ -1405,7 +1411,19 @@ export function createLibraryRouter(
     );
     if (photo.eventId !== event.id)
       throw new ApiError(404, 'NOT_FOUND', 'This photo is not available.');
-    await sendPhoto(photo, req, res);
+    await sendPhoto(photo, req, res, async () => {
+      const latest = await store().get(event.id);
+      if (
+        latest.id !== event.id ||
+        latest.ownerId !== event.ownerId ||
+        !available(latest)
+      )
+        throw new ApiError(
+          404,
+          'NOT_FOUND',
+          'This event is no longer available.',
+        );
+    });
   });
   router.post('/imports/drive', async (req, res) => {
     const user = await owner(req);

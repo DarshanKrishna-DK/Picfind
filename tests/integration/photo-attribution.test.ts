@@ -290,6 +290,24 @@ describe('owner controlled photo attribution and current delivery metadata', () 
     expect(response.headers[ATTRIBUTION_HEADER.toLowerCase()]).toBeTruthy();
     expect(f.store.file).not.toHaveBeenCalled();
   });
+  it.each(['private', 'archived', 'expired'])(
+    'denies public delivery when its event becomes %s during the image read',
+    async (change) => {
+      const f = fixture();
+      await f.save({ published: true }).expect(200);
+      f.store.file = vi.fn(async () => {
+        if (change === 'private') f.event.visibility = 'private';
+        if (change === 'archived') f.event.archived = true;
+        if (change === 'expired')
+          f.event.expiresAt = '2000-01-01T00:00:00.000Z';
+        return new Response(new Uint8Array([255, 216, 255, 217]));
+      });
+      const response = await f.file().expect(change === 'private' ? 404 : 409);
+      expect(
+        response.headers[ATTRIBUTION_HEADER.toLowerCase()],
+      ).toBeUndefined();
+    },
+  );
   it('detects credit changing during the last save read and preserves the other update', async () => {
     const f = fixture();
     const get = f.store.get;

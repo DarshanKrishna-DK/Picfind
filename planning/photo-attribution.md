@@ -26,6 +26,16 @@ cached gallery credit, and adds a quoted, formula-neutralized `credits.csv` with
 archive filename, photo ID, original filename, credit name and website. No
 sidecar is produced if none of the downloaded photos has published attribution.
 The sidecar counts toward the existing aggregate archive byte limit.
+Validate each response header and reserve its CSV row bytes before reading that
+image body. Cancel malformed or already oversized responses and stop before
+fetching another photo. Accumulate rows once rather than rebuilding the complete
+manifest for every file. Invalid wire metadata fails the complete archive rather
+than silently stripping a credit.
+
+The final delivery check reauthorizes invitations, moderator membership and
+public event visibility after the current photo metadata read. Retained photo
+scope, digest metadata, byte size and event availability are checked again.
+This does not make the independent object store and metadata store transactional.
 
 Original JPEG bytes remain unchanged. An individual JPEG download does not embed
 credit into EXIF or pixels. Existing downloaded copies cannot be recalled after

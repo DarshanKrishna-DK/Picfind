@@ -2,7 +2,6 @@ import {
   ATTRIBUTION_HEADER,
   attributionCsv,
   decodeAttributionHeader,
-  type PublishedAttribution,
 } from '../../../packages/shared/src/photo-attribution';
 
 export interface DownloadPhoto {
@@ -32,12 +31,10 @@ export async function collectPhotoFiles(
 ) {
   if (!photos.length) throw new Error('Choose at least one photo to download.');
   const files: Record<string, Uint8Array> = {};
-  const credits: {
-    archiveName: string;
-    photoId: string;
-    filename: string;
-    credit: PublishedAttribution;
-  }[] = [];
+  const creditParts: Uint8Array[] = [];
+  let creditBytes = 0;
+  const encoder = new TextEncoder();
+  const creditHeading = attributionCsv([]);
   let totalBytes = 0;
   for (const [index, photo] of photos.entries()) {
     signal.throwIfAborted();
@@ -54,6 +51,30 @@ export async function collectPhotoFiles(
       throw new Error(
         `Could not download ${photo.filename}. The gallery may have expired. Try again or contact the organizer.`,
       );
+    }
+    const archiveName = archiveFilename(photo.filename, index);
+    try {
+      const credit = decodeAttributionHeader(
+        response.headers.get(ATTRIBUTION_HEADER),
+      );
+      if (credit) {
+        const row = attributionCsv([
+          { archiveName, photoId: photo.id, filename: photo.filename, credit },
+        ]).slice(creditHeading.length);
+        const part = encoder.encode(
+          (creditParts.length ? '' : creditHeading) + row,
+        );
+        totalBytes += part.byteLength;
+        if (totalBytes > maxBytes)
+          throw new Error(
+            'This download is too large to include photographer credits. Select a smaller batch.',
+          );
+        creditBytes += part.byteLength;
+        creditParts.push(part);
+      }
+    } catch (failure) {
+      await response.body.cancel().catch(() => {});
+      throw failure;
     }
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -83,26 +104,17 @@ export async function collectPhotoFiles(
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    const archiveName = archiveFilename(photo.filename, index);
     files[archiveName] = bytes;
-    const credit = decodeAttributionHeader(
-      response.headers.get(ATTRIBUTION_HEADER),
-    );
-    if (credit)
-      credits.push({
-        archiveName,
-        photoId: photo.id,
-        filename: photo.filename,
-        credit,
-      });
     onProgress(index + 1, photos.length);
   }
-  if (credits.length) {
-    const manifest = new TextEncoder().encode(attributionCsv(credits));
-    if (totalBytes + manifest.byteLength > maxBytes)
-      throw new Error(
-        'This download is too large to include photographer credits. Select a smaller batch.',
-      );
+  signal.throwIfAborted();
+  if (creditParts.length) {
+    const manifest = new Uint8Array(creditBytes);
+    let offset = 0;
+    for (const part of creditParts) {
+      manifest.set(part, offset);
+      offset += part.byteLength;
+    }
     files['credits.csv'] = manifest;
   }
   return files;
