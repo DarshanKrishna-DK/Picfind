@@ -36,6 +36,8 @@ test('submitted round comparison filters by identity, exports fresh availability
     failure = 0,
     hold = false;
   let finishedHeld = false;
+  let holdRounds = false;
+  let releaseRounds: (() => void) | undefined;
   let release: (() => void) | undefined;
   const downloads: string[] = [];
   page.on('download', (download) =>
@@ -75,7 +77,7 @@ test('submitted round comparison filters by identity, exports fresh availability
         firstInvitationId,
         firstSubmissionId,
         secondInvitationId,
-        secondSubmissionId,
+        secondSubmissionId: result.second.submissionId,
       });
       if (hold) {
         await new Promise<void>((resolve) => {
@@ -96,6 +98,10 @@ test('submitted round comparison filters by identity, exports fresh availability
     }
     if (path.endsWith('/submission')) {
       const first = path.includes(firstInvitationId);
+      if (!first && holdRounds)
+        await new Promise<void>((resolve) => {
+          releaseRounds = resolve;
+        });
       const round = first ? result.first : result.second;
       return route.fulfill({
         json: {
@@ -159,22 +165,39 @@ test('submitted round comparison filters by identity, exports fresh availability
   const csv = panel.getByRole('button', {
     name: 'Export submitted comparison CSV',
   });
-  async function choose() {
+  async function choose(slowSwitch = false) {
     await panel
       .getByRole('combobox', { name: 'First invitation', exact: true })
       .selectOption(firstInvitationId);
     await panel
       .getByRole('combobox', { name: 'First round', exact: true })
       .selectOption(firstSubmissionId);
+    if (slowSwitch) {
+      await panel
+        .getByRole('combobox', { name: 'Second invitation', exact: true })
+        .selectOption(firstInvitationId);
+      await panel
+        .getByRole('combobox', { name: 'Second round', exact: true })
+        .selectOption(firstSubmissionId);
+      holdRounds = true;
+    }
     await panel
       .getByRole('combobox', { name: 'Second invitation', exact: true })
       .selectOption(secondInvitationId);
+    if (slowSwitch) {
+      await expect.poll(() => Boolean(releaseRounds)).toBe(true);
+      await expect(
+        panel.getByRole('combobox', { name: 'Second round', exact: true }),
+      ).toHaveCount(0);
+      holdRounds = false;
+      releaseRounds!();
+    }
     await panel
       .getByRole('combobox', { name: 'Second round', exact: true })
       .selectOption(secondSubmissionId);
   }
   await expect(load).toBeDisabled();
-  await choose();
+  await choose(true);
   await load.click();
   await expect(view).toContainText('2 available photos, 1 shared favorites.');
   await expect(view.getByRole('listitem')).toHaveCount(2);
@@ -188,13 +211,22 @@ test('submitted round comparison filters by identity, exports fresh availability
     .getByRole('combobox', { name: 'Submitted comparison photos', exact: true })
     .selectOption('first');
   await expect(view.getByRole('listitem')).toContainText(photos[0]!.id);
+  const filteredDownload = page.waitForEvent('download');
+  await csv.click();
+  const firstOnly = await filteredDownload;
+  const filteredCsv = await readFile((await firstOnly.path())!, 'utf8');
+  expect(firstOnly.suggestedFilename()).toBe(
+    'picfind-submitted-comparison-first.csv',
+  );
+  expect(filteredCsv).toContain(photos[0]!.id);
+  expect(filteredCsv).not.toContain(photos[1]!.id);
   await panel
     .getByRole('combobox', { name: 'Submitted comparison photos', exact: true })
     .selectOption('all');
   let downloadEvent = page.waitForEvent('download');
   await csv.click();
   let download = await downloadEvent;
-  expect(reads).toBe(2);
+  expect(reads).toBe(3);
   const duplicateCsv = await readFile((await download.path())!, 'utf8');
   expect(duplicateCsv).toContain(`"${photos[0]!.id}","'=Budget.jpg"`);
   expect(duplicateCsv).toContain(`"${photos[1]!.id}","'=Budget.jpg"`);
@@ -207,7 +239,7 @@ test('submitted round comparison filters by identity, exports fresh availability
   downloadEvent = page.waitForEvent('download');
   await csv.click();
   download = await downloadEvent;
-  expect(reads).toBe(3);
+  expect(reads).toBe(4);
   const refreshedCsv = await readFile((await download.path())!, 'utf8');
   expect(refreshedCsv).toContain('Current.jpg');
   expect(refreshedCsv).not.toContain(photos[0]!.id);
@@ -228,7 +260,7 @@ test('submitted round comparison filters by identity, exports fresh availability
   await csv.click();
   await expect(panel).toContainText('Comparison access unavailable.');
   await expect(view).toHaveCount(0);
-  expect(downloads).toHaveLength(2);
+  expect(downloads).toHaveLength(3);
   failure = 0;
   await load.click();
   await expect(view).toBeVisible();
@@ -239,7 +271,7 @@ test('submitted round comparison filters by identity, exports fresh availability
     'No available photos match this comparison.',
   );
   await expect(csv).toBeDisabled();
-  expect(downloads).toHaveLength(2);
+  expect(downloads).toHaveLength(3);
   await page.reload();
   await page.getByRole('tab', { name: 'Collections', exact: true }).click();
   await page
@@ -253,11 +285,30 @@ test('submitted round comparison filters by identity, exports fresh availability
     { id: photos[1]!.id, filename: 'Current.jpg', selectedBy: 'both' },
   ];
   await choose();
+  result.second.submissionId = firstSubmissionId;
+  await panel.getByRole('button', { name: 'Refresh second rounds' }).click();
+  await panel
+    .getByRole('combobox', { name: 'Second round', exact: true })
+    .selectOption(firstSubmissionId);
+  await expect(load).toBeEnabled();
   await load.click();
   await expect(view).toBeVisible();
   hold = true;
   await csv.click();
   await expect.poll(() => Boolean(release)).toBe(true);
+  await expect(
+    panel.getByRole('combobox', { name: 'First invitation', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    panel.getByRole('combobox', { name: 'Second round', exact: true }),
+  ).toBeDisabled();
+  await expect(load).toBeDisabled();
+  await expect(
+    panel.getByRole('combobox', {
+      name: 'Submitted comparison photos',
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await panel
     .getByRole('button', { name: 'Compare submitted rounds', exact: true })
     .click();
@@ -266,7 +317,7 @@ test('submitted round comparison filters by identity, exports fresh availability
   ).toHaveCount(0);
   release!();
   await expect.poll(() => finishedHeld).toBe(true);
-  expect(downloads).toHaveLength(2);
+  expect(downloads).toHaveLength(3);
 });
 
 test('submitted round exports reauthorize, preserve round identity and omit private or unavailable data', async ({

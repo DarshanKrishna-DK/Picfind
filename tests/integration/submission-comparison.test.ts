@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { invitationFixture, origin } from '../fixtures/collection-invitations';
 import type { LibraryRecord } from '../../apps/api/src/library';
 
-async function fixture() {
+async function fixture(reuseCurrentSubmissionId = false) {
   const f = invitationFixture();
   f.collection.selectedIds = f.photos.map((photo) => photo.id);
   const first = (await f.create().expect(201)).body.invitation.id as string;
@@ -23,8 +23,12 @@ async function fixture() {
       .set('Origin', origin)
       .set('Cookie', `picfind_session=${actor}`)
       .send({ photoId, status, version });
-  const submit = async (invite: string, actor: string, version: number) => {
-    const id = randomUUID();
+  const submit = async (
+    invite: string,
+    actor: string,
+    version: number,
+    id: string = randomUUID(),
+  ) => {
     await request(f.app)
       .post(`${f.path(invite)}/submission`)
       .set('Origin', origin)
@@ -42,7 +46,12 @@ async function fixture() {
   await save(second, 'second', f.photos[0]!.id, 'favorite', 0).expect(200);
   await save(second, 'second', f.photos[1]!.id, 'favorite', 1).expect(200);
   const firstSubmissionId = await submit(first, 'client', 1);
-  const secondSubmissionId = await submit(second, 'second', 2);
+  const secondSubmissionId = await submit(
+    second,
+    'second',
+    2,
+    reuseCurrentSubmissionId ? firstSubmissionId : randomUUID(),
+  );
   const choice = {
     firstInvitationId: first,
     firstSubmissionId,
@@ -59,6 +68,62 @@ async function fixture() {
 }
 
 describe('owner comparison of submitted rounds', () => {
+  it('distinguishes identical current submission UUIDs by invitation identity', async () => {
+    const f = await fixture(true);
+    const result = (await f.compare().expect(200)).body;
+    expect(result.first.submissionId).toBe(result.second.submissionId);
+    expect(result.first.invitationId).not.toBe(result.second.invitationId);
+    expect(result.photos).toHaveLength(2);
+    expect(result.shared).toBe(1);
+  });
+  it('accepts semantically identical invitation reads with reordered stored keys', async () => {
+    const f = await fixture(),
+      get = f.store.get;
+    const reads = new Map<string, number>();
+    f.store.get = async (id) => {
+      const row = await get(id);
+      const count = (reads.get(id) ?? 0) + 1;
+      reads.set(id, count);
+      return [f.first, f.second].includes(id) && count > 1
+        ? (Object.fromEntries(Object.entries(row).reverse()) as LibraryRecord)
+        : row;
+    };
+    expect((await f.compare().expect(200)).body.shared).toBe(1);
+  });
+  it('ignores unrelated jobs before applying history limits and deduplicates an interrupted reopen archive', async () => {
+    const f = await fixture();
+    const current = f.records.get(f.first)!.proofingSubmission!;
+    for (let index = 0; index < 24; index++) {
+      const id = randomUUID();
+      f.records.set(id, {
+        id,
+        kind: 'job',
+        ownerId: 'owner',
+        createdAt: current.submittedAt,
+        eventId: index % 3 === 0 ? randomUUID() : f.event.id,
+        purpose: index % 3 === 1 ? 'import' : 'proofing-submission',
+        submissionInvitationId: index % 3 === 2 ? randomUUID() : f.first,
+      });
+    }
+    f.records.set(current.id, {
+      id: current.id,
+      kind: 'job',
+      ownerId: 'owner',
+      createdAt: current.submittedAt,
+      eventId: f.event.id,
+      purpose: 'proofing-submission',
+      submissionInvitationId: f.first,
+      proofingSubmission: Object.fromEntries(
+        Object.entries(current).reverse(),
+      ) as typeof current,
+    });
+    const state = (
+      await f.read(`${f.root}/${f.first}/submission`, 'owner').expect(200)
+    ).body;
+    expect(state.current.id).toBe(current.id);
+    expect(state.history).toEqual([]);
+    expect((await f.compare().expect(200)).body.shared).toBe(1);
+  });
   it('returns an empty comparison for two valid empty submitted sets', async () => {
     const f = await fixture();
     f.records.get(f.first)!.proofingSubmission!.favoriteIds = [];
@@ -156,7 +221,11 @@ describe('owner comparison of submitted rounds', () => {
   it('rejects duplicate snapshots, missing fields and unknown fields', async () => {
     const f = await fixture();
     await f
-      .compare({ ...f.choice, secondSubmissionId: f.choice.firstSubmissionId })
+      .compare({
+        ...f.choice,
+        secondInvitationId: f.first,
+        secondSubmissionId: f.choice.firstSubmissionId,
+      })
       .expect(400);
     await f.compare({ firstInvitationId: f.first }).expect(400);
     await f.compare({ ...f.choice, extra: 'ignored' }).expect(400);

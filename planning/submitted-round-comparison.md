@@ -12,6 +12,9 @@ snapshots within one named collection.
   `/events/:id/proofing-collections/:collectionId/submission-comparison`
   accepts two invitation IDs and two exact submission IDs. The owner may compare
   different rounds of one invitation, but cannot compare a submission with itself.
+  Round identity is the invitation/submission pair. Current submissions can reuse
+  a client-supplied UUID across different invitations; comparison must not assume
+  global UUID uniqueness. Existing archive collision handling is unchanged.
 - Resolve each chosen snapshot through the same validated history reader used by
   submission history. Match invitations to the event, owner and collection.
   Retained rounds remain available after invitation revocation or expiry, under

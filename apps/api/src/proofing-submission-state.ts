@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isDeepStrictEqual } from 'node:util';
 import { ApiError } from './auth.js';
 import type { LibraryRecord } from './library.js';
 
@@ -103,7 +104,7 @@ export function readSubmissionHistory(
     rounds.add(item.round);
     if (
       item.round === state.round &&
-      (!state.current || JSON.stringify(item) !== JSON.stringify(state.current))
+      (!state.current || !isDeepStrictEqual(item, state.current))
     )
       return submissionMetadataInvalid();
   }

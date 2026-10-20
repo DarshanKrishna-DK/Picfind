@@ -155,7 +155,8 @@ function ComparisonForm({
   const distinct =
     first.submissionId &&
     second.submissionId &&
-    first.submissionId !== second.submissionId;
+    (first.invitationId !== second.invitationId ||
+      first.submissionId !== second.submissionId);
   const visible = result ? filterComparedPhotos(result.photos, filter) : [];
   function choose(side: 'first' | 'second', choice: Choice) {
     if (pending.current) return;
@@ -227,7 +228,7 @@ function ComparisonForm({
         onChange={(value) => choose('second', value)}
         disabled={busy}
       />
-      {first.submissionId && first.submissionId === second.submissionId && (
+      {first.submissionId && second.submissionId && !distinct && (
         <p>Choose two different submitted rounds.</p>
       )}
       <button

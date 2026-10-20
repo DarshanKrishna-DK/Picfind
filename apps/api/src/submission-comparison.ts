@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import type { LibraryRecord } from './library.js';
@@ -39,7 +40,11 @@ const query = z
     secondSubmissionId: z.uuid(),
   })
   .strict()
-  .refine((value) => value.firstSubmissionId !== value.secondSubmissionId);
+  .refine(
+    (value) =>
+      value.firstInvitationId !== value.secondInvitationId ||
+      value.firstSubmissionId !== value.secondSubmissionId,
+  );
 
 export function createSubmissionComparison({
   store,
@@ -103,8 +108,7 @@ export function createSubmissionComparison({
             [firstInvitation, secondInvitation].map((row) => [row.id, row]),
           ).values()) {
             const current = await invitation(initial.id);
-            if (JSON.stringify(current) !== JSON.stringify(initial))
-              throw changed();
+            if (!isDeepStrictEqual(current, initial)) throw changed();
           }
           // Selected archives are immutable; detect an external replacement before projection.
           for (const [item, invite] of [
@@ -120,8 +124,10 @@ export function createSubmissionComparison({
               archive.eventId !== collection.eventId ||
               archive.submissionInvitationId !== invite.id ||
               archive.deletionStartedAt ||
-              JSON.stringify(readSubmission(archive.proofingSubmission)) !==
-                JSON.stringify(item)
+              !isDeepStrictEqual(
+                readSubmission(archive.proofingSubmission),
+                item,
+              )
             )
               throw changed();
           }
@@ -148,8 +154,16 @@ export function createSubmissionComparison({
               filename: photo.filename ?? 'photo.jpg',
             }));
           const comparison = compareSelections(
-            { id: first.id, photoIds: first.favoriteIds, photos },
-            { id: second.id, photoIds: second.favoriteIds, photos },
+            {
+              id: `${firstInvitation.id}:${first.id}`,
+              photoIds: first.favoriteIds,
+              photos,
+            },
+            {
+              id: `${secondInvitation.id}:${second.id}`,
+              photoIds: second.favoriteIds,
+              photos,
+            },
           );
           const ids = new Set(photos.map((photo) => photo.id));
           function round(
