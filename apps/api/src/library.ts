@@ -71,6 +71,7 @@ import { createEventRsvp } from './event-rsvp.js';
 import { createStudioClients } from './studio-clients.js';
 import { createStudioProjects } from './studio-projects.js';
 import { createStudioQuestionnaires } from './studio-questionnaires.js';
+import { createCreditPresets } from './credit-presets.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
 import {
@@ -162,6 +163,7 @@ export interface LibraryRecord {
     | 'studio-appointment'
     | 'studio-questionnaire'
     | 'questionnaire-response'
+    | 'photographer-credit-preset'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -207,6 +209,8 @@ export interface LibraryRecord {
   questionnaireResponse?: import('../../../packages/shared/src/studio-questionnaires.js').StoredQuestionnaireResponse;
   questionnaireCommandDigest?: string;
   questionnaireRemovalStartedAt?: string;
+  creditPreset?: import('../../../packages/shared/src/credit-presets.js').SavedCreditPreset;
+  creditPresetCommandDigest?: string;
   milestoneCommandDigest?: string;
   projectRemovalStartedAt?: string;
   studioMilestone?: import('../../../packages/shared/src/studio-milestones.js').SavedMilestone;
@@ -706,6 +710,7 @@ export function createLibraryRouter(
   router.use(createStudioClients(store, owner));
   router.use(createStudioProjects(store, owner));
   router.use(createStudioQuestionnaires(auth, store, owner));
+  router.use(createCreditPresets(store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
   router.use(createEventReadiness(options, owner));

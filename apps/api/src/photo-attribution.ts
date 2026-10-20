@@ -1,84 +1,40 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
-import type { LibraryRecord, LibraryStore } from './library.js';
+import type { LibraryStore } from './library.js';
 import { withAccountLock } from './locks.js';
-import { photoAvailable } from './retention.js';
+import { attributionFields } from '../../../packages/shared/src/photo-attribution.js';
+import { CREDIT_ACTOR_HEADER } from '../../../packages/shared/src/credit-presets.js';
 import {
-  attributionFields,
-  storedAttributionSchema,
-  type PhotoAttribution,
-} from '../../../packages/shared/src/photo-attribution.js';
-
-function readCredit(photo: LibraryRecord): PhotoAttribution {
-  if (photo.attribution === undefined)
-    return {
-      name: '',
-      website: '',
-      published: false,
-      version: 0,
-      updatedAt: null,
-    };
-  const parsed = storedAttributionSchema.safeParse(photo.attribution);
-  if (!parsed.success)
-    throw new ApiError(
-      503,
-      'ATTRIBUTION_INVALID',
-      'This photo needs attribution metadata repair before editing.',
-    );
-  return parsed.data;
-}
+  ownedCreditPhoto,
+  readPhotoCredit as readCredit,
+} from './photo-attribution-access.js';
 export function createPhotoAttribution(
   getStore: () => LibraryStore,
   actorOf: (req: Request) => Promise<string>,
 ) {
   const router = Router();
-  async function ownedPhoto(id: unknown, actor: string, publishing = false) {
-    const missing = () =>
-      new ApiError(404, 'NOT_FOUND', 'This photo is not available.');
-    const parsed = z.uuid().safeParse(id);
-    if (!parsed.success) throw missing();
-    const photo = await getStore().get(parsed.data);
-    if (
-      photo.id !== parsed.data ||
-      photo.kind !== 'photo' ||
-      photo.ownerId !== actor ||
-      photo.deletionStartedAt ||
-      photo.deletionCompletedAt ||
-      !photoAvailable(photo)
-    )
-      throw missing();
-    if (photo.eventId) {
-      const event = await getStore().get(photo.eventId);
-      if (
-        event.id !== photo.eventId ||
-        event.kind !== 'event' ||
-        event.ownerId !== actor ||
-        event.deletionStartedAt
-      )
-        throw missing();
-      if (
-        publishing &&
-        (event.archived ||
-          (event.expiresAt && !(Date.parse(event.expiresAt) > Date.now())))
-      )
-        throw new ApiError(
-          409,
-          'EVENT_CLOSED',
-          'Restore an open event before publishing photographer credit.',
-        );
-    }
-    return photo;
+  async function actor(req: Request) {
+    const id = await actorOf(req);
+    if (req.get(CREDIT_ACTOR_HEADER) && req.get(CREDIT_ACTOR_HEADER) !== id)
+      throw new ApiError(
+        403,
+        'ACCOUNT_CHANGED',
+        'Your signed-in account changed. Reload photographer credits.',
+      );
+    return id;
   }
+  const ownedPhoto = (id: unknown, accountId: string, publishing = false) =>
+    ownedCreditPhoto(getStore(), id, accountId, publishing);
   router.get('/photos/:id/attribution', async (req, res) => {
     res.json({
       attribution: readCredit(
-        await ownedPhoto(req.params.id, await actorOf(req)),
+        await ownedPhoto(req.params.id, await actor(req)),
       ),
     });
   });
   router.patch('/photos/:id/attribution', async (req, res) => {
-    const actor = await actorOf(req);
+    const accountId = await actor(req);
     const input = z
       .object({
         name: z.unknown(),
@@ -105,10 +61,10 @@ export function createPhotoAttribution(
         'INVALID_ATTRIBUTION',
         'Use a credit name up to 100 characters, an optional HTTPS website without credentials, and the current version. Publishing requires a name.',
       );
-    const result = await withAccountLock(actor, async () => {
+    const result = await withAccountLock(accountId, async () => {
       const photo = await ownedPhoto(
         req.params.id,
-        actor,
+        accountId,
         fields.data.published,
       );
       const current = readCredit(photo);
@@ -135,7 +91,7 @@ export function createPhotoAttribution(
       };
       const fresh = await ownedPhoto(
         req.params.id,
-        actor,
+        accountId,
         fields.data.published,
       );
       const latest = readCredit(fresh);
