@@ -168,6 +168,8 @@ describe('discover face matching without live AWS', () => {
       filename: 'group.jpg',
       createdAt: new Date().toISOString(),
       indexState: 'ready',
+      provider: 'aws-rekognition',
+      modelVersion: '7.0',
       externalImageId: 'ext-photo',
     });
     files.set(photoId, new Uint8Array([1, 2, 3]));

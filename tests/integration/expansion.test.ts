@@ -386,7 +386,12 @@ describe('pricing and bounded processing', () => {
   it('skips already processed no-face photos rather than paying to retry', async () => {
     const provider = matcher();
     const { app, event, photo, records } = fixture({ faceMatcher: provider });
-    records.set(photo.id, { ...photo, indexState: 'empty' });
+    records.set(photo.id, {
+      ...photo,
+      indexState: 'empty',
+      provider: 'aws-rekognition',
+      modelVersion: 'test',
+    });
     await request(app)
       .post(`/api/events/${event.id}/index-faces`)
       .set('Cookie', 'picfind_session=owner')

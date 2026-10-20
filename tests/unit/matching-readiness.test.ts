@@ -31,6 +31,37 @@ const prepared = photo({
 });
 
 describe('event matching readiness metadata', () => {
+  it('marks missing or mixed model metadata as requiring attention', () => {
+    const missing = { ...prepared };
+    delete missing.modelVersion;
+    const unknown = matchingReadiness(event, [missing], runtime, now);
+    expect(unknown.counts.needsReview).toBe(1);
+    expect(unknown.status).toBe('needs-attention');
+    const contradictory = matchingReadiness(
+      event,
+      [{ ...prepared, indexState: 'empty' }],
+      runtime,
+      now,
+    );
+    expect(contradictory.counts.needsReview).toBe(1);
+    expect(contradictory.counts.noFaces).toBe(0);
+    const mixed = matchingReadiness(
+      event,
+      [prepared, { ...prepared, id: 'other', modelVersion: '6' }],
+      runtime,
+      now,
+    );
+    expect(mixed.counts).toMatchObject({
+      prepared: 0,
+      needsReview: 2,
+      total: 2,
+    });
+    expect(mixed.status).toBe('needs-attention');
+    expect(mixed.models).toEqual([
+      { version: '6', photos: 1 },
+      { version: '7', photos: 1 },
+    ]);
+  });
   it('excludes other events, owners, scans, expired and deleting photographs', () => {
     const result = matchingReadiness(
       event,
@@ -97,7 +128,16 @@ describe('event matching readiness metadata', () => {
     [[photo()], 'not-prepared'],
     [[prepared, photo()], 'partial'],
     [[prepared], 'ready'],
-    [[photo({ indexState: 'empty', provider: 'aws-rekognition' })], 'no-faces'],
+    [
+      [
+        photo({
+          indexState: 'empty',
+          provider: 'aws-rekognition',
+          modelVersion: '7',
+        }),
+      ],
+      'no-faces',
+    ],
   ] as const)('distinguishes preparation outcomes %#', (photos, status) => {
     expect(matchingReadiness(event, [...photos], runtime, now).status).toBe(
       status,
