@@ -5,6 +5,8 @@ import { CheckCircle2, Clock3, PauseCircle, ScanFace } from 'lucide-react';
 import { api } from '../api';
 import { ErrorNote } from '../components/ui';
 import './processing.css';
+import { MatchingReadinessPanel } from './matching-readiness';
+import type { MatchingReadiness } from '../../../../packages/shared/src/matching-readiness';
 
 interface ProcessingJob {
   id: string;
@@ -64,14 +66,27 @@ export function EventProcessing({
         jobs: ProcessingJob[];
         deleting?: boolean;
         retryUncertainRequired?: boolean;
+        readiness?: MatchingReadiness;
       }>(`/events/${eventId}/processing`),
+    retry: false,
     refetchInterval: (state) =>
-      state.state.data?.jobs.some(active) ? 1500 : false,
+      !state.state.error && state.state.data?.jobs.some(active) ? 1500 : false,
   });
-  const current = query.data?.jobs.find(active),
-    latest = current ?? query.data?.jobs[0];
-  const retryRequired = Boolean(query.data?.retryUncertainRequired);
-  const deleting = Boolean(query.data?.deleting);
+  const verified = !query.error && !query.isPending ? query.data : undefined;
+  const current = verified?.jobs.find(active),
+    latest = current ?? verified?.jobs[0];
+  const retryRequired = Boolean(verified?.retryUncertainRequired);
+  const deleting = Boolean(verified?.deleting);
+  const eventClosed =
+    archived ||
+    deleting ||
+    Boolean(
+      verified?.readiness &&
+      !['private', 'shared'].includes(verified.readiness.gallery),
+    );
+  useEffect(() => {
+    void client.invalidateQueries({ queryKey: ['event-processing', eventId] });
+  }, [client, eventId, photoCount, archived]);
   useEffect(() => {
     attempt.current = null;
     attemptRetry.current = false;
@@ -102,9 +117,12 @@ export function EventProcessing({
       current ||
       archived ||
       deleting ||
+      eventClosed ||
+      query.error ||
+      query.isPending ||
       (retryRequired && !retryUncertain) ||
       !photoCount ||
-      !query.data?.enabled
+      !verified?.enabled
     )
       return;
     setBusy(true);
@@ -162,6 +180,13 @@ export function EventProcessing({
         </div>
       </div>
       <ErrorNote error={error ?? query.error} />
+      {verified?.readiness && (
+        <MatchingReadinessPanel
+          snapshot={verified.readiness}
+          refreshing={query.isFetching}
+          refresh={() => void query.refetch()}
+        />
+      )}
       {deleting && (
         <p className="notice">
           Deletion has started for this event. Finish deletion before preparing
@@ -251,7 +276,7 @@ export function EventProcessing({
               type="checkbox"
               checked={consent}
               onChange={(event) => setConsent(event.target.checked)}
-              disabled={archived || deleting || !query.data?.enabled || busy}
+              disabled={eventClosed || !verified?.enabled || busy}
             />
             I have permission to process these photos for face matching.
           </label>
@@ -267,9 +292,7 @@ export function EventProcessing({
                   type="checkbox"
                   checked={retryUncertain}
                   aria-describedby={`processing-retry-${eventId}`}
-                  disabled={
-                    archived || deleting || !query.data?.enabled || busy
-                  }
+                  disabled={eventClosed || !verified?.enabled || busy}
                   onChange={(event) => {
                     setRetryUncertain(event.target.checked);
                     attempt.current = null;
@@ -294,8 +317,9 @@ export function EventProcessing({
               !photoCount ||
               archived ||
               deleting ||
+              eventClosed ||
               (retryRequired && !retryUncertain) ||
-              !query.data?.enabled
+              !verified?.enabled
             }
             onClick={() => void start()}
           >
@@ -304,11 +328,11 @@ export function EventProcessing({
           </button>
         </>
       )}
-      {query.data && query.data.jobs.length > 1 && (
+      {verified && verified.jobs.length > 1 && (
         <details className="processing-history">
           <summary>Previous processing runs</summary>
           <ul>
-            {query.data.jobs
+            {verified.jobs
               .filter((job) => job.id !== latest?.id)
               .slice(0, 4)
               .map((job) => (

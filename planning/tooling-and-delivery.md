@@ -80,13 +80,17 @@ For each slice:
 7. Re-review changed commits. Record PR URL, review verdict, checks and unresolved gates.
 8. Merge only when checks and required approvals support it.
 
-The repository is private. Reviews can run, but the guide requires a public
-repository for event leaderboard eligibility. Visibility has not been changed.
+The owner made the repository public on 2026-10-20, verified through GitHub.
 The user has said the event timeline does not matter. No leaderboard guarantee
-is made.
+is made. PRs #2 through #5 were merged after passing CI during a temporary
+instruction to stop Shipwright. Their subsequent reviews must not be described
+as completed pre-merge review cycles. The owner then restored the Shipwright
+workflow for future work.
 
 The guide says diffs over 5,000 lines are skipped, whereas the live welcome issue
-says 120,000. Keep feature PRs well below either threshold. Dependency/auth/payment
+says 120,000. The owner explicitly requires fewer than 5,000 changed lines per
+PR, including additions and deletions in code, documentation and lockfiles.
+Check the actual GitHub diff before review and merge. Dependency/auth/payment
 changes can request human approval. Treat actual check output as current evidence.
 
 ## Existing workspace

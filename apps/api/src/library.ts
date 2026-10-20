@@ -60,6 +60,7 @@ import {
   type CloudSourceOptions,
 } from './cloud-sources.js';
 import { processingUsage } from './processing-budget.js';
+import { matchingReadiness } from './matching-readiness.js';
 import type { BillingService } from './billing/service.js';
 import {
   assertPhotoAvailable,
@@ -1350,21 +1351,33 @@ export function createLibraryRouter(
     const event = await owned(eventId, user, 'event');
     const photos = (await store().list(user, 'photo')).filter(
       (photo) =>
-        photo.eventId === eventId && !photo.scanId && photoAvailable(photo),
+        photo.eventId === eventId &&
+        !photo.scanId &&
+        !photo.deletionStartedAt &&
+        photoAvailable(photo),
+    );
+    const jobs = options.jobQueue
+      ? await options.jobQueue.list(user, eventId)
+      : [];
+    const enabled = Boolean(
+      options.jobQueue &&
+      options.faceMatcher &&
+      options.faceJobsEnabled !== false,
     );
     res.json({
-      enabled: Boolean(
-        options.jobQueue &&
-        options.faceMatcher &&
-        options.faceJobsEnabled !== false,
-      ),
+      enabled,
       deleting: Boolean(event.deletionStartedAt),
       retryUncertainRequired: photos.some(requiresUncertainRetry),
-      jobs: options.jobQueue
-        ? (await options.jobQueue.list(user, eventId))
-            .slice(0, 20)
-            .map(publicJob)
-        : [],
+      readiness: matchingReadiness(event, photos, {
+        provider: options.faceMatcher
+          ? (options.faceProviderName ?? 'aws-rekognition')
+          : null,
+        processingAvailable: enabled,
+        active: jobs.some(
+          (job) => job.status === 'queued' || job.status === 'running',
+        ),
+      }),
+      jobs: jobs.slice(0, 20).map(publicJob),
     });
   });
   router.post('/events/:id/index-faces', async (req, res) => {
