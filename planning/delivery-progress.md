@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 11 pushed after review, 17 merged and
-reviewed, and 17 opened. This is a
+on 2026-10-20, Picfind had 12 pushed after review, 18 merged and
+reviewed, and 18 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 
 | PR                                                         | Outcome                                  | Merge and review evidence                                                                      |
@@ -29,8 +29,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [16](https://github.com/DarshanKrishna-DK/Picfind/pull/16) | Expiring client collection invitations   | Reviewed, HEAD and metered revocation tests added after review, re-reviewed, merged            |
 | [17](https://github.com/DarshanKrishna-DK/Picfind/pull/17) | Saved client proofing decisions          | Reviewed, operation locking and denied-save privacy improved after review, re-reviewed, merged |
 | [18](https://github.com/DarshanKrishna-DK/Picfind/pull/18) | Face-index provenance safeguards         | Reviewed, stale cache reference preservation fixed after review, re-reviewed, merged           |
+| [19](https://github.com/DarshanKrishna-DK/Picfind/pull/19) | Bounded local JPEG face extraction       | Reviewed, duplicate detection and publication failures fixed after review, re-reviewed, merged |
 
-GitHub currently proves seventeen merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17 and #18 were visibly
+GitHub currently proves eighteen merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18 and #19 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
