@@ -66,3 +66,60 @@ Python 3.14.0, OpenCV 4.13.0, NumPy 2.4.2, CPU only, two threads, ten iterations
 Six artifact safety tests passed. These measurements establish local runtime
 compatibility only. They do not establish real event throughput, matching quality,
 minimum production RAM or a safe production threshold.
+
+## Offline pair-score calibration
+
+`calibrate.py` accepts an operator-prepared JSON dataset of cosine similarity
+scores. It requires only Python's standard library, no models, network, API keys,
+GPU or photo uploads. It does not compute scores or enable production matching.
+Keep the dataset under ignored `artifacts/`, with pseudonymous identity and sample
+IDs. Do not commit participant data or consent documents.
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/calibrate.py --scores artifacts/private-evaluation/scores.json --target-fmr 0.001
+```
+
+The document shape is:
+
+```json
+{
+  "schema_version": 1,
+  "score_kind": "cosine_similarity",
+  "model_sha256": "64 lowercase hexadecimal characters",
+  "consent_reference": "local operator consent record reference",
+  "pairs": [
+    {
+      "split": "calibration",
+      "left_identity": "pseudonymous-person-a",
+      "right_identity": "pseudonymous-person-a",
+      "left_sample": "sample-1",
+      "right_sample": "sample-2",
+      "score": 0.8
+    }
+  ]
+}
+```
+
+This abbreviated example is not a valid evaluation dataset. Both `calibration`
+and `test` need genuine pairs (same identity) and impostor pairs (different
+identities). Identities must be disjoint between splits. Sample IDs must refer to
+the same identity throughout, and self-pairs and duplicate unordered sample pairs
+are rejected. Use globally unique sample IDs. Bounds: 10 MiB JSON, 100,000 pairs,
+128 characters per identifier. Scores must be finite and within [-1, 1].
+
+The candidate is the lowest observed calibration cutoff whose empirical false
+match rate meets the requested target. Equal scores are accepted or rejected
+together. If no observed cutoff meets the target, the report explicitly selects
+reject-all. The held-out test is evaluated once at that fixed cutoff; test scores
+never select the threshold. Do not repeatedly tune against the held-out set.
+The report includes raw error counts, denominators, empirical rates, identity
+counts and exact dataset/model digests, without printing identities, sample IDs
+or consent references.
+
+The tool cannot verify consent, label correctness, score provenance, demographic
+coverage or representativeness. A zero error count on a small dataset is weak
+evidence. Repeated identities produce correlated pairs, so these rates have no
+claimed confidence interval and do not represent event-gallery retrieval accuracy.
+Review genuine/impostor sample sizes, lighting, pose, camera and group-shot
+coverage separately. Production remains gated by consented representative
+evaluation, candidate retrieval testing, deletion and operational review.
