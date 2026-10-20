@@ -11,6 +11,10 @@ import {
   type SelectionStatus,
 } from '../../../../packages/shared/src/proofing';
 import './organizer.css';
+import {
+  exportSelectionFilenames,
+  type SelectionExportFormat,
+} from '../../../../packages/shared/src/selection-export';
 
 const labels: Record<SelectionStatus, string> = {
   new: 'New',
@@ -131,6 +135,8 @@ function SelectionCard({
   const [message, setMessage] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const exportPending = useRef(false);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const stale =
@@ -223,6 +229,51 @@ function SelectionCard({
     }
   }
 
+  async function exportFilenames(format: SelectionExportFormat) {
+    if (exportPending.current) return;
+    exportPending.current = true;
+    setExporting(true);
+    setError(null);
+    setProgress('Checking current photo availability...');
+    try {
+      // Reauthorize and refresh availability instead of exporting stale card data.
+      const current = await api<{ selections: EventSelection[] }>(
+        `/events/${eventId}/insights`,
+      );
+      const selected = current.selections.find(
+        (item) => item.id === selection.id,
+      );
+      if (!selected)
+        throw new Error(
+          'This selection is no longer available. Refresh the event.',
+        );
+      const output = exportSelectionFilenames(selected.photos, format);
+      saveFile(
+        new Blob([output.content], {
+          type:
+            format === 'csv'
+              ? 'text/csv;charset=utf-8'
+              : 'text/plain;charset=utf-8',
+        }),
+        `picfind-selection-${selection.id}.${format}`,
+      );
+      const omitted = new Set(selected.photoIds).size - output.count;
+      setProgress(
+        `${output.count} ${output.count === 1 ? 'filename' : 'filenames'} exported.${omitted > 0 ? ` ${omitted} unavailable ${omitted === 1 ? 'photo' : 'photos'} omitted.` : ''}${
+          output.duplicateNames
+            ? ' Some filenames repeat. Use the CSV photo IDs to distinguish them.'
+            : ''
+        }`,
+      );
+    } catch (failure) {
+      setProgress('');
+      setError(failure);
+    } finally {
+      exportPending.current = false;
+      setExporting(false);
+    }
+  }
+
   return (
     <article
       className="selection-card"
@@ -290,6 +341,27 @@ function SelectionCard({
           </button>
         )}
       </div>
+      <div className="source-actions" aria-label="Export selected filenames">
+        <button
+          className="button secondary"
+          disabled={exporting || !photos.length}
+          onClick={() => void exportFilenames('txt')}
+        >
+          Export filenames TXT
+        </button>
+        <button
+          className="button secondary"
+          disabled={exporting || !photos.length}
+          onClick={() => void exportFilenames('csv')}
+        >
+          Export filenames CSV
+        </button>
+      </div>
+      <p className="field-help">
+        Export current filenames for your editing workflow. CSV includes photo
+        IDs and protects spreadsheet cells; private notes and photo files are
+        excluded.
+      </p>
       <p className="field-help">
         Device download only, up to 64 MB per ZIP. For larger requests, open and
         save individual photos above. Delivery allowance applies.
