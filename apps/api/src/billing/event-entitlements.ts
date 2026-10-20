@@ -50,6 +50,7 @@ export type EventPatch = Partial<
     | 'members'
     | 'selectionMinimum'
     | 'selectionMaximum'
+    | 'selectionClosesAt'
   >
 >;
 const DAY = 86400000;

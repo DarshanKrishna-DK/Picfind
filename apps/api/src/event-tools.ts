@@ -24,6 +24,7 @@ import {
   validSelectionRules,
   type SelectionCountRules,
 } from '../../../packages/shared/src/selection-rules.js';
+import { selectionWindow } from '../../../packages/shared/src/selection-window.js';
 
 function selectionRules(
   event: LibraryRecord,
@@ -179,7 +180,57 @@ export function createEventTools(
       brandingName: event.brandingName ?? '',
       accentColor: event.accentColor ?? '#173f37',
       selectionRules: validSelectionRules(rules) ? rules : null,
+      selectionWindow: selectionWindow(event.selectionClosesAt),
     });
+  });
+  router.patch('/events/:id/selection-window', async (req, res) => {
+    const user = await owner(req);
+    const parsed = z
+      .discriminatedUnion('action', [
+        z.object({ action: z.literal('open') }).strict(),
+        z.object({ action: z.literal('close') }).strict(),
+        z
+          .object({
+            action: z.literal('schedule'),
+            closesAt: z.iso.datetime(),
+          })
+          .strict(),
+      ])
+      .safeParse(req.body);
+    if (!parsed.success)
+      throw new ApiError(
+        400,
+        'INVALID_SELECTION_WINDOW',
+        'Choose a valid submission deadline or open or close submissions.',
+      );
+    const result = await withAccountLock(user, async () => {
+      const event = await eventOf(req.params.id, user);
+      const now = Date.now();
+      let closesAt = '';
+      if (parsed.data.action === 'close')
+        closesAt = new Date(now).toISOString();
+      if (parsed.data.action === 'schedule') {
+        const deadline = Date.parse(parsed.data.closesAt);
+        if (!Number.isFinite(deadline) || deadline <= now)
+          throw new ApiError(
+            400,
+            'DEADLINE_IN_PAST',
+            'Choose a future deadline, or use Close submissions now.',
+          );
+        if (event.expiresAt && deadline > Date.parse(event.expiresAt))
+          throw new ApiError(
+            400,
+            'DEADLINE_AFTER_GALLERY_EXPIRY',
+            'The submission deadline cannot be after the gallery expiry.',
+          );
+        closesAt = new Date(deadline).toISOString();
+      }
+      const patch = { selectionClosesAt: closesAt };
+      if (saveEvent) await saveEvent(user, event.id, patch);
+      else await getStore().put({ ...event, ...patch });
+      return selectionWindow(closesAt, now);
+    });
+    res.json({ selectionWindow: result });
   });
   router.patch('/events/:id/selection-rules', async (req, res) => {
     const user = await owner(req);
@@ -272,6 +323,7 @@ export function createEventTools(
       brandingName: event.brandingName ?? '',
       accentColor: event.accentColor ?? '#173f37',
       selectionRules: selectionRules(event, true),
+      selectionWindow: selectionWindow(event.selectionClosesAt),
       selections: selections.map((row): EventSelection => ({
         id: row.id,
         name: row.visitorName ?? '',
@@ -405,6 +457,12 @@ export function createEventTools(
             'GALLERY_LOCKED',
             'Unlock this gallery again.',
           );
+        if (selectionWindow(current.selectionClosesAt).closed)
+          throw new ApiError(
+            409,
+            'SELECTIONS_CLOSED',
+            'Favorites submissions are closed. The photographer can reopen them.',
+          );
         const rules = selectionRules(current);
         if (ids.length < rules.minimum || ids.length > rules.maximum)
           throw new ApiError(
@@ -439,6 +497,21 @@ export function createEventTools(
             429,
             'SELECTION_LIMIT',
             'This event has reached its selection submission limit.',
+          );
+        // Storage reads can cross a scheduled deadline. Recheck immediately
+        // before writing rather than accepting from the earlier snapshot.
+        const accepting = await eventOf(event.id);
+        if (!unlocked(req, accepting))
+          throw new ApiError(
+            401,
+            'GALLERY_LOCKED',
+            'Unlock this gallery again.',
+          );
+        if (selectionWindow(accepting.selectionClosesAt).closed)
+          throw new ApiError(
+            409,
+            'SELECTIONS_CLOSED',
+            'Favorites submissions are closed. The photographer can reopen them.',
           );
         await getStore().put(
           {

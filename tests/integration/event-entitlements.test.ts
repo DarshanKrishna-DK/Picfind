@@ -169,6 +169,20 @@ describe('organizer event entitlement and atomic live capacity, synthetic paymen
       .set('Cookie', `picfind_session=${f.owner}`)
       .expect(200);
     expect(insights.body.selectionRules).toEqual({ minimum: 5, maximum: 12 });
+    const closesAt = expiry(3);
+    await request(f.app)
+      .patch(`/api/events/${id}/selection-window`)
+      .set('Origin', origin)
+      .set('Cookie', `picfind_session=${f.owner}`)
+      .send({ action: 'schedule', closesAt })
+      .expect(200);
+    expect(f.store.events.get(id)).toMatchObject({
+      selectionClosesAt: closesAt,
+      selectionMinimum: 5,
+      selectionMaximum: 12,
+      expiresAt: expiry(7),
+      visibility: 'private',
+    });
   });
   it.each([undefined, 'personal-1000'] as const)(
     'does not let %s personal credit host events',

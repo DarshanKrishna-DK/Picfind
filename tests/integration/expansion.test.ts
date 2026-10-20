@@ -504,6 +504,12 @@ describe('gallery protection and client proofing', () => {
       brandingName: '',
       accentColor: '#173f37',
       selectionRules: { minimum: 2, maximum: 2 },
+      selectionWindow: {
+        closed: false,
+        invalid: false,
+        closesAt: null,
+        serverNow: expect.any(String),
+      },
     });
     const submit = (ids: string[]) =>
       request(app)
@@ -589,6 +595,156 @@ describe('gallery protection and client proofing', () => {
       .expect(201);
   });
 });
+describe('favorites submission deadlines', () => {
+  it('enforces the server deadline, preserves the gallery, and reopens without losing submissions', async () => {
+    const { app, event, photo, records } = fixture();
+    const initial = Date.parse('2026-10-20T12:00:00.000Z');
+    let now = initial;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const deadline = new Date(initial + 60_000).toISOString();
+      const change = (body: object) =>
+        request(app)
+          .patch(`/api/events/${event.id}/selection-window`)
+          .set('Origin', origin)
+          .set('Cookie', 'picfind_session=owner')
+          .send(body);
+      await change({ action: 'schedule', closesAt: deadline }).expect(200);
+      expect(records.get(event.id)?.selectionClosesAt).toBe(deadline);
+      const submit = () =>
+        request(app)
+          .post(`/api/public/events/${event.id}/selections`)
+          .set('Origin', origin)
+          .set('Cookie', 'picfind_session=guest')
+          .send({ name: 'Guest', photoIds: [photo.id] });
+      now = initial + 59_999;
+      await submit().expect(201);
+      now++;
+      expect((await submit().expect(409)).body.error.code).toBe(
+        'SELECTIONS_CLOSED',
+      );
+      await request(app)
+        .get(`/api/public/events/${event.id}`)
+        .set('Cookie', 'picfind_session=guest')
+        .expect(200);
+      const access = await request(app)
+        .get(`/api/public/events/${event.id}/access`)
+        .set('Cookie', 'picfind_session=guest')
+        .expect(200);
+      expect(access.body.selectionWindow).toEqual({
+        closesAt: deadline,
+        serverNow: deadline,
+        closed: true,
+        invalid: false,
+      });
+      await change({ action: 'open' }).expect(200);
+      await submit().expect(201);
+      const insights = await request(app)
+        .get(`/api/events/${event.id}/insights`)
+        .set('Cookie', 'picfind_session=owner')
+        .expect(200);
+      expect(insights.body.selections).toHaveLength(2);
+      await change({ action: 'close' }).expect(200);
+      expect(records.get(event.id)?.selectionClosesAt).toBe(
+        new Date(now).toISOString(),
+      );
+      await submit().expect(409);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('checks the deadline again after asynchronous storage reads', async () => {
+    const { app, event, photo, store, records } = fixture();
+    const initial = Date.parse('2026-10-20T12:00:00.000Z');
+    let now = initial;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    records.set(event.id, {
+      ...event,
+      selectionClosesAt: new Date(initial + 1000).toISOString(),
+    });
+    const original = store.list;
+    store.list = async (owner, kind) => {
+      const rows = await original(owner, kind);
+      if (kind === 'job') now += 1001;
+      return rows;
+    };
+    try {
+      const response = await request(app)
+        .post(`/api/public/events/${event.id}/selections`)
+        .set('Origin', origin)
+        .set('Cookie', 'picfind_session=guest')
+        .send({ name: 'Guest', photoIds: [photo.id] })
+        .expect(409);
+      expect(response.body.error.code).toBe('SELECTIONS_CLOSED');
+      expect(
+        [...records.values()].filter((row) => row.purpose === 'selection'),
+      ).toHaveLength(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('requires the owner and validates deadlines without modifying the event', async () => {
+    const { app, event, records } = fixture();
+    const route = `/api/events/${event.id}/selection-window`;
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .send({ action: 'close' })
+      .expect(401);
+    await request(app)
+      .patch(route)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=other')
+      .send({ action: 'close' })
+      .expect(404);
+    const expiry = new Date(Date.now() + 60_000).toISOString();
+    records.set(event.id, { ...event, expiresAt: expiry });
+    for (const body of [
+      { action: 'schedule', closesAt: 'invalid' },
+      { action: 'schedule', closesAt: '2020-01-01T00:00:00.000Z' },
+      {
+        action: 'schedule',
+        closesAt: new Date(Date.now() + 120_000).toISOString(),
+      },
+      { action: 'open', closesAt: expiry },
+      { action: 'close', ownerId: 'other' },
+    ]) {
+      await request(app)
+        .patch(route)
+        .set('Origin', origin)
+        .set('Cookie', 'picfind_session=owner')
+        .send(body)
+        .expect(400);
+    }
+    expect(records.get(event.id)?.selectionClosesAt).toBeUndefined();
+  });
+  it('allows repair of an invalid deadline without hiding the gallery', async () => {
+    const { app, event, photo, records } = fixture();
+    records.set(event.id, { ...event, selectionClosesAt: 'broken' });
+    const access = await request(app)
+      .get(`/api/public/events/${event.id}/access`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
+    expect(access.body.selectionWindow).toMatchObject({
+      invalid: true,
+      closed: true,
+    });
+    await request(app)
+      .post(`/api/public/events/${event.id}/selections`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=guest')
+      .send({ name: 'Guest', photoIds: [photo.id] })
+      .expect(409);
+    await request(app)
+      .patch(`/api/events/${event.id}/selection-window`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send({ action: 'open' })
+      .expect(200);
+    expect(records.get(event.id)?.selectionClosesAt).toBe('');
+  });
+});
+
 describe('provider erasure and retryability', () => {
   it('retains event and photos after failed provider cleanup', async () => {
     const provider = matcher();

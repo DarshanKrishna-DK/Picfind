@@ -5,9 +5,9 @@ fewer than 5,000 added plus deleted lines. The owner authorized approval labels
 and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
-ranks merged PRs with a follow-up push after review. At the 2026-10-20
-12:25 pm displayed update, Picfind had 3 pushed after review, 9 merged and
-reviewed, and 9 opened. This is a
+ranks merged PRs with a follow-up push after review. At the last verified refresh
+on 2026-10-20, Picfind had 4 pushed after review, 10 merged and
+reviewed, and 10 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 
 | PR                                                         | Outcome                                  | Merge and review evidence                                                                   |
@@ -21,8 +21,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [8](https://github.com/DarshanKrishna-DK/Picfind/pull/8)   | Enforced PR size budget                  | Reviewed, false findings answered with CI evidence, approved and merged                     |
 | [9](https://github.com/DarshanKrishna-DK/Picfind/pull/9)   | Compare client selection requests        | Reviewed, export cancellation improved after review, re-reviewed, merged                    |
 | [10](https://github.com/DarshanKrishna-DK/Picfind/pull/10) | Offline face-score calibration reports   | Reviewed, exhaustive threshold and provenance tests added after review, re-reviewed, merged |
+| [11](https://github.com/DarshanKrishna-DK/Picfind/pull/11) | Photographer-defined selection counts    | Reviewed, gallery availability fixed after review, re-reviewed, merged                      |
 
-GitHub currently proves nine merges in this delivery batch. PRs #6, #9 and #10 were visibly
+GitHub currently proves ten merges in this delivery batch. PRs #6, #9, #10 and #11 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
