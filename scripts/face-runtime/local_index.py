@@ -222,6 +222,10 @@ class LocalIndex:
             if unseal(key, metadata["verifier"], metadata["database_id"].encode()) != b"picfind-local-index-v1":
                 raise ValueError("INDEX_AUTHENTICATION_FAILED")
             self.database_id = metadata["database_id"]
+            page_size = self.connection.execute("PRAGMA page_size").fetchone()[0]
+            page_limit = MAX_DATABASE_BYTES // page_size
+            if self.connection.execute(f"PRAGMA max_page_count={page_limit}").fetchone()[0] > page_limit:
+                raise ValueError("INDEX_SIZE_EXCEEDED")
             self.connection.execute("PRAGMA foreign_keys=ON")
             self.connection.execute("PRAGMA secure_delete=ON")
             self.connection.execute("PRAGMA synchronous=FULL")
@@ -318,6 +322,30 @@ class LocalIndex:
     def read_scope(self, selected_scope):
         with self.snapshot_scope(selected_scope) as snapshot:
             return snapshot["photos"]
+
+    def inspect_photo(self, selected_scope, photo_id, expected_pipeline):
+        """Authenticate one cached photo without materializing the full scope."""
+        canonical_uuid(photo_id)
+        if not hexadecimal(expected_pipeline):
+            raise ValueError("PIPELINE_INVALID")
+        with self.transaction():
+            saved_scope = self.scope_row(selected_scope)
+            if not saved_scope:
+                return None
+            if saved_scope["retired"]:
+                raise ValueError("SCOPE_RETIRED")
+            if saved_scope["pipeline_id"] != expected_pipeline:
+                raise ValueError("SCOPE_PIPELINE_INCOMPATIBLE")
+            row = self.connection.execute(
+                f"SELECT {PHOTO_COLUMNS} FROM photos WHERE kind=? AND scope_id=? AND photo_id=?",
+                (*selected_scope, photo_id),
+            ).fetchone()
+            if not row:
+                return None
+            if row["removed"]:
+                raise ValueError("PHOTO_RETIRED")
+            return {"artifact": self.decode_photo(selected_scope, saved_scope, row),
+                    "artifact_digest": row["artifact_digest"]}
 
     def stats(self, selected_scope):
         with self.transaction():

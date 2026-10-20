@@ -315,3 +315,81 @@ sample floors, held-out failure, pipeline mismatches, denied cross-scope queries
 retired photos/scopes, consistent snapshots, exclusive output and private
 projections. No real event dataset has been evaluated and no recognition accuracy
 claim follows from these tests.
+
+## Resumable local batch indexing
+
+`batch_index.py` processes an explicit manifest of 1 to 100 JPEGs into an
+existing encrypted index. It starts one pinned CPU extraction worker at a time.
+Face artifacts pass through subprocess memory directly into authenticated
+encryption; this command does not create plaintext extraction JSON files.
+It does not create PicFind gallery records, call AWS, download models or activate
+the local provider in the web application.
+
+The manifest has exactly these top-level fields:
+
+| Field               | Value                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `schema_version`    | Integer `1`                                                                              |
+| `scope`             | `{ "kind": "event" or "scan", "id": "canonical UUID" }`, matching the explicit CLI scope |
+| `pipeline_id`       | Current extraction pipeline digest for the selected side/thread settings                 |
+| `consent_reference` | Pseudonymous operator authorization reference, 1 to 128 safe characters                  |
+| `photos`            | 1 to 100 objects with unique `photo_id` and `input` paths                                |
+
+Each photo has `photo_id` (canonical UUID), `input` (forward-slash relative JPEG
+path below `--root`) and `sha256` (the expected lowercase SHA-256 of the source
+bytes). Optional `expected_digest` authorizes replacing exactly that previously
+indexed artifact version. Do not put participant names or contact data in consent
+references. An operator-supplied reference is not independently verified consent.
+
+Obtain the current pipeline ID from an extraction artifact or print it without
+loading models:
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe -c "import sys; sys.path.insert(0, 'scripts/face-runtime'); import extract; print(extract.digest_json(extract.pipeline(1280, 2)))"
+```
+
+Use a private, non-synced source root, manifest, key, database and report
+directory for real consented data. The following paths are generated-fixture
+examples only:
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/batch_index.py --manifest artifacts/private-evaluation/manifest.json --root artifacts/private-evaluation/photos --models-dir artifacts/face-models --database artifacts/private-evaluation/index.sqlite --key-file artifacts/private-evaluation/index.key --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00 --output artifacts/private-evaluation/batch-report.json --timeout 30 --deadline 600
+```
+
+The manifest shape and path containment are checked before any photo write.
+Absolute paths, traversal, symbolic links/junctions and UNC source roots are
+rejected. Use a local directory, not a mapped network drive. This is a trusted
+operator tool, not a filesystem sandbox against a hostile OS account.
+
+The extractor retains its 10 MiB JPEG, 16-million-pixel, 100-face and 1-to-4-thread
+bounds. `--timeout` bounds each native worker to 1 through 120 seconds.
+`--deadline` accepts 1 through 3,600 seconds and starts after manifest validation.
+The remaining processing budget limits worker timeouts and is checked before
+imports and between photos. Filesystem operations, SQLite commits and report
+publication are not hard real-time operations or OS memory limits.
+[SQLite page limits](https://www.sqlite.org/pragma.html#pragma_max_page_count)
+also enforce the existing 2 GiB main-database ceiling during
+writes. Temporary journals and source files are separate disk usage. An import
+that exceeds the database limit rolls back rather than leaving an oversized
+database that cannot be reopened by the normal tooling.
+
+If the authenticated cached artifact already matches the pinned source hash,
+pipeline and consent reference, a retry skips inference. It still re-enters the
+index write transaction, so a concurrent replacement or erasure cannot resurrect
+retired data. Changed inputs or consent references require the expected artifact
+digest; incompatible pipelines and retired scopes fail. No source image is
+deleted or rewritten.
+
+Each photo commits independently. A bad image produces a failed row while other
+photos can finish. Exit status `0` means all rows are stored or unchanged;
+status `1` includes partial results or a command failure. The report has photo
+UUIDs, outcomes, counts and manifest/pipeline/artifact digests, but no source
+paths, filenames, consent values or vectors. stdout contains aggregate counts
+only. Output publication is exclusive. If report publication fails after valid
+photo commits, preserve the database and retry with a new report path.
+
+Tests use generated vectors and temporary encrypted indexes. A separate native
+smoke used two generated blank JPEGs plus an invalid JPEG: two committed and one
+failed. After repairing that generated fixture, the next process stored one and
+reused two, leaving three indexed photos with zero faces. This verifies runtime
+and recovery behavior, not recognition accuracy.
