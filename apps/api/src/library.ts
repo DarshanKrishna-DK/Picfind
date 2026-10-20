@@ -72,6 +72,7 @@ import { createStudioClients } from './studio-clients.js';
 import { createStudioProjects } from './studio-projects.js';
 import { createStudioQuestionnaires } from './studio-questionnaires.js';
 import { createCreditPresets } from './credit-presets.js';
+import { createStudioEnquiries } from './studio-enquiries.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
 import {
@@ -164,6 +165,8 @@ export interface LibraryRecord {
     | 'studio-questionnaire'
     | 'questionnaire-response'
     | 'photographer-credit-preset'
+    | 'studio-enquiry-form'
+    | 'studio-enquiry'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -212,6 +215,11 @@ export interface LibraryRecord {
   questionnaireRemovalStartedAt?: string;
   creditPreset?: import('../../../packages/shared/src/credit-presets.js').SavedCreditPreset;
   creditPresetCommandDigest?: string;
+  enquiryForm?: import('../../../packages/shared/src/studio-enquiries.js').EnquiryForm;
+  enquiryFormCommandDigest?: string;
+  studioEnquiry?: import('../../../packages/shared/src/studio-enquiries.js').Enquiry;
+  enquirySubmissionDigest?: string;
+  enquiryUpdateDigest?: string;
   milestoneCommandDigest?: string;
   projectRemovalStartedAt?: string;
   studioMilestone?: import('../../../packages/shared/src/studio-milestones.js').SavedMilestone;
@@ -712,6 +720,7 @@ export function createLibraryRouter(
   router.use(createStudioProjects(store, owner));
   router.use(createStudioQuestionnaires(auth, store, owner));
   router.use(createCreditPresets(store, owner));
+  router.use(createStudioEnquiries(store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
   router.use(createEventReadiness(options, owner));

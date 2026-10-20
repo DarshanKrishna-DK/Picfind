@@ -18,6 +18,7 @@ import { HighlightsPage } from './features/highlights';
 import { HighlightWall } from './features/highlight-wall';
 import { StudioClients } from './features/studio-clients';
 import { PhotographerCredits } from './features/credit-presets';
+import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioProjects } from './features/studio-projects';
 import { ProjectQuestionnaires } from './features/project-questionnaires';
 import { StudioWork } from './features/studio-work';
@@ -55,6 +56,7 @@ export function Product() {
         <Route path="e/:eventId" element={<SharedEvent />} />
         <Route path="invite/:eventId" element={<PublishedInvitationPage />} />
         <Route path="invite/:eventId/response" element={<GuestRsvpPage />} />
+        <Route path="enquire/:id" element={<PublicEnquiry />} />
         <Route path="highlights/:eventId" element={<HighlightsPage />} />
         <Route
           path="questionnaires/:id"
@@ -82,6 +84,7 @@ export function Product() {
         <Route path="library" element={<LibraryPage />} />
         <Route path="clients" element={<StudioClients />} />
         <Route path="credits" element={<PhotographerCredits />} />
+        <Route path="enquiries" element={<StudioEnquiries />} />
         <Route path="projects" element={<StudioProjects />} />
         <Route
           path="projects/:projectId/questionnaires"

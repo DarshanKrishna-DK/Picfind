@@ -1,0 +1,76 @@
+.enquiry-desk,
+.enquiry-public,
+.enquiry-editor {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.enquiry-form {
+  display: grid;
+  gap: 1rem;
+}
+.enquiry-form label:not(.enquiry-checkbox) {
+  display: grid;
+  gap: 0.4rem;
+}
+.enquiry-form input:not([type='checkbox']),
+.enquiry-form textarea,
+.enquiry-form select,
+.enquiry-controls input,
+.enquiry-controls select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 8px;
+  background: var(--surface, white);
+  color: inherit;
+  font: inherit;
+}
+.enquiry-form textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+.enquiry-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.7rem;
+  margin-block: 0.8rem;
+}
+.enquiry-controls label {
+  display: grid;
+  flex: 1 1 180px;
+  min-width: 0;
+  gap: 0.4rem;
+}
+.enquiry-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+.enquiry-checkbox input {
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+}
+.enquiry-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1rem;
+}
+.enquiry-list article,
+.enquiry-editor {
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-block: 1rem;
+}
+.enquiry-editor dd {
+  margin-left: 0;
+  margin-bottom: 0.7rem;
+}
+.enquiry-text {
+  white-space: pre-wrap;
+}
+.enquiry-public {
+  max-width: 760px;
+}
