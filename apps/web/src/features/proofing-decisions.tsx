@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
+import { ProofingSubmissions } from './proofing-submissions';
 import type { InvitedCollection } from '../../../../packages/shared/src/collection-invitation';
 import {
   PROOFING_DECISIONS,
@@ -37,6 +38,7 @@ export function ClientCollectionReview({
   const key = ['client-decisions', invitationId, accountId];
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [submissionBusy, setSubmissionBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState('');
@@ -49,19 +51,21 @@ export function ClientCollectionReview({
     queryFn: ({ signal }) => api<ProofingDecisions>(root, { signal }),
     gcTime: 0,
     staleTime: 0,
-    refetchInterval: busy ? false : 30_000,
-    refetchOnWindowFocus: !busy,
+    refetchInterval: busy || submissionBusy ? false : 30_000,
+    refetchOnWindowFocus: !busy && !submissionBusy,
   });
   async function save(photoId: string, status: ProofingDecision | null) {
     if (
       operation.current ||
       busy ||
+      submissionBusy ||
       conflict ||
       query.isFetching ||
       !query.data ||
       query.error
     )
       return;
+    if (query.data.submitted) return;
     operation.current = true;
     const expectedVersion = query.data.version;
     setBusy(true);
@@ -98,7 +102,7 @@ export function ClientCollectionReview({
     }
   }
   async function refresh() {
-    if (operation.current || query.isFetching) return;
+    if (operation.current || submissionBusy || query.isFetching) return;
     operation.current = true;
     setBusy(true);
     try {
@@ -129,14 +133,14 @@ export function ClientCollectionReview({
     <section aria-label="Your photo decisions">
       <h2>Your photo decisions</h2>
       <p>
-        Mark photos for your photographer. These are saved draft choices, not a
-        final submission.
+        Mark photos for your photographer. Saved choices remain drafts until you
+        submit your final favorites.
       </p>
       <ErrorNote error={query.error ?? error} />
       <p role="status">{message}</p>
       <button
         className="button secondary"
-        disabled={busy || query.isFetching}
+        disabled={busy || submissionBusy || query.isFetching}
         onClick={() => void refresh()}
       >
         Refresh saved decisions
@@ -148,6 +152,12 @@ export function ClientCollectionReview({
         !accessDenied &&
         query.data && (
           <>
+            {query.data.submitted && (
+              <p>
+                Round {query.data.submitted.round} is submitted. Ask your
+                photographer to reopen it before changing choices.
+              </p>
+            )}
             <p>
               {
                 photos.filter((photo) => saved.get(photo.id) === 'favorite')
@@ -206,7 +216,13 @@ export function ClientCollectionReview({
                       Decision for {photo.filename}
                       <select
                         value={saved.get(photo.id) ?? ''}
-                        disabled={busy || conflict || query.isFetching}
+                        disabled={
+                          busy ||
+                          submissionBusy ||
+                          conflict ||
+                          query.isFetching ||
+                          Boolean(query.data?.submitted)
+                        }
                         onChange={(event) =>
                           void save(
                             photo.id,
@@ -227,6 +243,13 @@ export function ClientCollectionReview({
                 );
               })}
             </div>
+            <ProofingSubmissions
+              root={`/proofing-invitations/${invitationId}/submission`}
+              accountId={accountId}
+              disabled={busy || conflict || query.isFetching}
+              onBusy={setSubmissionBusy}
+              onChanged={() => query.refetch()}
+            />
           </>
         )
       )}
@@ -278,7 +301,10 @@ export function OwnerClientDecisions({
             query.data && (
               <>
                 <p>
-                  Saved draft choices. Last update:{' '}
+                  {query.data.submitted
+                    ? 'Submitted choices.'
+                    : 'Saved draft choices.'}{' '}
+                  Last update:{' '}
                   {query.data.updatedAt
                     ? new Date(query.data.updatedAt).toLocaleString()
                     : 'No choices saved yet'}
@@ -296,6 +322,12 @@ export function OwnerClientDecisions({
                     ))}
                   </ul>
                 )}
+                <ProofingSubmissions
+                  root={`${root}/${invitationId}/submission`}
+                  accountId="owner"
+                  owner
+                  onChanged={() => query.refetch()}
+                />
               </>
             )
           )}

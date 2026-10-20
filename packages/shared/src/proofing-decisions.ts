@@ -4,5 +4,6 @@ export interface ProofingDecisions {
   version: number;
   updatedAt: string | null;
   unavailableCount: number;
+  submitted?: { id: string; round: number; submittedAt: string };
   decisions: { photoId: string; filename: string; status: ProofingDecision }[];
 }

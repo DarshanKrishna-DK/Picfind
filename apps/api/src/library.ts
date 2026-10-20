@@ -127,6 +127,7 @@ export interface LibraryRecord {
     | 'proofing-collection'
     | 'collection-invitation'
     | 'proofing-comment'
+    | 'proofing-submission'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -145,6 +146,11 @@ export interface LibraryRecord {
   }[];
   proofingDecisionVersion?: number;
   proofingDecisionUpdatedAt?: string;
+  proofingRound?: number;
+  proofingSubmission?: import('../../../packages/shared/src/proofing-submission.js').StoredProofingSubmission;
+  proofingReopenedFrom?: string;
+  proofingReopenReason?: string;
+  submissionInvitationId?: string;
   commentInvitationId?: string;
   commentPhotoId?: string;
   commentAuthorId?: string;
