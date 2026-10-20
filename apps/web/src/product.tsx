@@ -21,6 +21,10 @@ import { PhotographerCredits } from './features/credit-presets';
 import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioServices } from './features/studio-services';
 import { StudioExpenses } from './features/studio-expenses';
+import {
+  StudioPortfolio,
+  PublicPhotographerPortfolio,
+} from './features/studio-portfolio';
 import { StudioProjects } from './features/studio-projects';
 import { ProjectQuestionnaires } from './features/project-questionnaires';
 import { ProjectProposals } from './features/project-proposals';
@@ -60,6 +64,7 @@ export function Product() {
         <Route path="invite/:eventId" element={<PublishedInvitationPage />} />
         <Route path="invite/:eventId/response" element={<GuestRsvpPage />} />
         <Route path="enquire/:id" element={<PublicEnquiry />} />
+        <Route path="portfolio/:id" element={<PublicPhotographerPortfolio />} />
         <Route path="highlights/:eventId" element={<HighlightsPage />} />
         <Route path="proposals/:id" element={<ProjectProposals client />} />
         <Route
@@ -89,6 +94,7 @@ export function Product() {
         <Route path="clients" element={<StudioClients />} />
         <Route path="services" element={<StudioServices />} />
         <Route path="expenses" element={<StudioExpenses />} />
+        <Route path="portfolio" element={<StudioPortfolio />} />
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
         <Route path="projects" element={<StudioProjects />} />

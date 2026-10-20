@@ -1,0 +1,166 @@
+.portfolio-editor {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+.portfolio-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.4rem;
+}
+.portfolio-fields label,
+.portfolio-selection label,
+.portfolio-library > label {
+  display: grid;
+  gap: 0.5rem;
+}
+.portfolio-fields input,
+.portfolio-fields textarea,
+.portfolio-fields select,
+.portfolio-selection input,
+.portfolio-library input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line, #d4d8dc);
+  border-radius: 0.6rem;
+  background: var(--surface, white);
+  color: inherit;
+  font: inherit;
+}
+.portfolio-fields textarea {
+  resize: vertical;
+}
+.portfolio-publication,
+.portfolio-publish,
+.portfolio-library {
+  padding: 1.4rem;
+}
+.portfolio-publication {
+  display: grid;
+  gap: 0.7rem;
+}
+.portfolio-selection,
+.portfolio-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-block: 1rem;
+}
+.portfolio-selection article,
+.portfolio-choices button {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.portfolio-selection img,
+.portfolio-choices img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+.portfolio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.portfolio-publish > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  line-height: 1.5;
+}
+.portfolio-publish input {
+  margin-top: 0.3rem;
+  flex: none;
+}
+.photographer-portfolio {
+  padding: clamp(1.5rem, 5vw, 5rem);
+  color: #24302c;
+  background: #f4f1e9;
+  min-height: 70vh;
+}
+.portfolio-theme-forest {
+  color: #eef5ec;
+  background: #163c32;
+}
+.portfolio-theme-midnight {
+  color: #f2f3f7;
+  background: #171c2a;
+}
+.photographer-portfolio > header {
+  max-width: 780px;
+  margin: 0 auto 3rem;
+  text-align: center;
+}
+.photographer-portfolio h1 {
+  font-size: clamp(2.25rem, 6vw, 5rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+.portfolio-tagline {
+  font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+}
+.portfolio-biography {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.photographer-portfolio p,
+.photographer-portfolio .eyebrow {
+  color: inherit;
+}
+.photographer-portfolio .button {
+  color: inherit;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.portfolio-public-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  max-width: 1400px;
+  margin: auto;
+}
+.portfolio-public-gallery figure {
+  margin: 0;
+  min-width: 0;
+}
+.portfolio-public-gallery figure:first-child {
+  grid-column: 1 / -1;
+}
+.portfolio-public-gallery img {
+  width: 100%;
+  height: auto;
+  max-height: 85vh;
+  object-fit: contain;
+  display: block;
+}
+.portfolio-public-gallery figcaption {
+  padding-top: 0.75rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.photographer-portfolio > footer {
+  text-align: center;
+  padding-top: 3rem;
+  font-size: 0.85rem;
+}
+@media (max-width: 760px) {
+  .portfolio-fields,
+  .portfolio-selection,
+  .portfolio-public-gallery {
+    grid-template-columns: 1fr;
+  }
+  .portfolio-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .portfolio-selection article,
+  .portfolio-choices button {
+    padding: 0.7rem;
+  }
+}

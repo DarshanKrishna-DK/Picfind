@@ -8,6 +8,7 @@ describe('authentication return destinations', () => {
     '/app/enquiries',
     '/app/services',
     '/app/expenses',
+    '/app/portfolio',
     '/app/credits',
     '/app/projects',
     '/app/projects/ad851772-ef2a-46a2-8f66-066975c7b0aa/questionnaires',
