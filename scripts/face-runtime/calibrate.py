@@ -26,6 +26,11 @@ def validate(document):
         raise ValueError("SCHEMA_VERSION_REQUIRED")
     if document.get("score_kind") != "cosine_similarity":
         raise ValueError("COSINE_SCORE_REQUIRED")
+    if "pipeline_id" in document and (
+        not isinstance(document["pipeline_id"], str)
+        or not re.fullmatch(r"[0-9a-f]{64}", document["pipeline_id"])
+    ):
+        raise ValueError("PIPELINE_CHECKSUM_INVALID")
     if not isinstance(document.get("model_sha256"), str) or not re.fullmatch(
         r"[0-9a-f]{64}", document["model_sha256"]
     ):
@@ -127,6 +132,7 @@ def report(document, target):
     return {
         "schema_version": 1,
         "model_sha256": document["model_sha256"],
+        **({"pipeline_id": document["pipeline_id"]} if "pipeline_id" in document else {}),
         "score_kind": "cosine_similarity",
         "comparison": "score >= threshold",
         "candidate_threshold": threshold,

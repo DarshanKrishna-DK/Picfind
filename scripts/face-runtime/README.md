@@ -258,3 +258,60 @@ prints counts, status and artifact/pipeline digests only. The internal
 `read_scope` method is for the next scoped-search implementation; it is not an
 HTTP endpoint. Production matching remains disabled pending calibrated search,
 authenticated service integration, consent and operational lifecycle review.
+
+## Calibrated scoped evaluation search
+
+`search.py` searches one encrypted event/scan scope using an extracted
+single-face reference. It reads no original photos and performs no model
+downloads, cloud requests or production-provider changes. First extract the
+operator-authorized reference with `extract.py --mode reference` and the same
+scope, resize/thread settings and model pipeline as the indexed photos.
+
+The score dataset described under offline calibration must additionally contain
+`pipeline_id`, exactly matching the reference artifact, and `model_sha256` must
+match the pinned SFace recognizer. The calibration report still supports older
+datasets without a pipeline ID, but search rejects them. The CLI recomputes the
+candidate cutoff from the dataset rather than trusting a manually edited report
+or accepting an arbitrary similarity cutoff.
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/search.py --database artifacts/private-evaluation/index.sqlite --key-file artifacts/private-evaluation/index.key --scope-kind event --scope-id 55bda43c-4bde-4e1f-a9b5-16188acc9f00 --reference artifacts/private-evaluation/reference-faces.json --scores artifacts/private-evaluation/scores.json --output artifacts/private-evaluation/search-results.json --target-fmr 0.001 --limit 100
+```
+
+These paths are examples for generated fixtures. Real consented data belongs in
+the private, non-synced workspace described above. The output directory must
+exist and the output file must be new.
+
+The default floor requires 100 genuine and 1,000 impostor pairs in each of the
+identity-disjoint calibration and test partitions. `--allow-small-evaluation`
+explicitly permits tiny synthetic fixtures and marks the result accordingly.
+The flag does not waive model/pipeline checks, identity separation, finite scores
+or the held-out false-match check. A floor is a sanity check, not a statistical
+accuracy guarantee. Operator-supplied labels, consent and representativeness
+remain unverified.
+
+The cutoff is selected on calibration data only. Search is rejected if the
+held-out false-match rate exceeds the requested target. A reject-all calibration
+produces no matches. Low genuine-match recall is reported in the evaluation
+metadata and must be assessed separately. No successful result enables production
+matching.
+
+Search authenticates one SQLite snapshot, compares cosine similarity against the
+candidate cutoff inclusively, keeps the strongest qualifying face per photo and
+sorts by score then photo UUID. `--limit` accepts 1 to 500; results report whether
+qualifying photos were truncated. The snapshot digest changes with the indexed
+photo/artifact set. An erasure committed before the snapshot excludes its data.
+Saved results describe that historical snapshot, not current gallery access;
+they must never be used as an authorization grant.
+
+The private JSON contains matching photo UUIDs/scores, counts, snapshot/pipeline
+digests and the calibration summary with exact dataset digest. It contains no
+vectors, crops, identity labels or consent-reference values. stdout shows counts
+and the small-evaluation/production-disabled flags. The reference and score files
+are not deleted automatically; the operator manages their retention.
+
+Synthetic tests cover deduplication, ranking, inclusive cutoff, reject-all,
+sample floors, held-out failure, pipeline mismatches, denied cross-scope queries,
+retired photos/scopes, consistent snapshots, exclusive output and private
+projections. No real event dataset has been evaluated and no recognition accuracy
+claim follows from these tests.

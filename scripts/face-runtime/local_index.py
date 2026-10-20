@@ -61,7 +61,7 @@ def decode(payload):
         raise ValueError("ARTIFACT_JSON_INVALID") from None
 
 
-def validate_artifact(data, expected_scope):
+def validate_artifact(data, expected_scope, expected_mode="photo"):
     required = {"schema_version", "scope", "photo_id", "consent_reference", "mode",
                 "input_sha256", "input_dimensions", "pipeline_id", "pipeline",
                 "faces", "quality_evaluated", "detector_dimensions"}
@@ -70,8 +70,8 @@ def validate_artifact(data, expected_scope):
     if data["scope"] != {"kind": expected_scope[0], "id": expected_scope[1]}:
         raise ValueError("ARTIFACT_SCOPE_MISMATCH")
     canonical_uuid(data["photo_id"])
-    if data["mode"] != "photo" or data["quality_evaluated"] is not False:
-        raise ValueError("PHOTO_ARTIFACT_REQUIRED")
+    if expected_mode not in ("photo", "reference") or data["mode"] != expected_mode or data["quality_evaluated"] is not False:
+        raise ValueError("PHOTO_ARTIFACT_REQUIRED" if expected_mode == "photo" else "REFERENCE_ARTIFACT_REQUIRED")
     if not hexadecimal(data["input_sha256"]) or not hexadecimal(data["pipeline_id"]):
         raise ValueError("ARTIFACT_DIGEST_INVALID")
     consent = data["consent_reference"]
@@ -99,6 +99,8 @@ def validate_artifact(data, expected_scope):
     faces = data["faces"]
     if not isinstance(faces, list) or len(faces) > 100:
         raise ValueError("ARTIFACT_FACE_COUNT_INVALID")
+    if expected_mode == "reference" and len(faces) != 1:
+        raise ValueError("SINGLE_FACE_REFERENCE_REQUIRED")
     previous = None
     for index, face in enumerate(faces):
         if not isinstance(face, dict) or set(face) != {"id", "detection", "embedding"}:
@@ -122,12 +124,12 @@ def validate_artifact(data, expected_scope):
     return data
 
 
-def load_artifact(path, expected_scope):
+def load_artifact(path, expected_scope, expected_mode="photo"):
     with Path(path).open("rb") as stream:
         payload = stream.read(MAX_OUTPUT + 1)
     if len(payload) > MAX_OUTPUT:
         raise ValueError("ARTIFACT_TOO_LARGE")
-    return validate_artifact(decode(payload), expected_scope)
+    return validate_artifact(decode(payload), expected_scope, expected_mode)
 
 
 def create_key(path):
@@ -295,7 +297,8 @@ class LocalIndex:
             raise ValueError("INDEX_ARTIFACT_CORRUPT")
         return artifact
 
-    def read_scope(self, selected_scope):
+    @contextmanager
+    def snapshot_scope(self, selected_scope):
         with self.transaction():
             saved_scope = self.scope_row(selected_scope)
             if not saved_scope or saved_scope["retired"]:
@@ -303,7 +306,16 @@ class LocalIndex:
             rows = self.connection.execute(f"SELECT {PHOTO_COLUMNS} FROM photos WHERE kind=? AND scope_id=? AND removed=0 ORDER BY photo_id LIMIT ?", (*selected_scope, MAX_PHOTOS + 1)).fetchall()
             if len(rows) > MAX_PHOTOS or sum(row["face_count"] for row in rows) > MAX_FACES:
                 raise ValueError("SCOPE_CAPACITY_EXCEEDED")
-            return [self.decode_photo(selected_scope, saved_scope, row) for row in rows]
+            photos = [self.decode_photo(selected_scope, saved_scope, row) for row in rows]
+            yield {
+                "pipeline_id": saved_scope["pipeline_id"],
+                "snapshot_sha256": digest_json([list(selected_scope), saved_scope["pipeline_id"], [[row["photo_id"], row["artifact_digest"]] for row in rows]]),
+                "photos": photos,
+            }
+
+    def read_scope(self, selected_scope):
+        with self.snapshot_scope(selected_scope) as snapshot:
+            return snapshot["photos"]
 
     def stats(self, selected_scope):
         with self.transaction():
