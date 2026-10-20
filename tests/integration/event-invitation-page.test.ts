@@ -285,6 +285,65 @@ describe('explicit event invitation publication', () => {
       expect(f.store.put).toHaveBeenCalledTimes(1);
     }
   });
+  it('keeps an owner snapshot version-bound when publication changes during its event recheck', async () => {
+    const f = fixture();
+    await f.save({ action: 'publish' }).expect(200);
+    const original = f.store.get;
+    let eventReads = 0;
+    f.store.get = async (id) => {
+      if (id === f.event.id && ++eventReads === 2) {
+        const current = f.stored().invitationPage!;
+        current.version++;
+        current.draft = { ...current.draft, address: 'New private address' };
+        current.published = {
+          fields: { ...current.draft, address: 'New published address' },
+          revision: current.version,
+          publishedAt: current.updatedAt,
+        };
+      }
+      return original(id);
+    };
+    const snapshot = (await f.read().expect(200)).body.page;
+    expect(snapshot.version).toBe(1);
+    expect(snapshot.draft.address).toBe('Guest entrance');
+    f.store.get = original;
+    await f
+      .save({
+        version: snapshot.version,
+        action: 'publish',
+        fields: { ...snapshot.draft, address: 'Stale attempted overwrite' },
+      })
+      .expect(409);
+    expect(f.stored().invitationPage!.published!.fields.address).toBe(
+      'New published address',
+    );
+    expect(f.store.put).toHaveBeenCalledTimes(1);
+    expect((await f.read().expect(200)).body.page.version).toBe(2);
+  });
+  it('uses fresh event status for owner editability and rejects ownership loss during the final read', async () => {
+    for (const change of ['archive', 'owner', 'delete']) {
+      const f = fixture();
+      await f.save({ action: 'publish' }).expect(200);
+      const original = f.store.get;
+      let eventReads = 0;
+      f.store.get = async (id) => {
+        if (id === f.event.id && ++eventReads === 2) {
+          if (change === 'archive') f.event.archived = true;
+          if (change === 'owner') f.event.ownerId = 'other';
+          if (change === 'delete')
+            f.event.deletionStartedAt = new Date().toISOString();
+        }
+        return original(id);
+      };
+      if (change === 'archive') {
+        const response = await f.read().expect(200);
+        expect(response.body.editable).toBe(false);
+        expect(response.body.page.draft).toEqual(f.fields);
+        await f.publicRead().expect(404);
+      } else await f.read().expect(404);
+      expect(f.store.put).toHaveBeenCalledTimes(1);
+    }
+  });
   it('keeps timestamps monotonic after clock rollback and deletes the page with its event', async () => {
     const f = fixture();
     await f.save({ action: 'publish' }).expect(200);
