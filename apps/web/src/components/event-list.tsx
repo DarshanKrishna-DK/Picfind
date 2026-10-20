@@ -119,9 +119,13 @@ export function EventList() {
             label="Filter events"
             value={status}
             onChange={(next) => filter('status', next)}
-            options={['All events', 'Private', 'Shared', 'Expired', 'Archived'].map(
-              (value) => ({ value, label: value }),
-            )}
+            options={[
+              'All events',
+              'Private',
+              'Shared',
+              'Expired',
+              'Archived',
+            ].map((value) => ({ value, label: value }))}
           />
         </label>
         <label>
