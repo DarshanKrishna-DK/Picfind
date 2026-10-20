@@ -130,7 +130,7 @@ async function fixture(page: Page) {
       const body = req.postDataJSON();
       expect(body.requestId).toMatch(/^[a-f0-9-]{36}$/);
       expect(body.consent).toBe(true);
-      expect(body.photoIds).toEqual(['source-0']);
+      expect(body.photoIds).toEqual(['source-0', 'source-1']);
       save(body.requestId as string);
       return route.fulfill(
         state.loseCreate
@@ -220,6 +220,7 @@ async function fixture(page: Page) {
 }
 async function enqueue(page: Page) {
   await page.getByLabel('Source 0.jpg', { exact: true }).check();
+  await page.getByLabel('Source 1.jpg', { exact: true }).check();
   await page.getByLabel('Reference selfie', { exact: true }).setInputFiles({
     name: 'synthetic.png',
     mimeType: 'image/png',
