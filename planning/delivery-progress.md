@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 13 pushed after review, 19 merged and
-reviewed, and 19 opened. This is a
+on 2026-10-20, Picfind had 14 pushed after review, 20 merged and
+reviewed, and 20 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 
 | PR                                                         | Outcome                                      | Merge and review evidence                                                                      |
@@ -31,8 +31,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [18](https://github.com/DarshanKrishna-DK/Picfind/pull/18) | Face-index provenance safeguards             | Reviewed, stale cache reference preservation fixed after review, re-reviewed, merged           |
 | [19](https://github.com/DarshanKrishna-DK/Picfind/pull/19) | Bounded local JPEG face extraction           | Reviewed, duplicate detection and publication failures fixed after review, re-reviewed, merged |
 | [20](https://github.com/DarshanKrishna-DK/Picfind/pull/20) | Private client-photographer photo discussion | Reviewed, retained quota and draft photo binding fixed after review, re-reviewed, merged       |
+| [21](https://github.com/DarshanKrishna-DK/Picfind/pull/21) | Encrypted local face-index persistence       | Reviewed, dependency hash verification added after review, re-reviewed, merged                 |
 
-GitHub currently proves nineteen merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19 and #20 were visibly
+GitHub currently proves twenty merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20 and #21 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
