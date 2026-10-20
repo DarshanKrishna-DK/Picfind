@@ -21,6 +21,7 @@ import { PhotographerCredits } from './features/credit-presets';
 import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioServices } from './features/studio-services';
 import { StudioExpenses } from './features/studio-expenses';
+import { EnquiryProjectHandoff } from './features/enquiry-handoff';
 import {
   StudioPortfolio,
   PublicPhotographerPortfolio,
@@ -97,6 +98,10 @@ export function Product() {
         <Route path="portfolio" element={<StudioPortfolio />} />
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
+        <Route
+          path="enquiries/:id/handoff"
+          element={<EnquiryProjectHandoff />}
+        />
         <Route path="projects" element={<StudioProjects />} />
         <Route
           path="projects/:projectId/proposals"

@@ -357,6 +357,12 @@ export function createStudioEnquiries(
     const result = await withAccountLock(accountId, async () => {
       const current = await owned(id, accountId);
       if (!current) throw unavailable();
+      if (current.row.enquiryHandoff?.status === 'pending')
+        throw new ApiError(
+          409,
+          'HANDOFF_PENDING',
+          'Resume or abandon the pending project handoff before editing this enquiry.',
+        );
       if (
         current.value.version === input.data.version + 1 &&
         current.row.enquiryUpdateDigest === digest
@@ -420,6 +426,12 @@ export function createStudioEnquiries(
     await withAccountLock(accountId, async () => {
       const current = await owned(id, accountId);
       if (!current) return;
+      if (current.row.enquiryHandoff?.status === 'pending')
+        throw new ApiError(
+          409,
+          'HANDOFF_PENDING',
+          'Resume or abandon the pending project handoff before removing this enquiry.',
+        );
       if (current.value.version !== input.data.version) throw changed();
       await getStore().remove(id);
     });
