@@ -52,6 +52,7 @@ import {
 } from './drive-oauth.js';
 import { mapFaceError } from './face-errors.js';
 import { createEventTools } from './event-tools.js';
+import { createPhotoNotes } from './photo-notes.js';
 import { createEventMembershipRouter } from './event-membership-router.js';
 import { memberEvents, requireEventAccess } from './event-membership-access.js';
 import { PHOTO_PLANS } from '../../../packages/shared/src/plans.js';
@@ -122,6 +123,9 @@ export interface LibraryRecord {
   brandingName?: string;
   accentColor?: string;
   selectedIds?: string[];
+  privatePhotoNote?: string;
+  privatePhotoNoteVersion?: number;
+  privatePhotoNoteUpdatedAt?: string;
   selectionMinimum?: number;
   selectionMaximum?: number;
   selectionClosesAt?: string;
@@ -604,6 +608,7 @@ export function createLibraryRouter(
   router.use(express.json({ limit: '512kb' }));
   router.use(createFolderSyncRouter(owner, options.folderSyncControls));
   router.use(createEventTools(auth, store, owner, saveEvent));
+  router.use(createPhotoNotes(store, owner));
   router.use(
     createEventMembershipRouter(auth, store, owner, options.billing, limits),
   );
