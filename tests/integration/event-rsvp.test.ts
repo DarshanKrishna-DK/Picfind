@@ -329,6 +329,48 @@ describe('private browser-receipt RSVP collection', () => {
     const fresh = (await a.get(f.guest).expect(200)).body;
     await f.save(a, fresh).expect(200);
   });
+  it.each(['before-delete', 'after-delete'] as const)(
+    'preserves withdrawal authority after an ambiguous %s storage failure',
+    async (mode) => {
+      const f = fixture(),
+        a = f.client();
+      await f.configure().expect(200);
+      const initial = (await f.prepare(a).expect(200)).body,
+        saved = (await f.save(a, initial).expect(200)).body;
+      f.publication.invitationPage!.published = null;
+      vi.mocked(f.store.remove).mockImplementationOnce(async (id) => {
+        if (mode === 'after-delete') f.records.delete(id);
+        throw new ApiError(503, 'STORAGE_UNAVAILABLE', 'Retry cleanup.');
+      });
+      const failed = await f.erase(a, saved).expect(503);
+      expect(failed.headers['set-cookie']).toBeUndefined();
+      expect(f.records.has(saved.receiptId)).toBe(mode === 'before-delete');
+      const retried = await f.erase(a, saved).expect(204);
+      expect(String(retried.headers['set-cookie'])).toContain(
+        'Expires=Thu, 01 Jan 1970',
+      );
+      expect(f.records.has(saved.receiptId)).toBe(false);
+      await f.erase(a, saved).expect(204);
+    },
+  );
+  it('preserves the receipt and newer response when an old tab requests withdrawal', async () => {
+    const f = fixture(),
+      a = f.client();
+    await f.configure().expect(200);
+    const initial = (await f.prepare(a).expect(200)).body,
+      saved = (await f.save(a, initial).expect(200)).body,
+      updated = (
+        await f.save(a, saved, { message: 'Keep this update.' }).expect(200)
+      ).body;
+    const stale = await f.erase(a, saved).expect(409);
+    expect(stale.headers['set-cookie']).toBeUndefined();
+    expect(f.store.remove).not.toHaveBeenCalled();
+    expect((await a.get(f.guest).expect(200)).body.response.message).toBe(
+      'Keep this update.',
+    );
+    await f.erase(a, updated).expect(204);
+    expect(f.records.has(saved.receiptId)).toBe(false);
+  });
   it('bounds responses without preventing existing guests from editing at capacity', async () => {
     const f = fixture(),
       a = f.client(),
