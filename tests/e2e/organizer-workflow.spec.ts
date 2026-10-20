@@ -9,6 +9,243 @@ import type { ProofingComment } from '../../packages/shared/src/proofing-comment
 import type { ProofingSubmissionState } from '../../packages/shared/src/proofing-submission';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
+test('submitted round exports reauthorize, preserve round identity and omit private or unavailable data', async ({
+  page,
+}) => {
+  // Two complete owner visits and multiple downloads need time on mobile WebKit.
+  test.setTimeout(60_000);
+  const { eventId, photos } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const submissionId = '88888888-8888-4888-8888-888888888888';
+  const oldId = '99999999-9999-4999-8999-999999999999';
+  const ownerRoot = `/api/events/${eventId}/proofing-collections`;
+  const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+  let reads = 0,
+    failure = 0,
+    hold = false,
+    finishedHeld = false;
+  let release: (() => void) | undefined;
+  const downloaded: string[] = [];
+  page.on('download', (download) =>
+    downloaded.push(download.suggestedFilename()),
+  );
+  const current: ProofingSubmissionState = {
+    round: 2,
+    decisionVersion: 5,
+    collectionVersion: 3,
+    reopenReason: 'Private client reason',
+    canReopen: false,
+    current: {
+      id: submissionId,
+      round: 2,
+      submittedAt: expiresAt,
+      decisionVersion: 5,
+      collectionVersion: 2,
+      note: 'Private client note',
+      favoriteCount: 3,
+      unavailableCount: 1,
+      photos: photos.map((photo) => ({
+        photoId: photo.id,
+        filename: 'duplicate.jpg',
+      })),
+    },
+    history: [
+      {
+        id: oldId,
+        round: 1,
+        submittedAt: expiresAt,
+        decisionVersion: 1,
+        collectionVersion: 1,
+        note: 'Earlier private note',
+        favoriteCount: 1,
+        unavailableCount: 0,
+        photos: [{ photoId: photos[1]!.id, filename: 'Earlier.jpg' }],
+      },
+    ],
+  };
+  await page.route(`**${ownerRoot}`, (route) =>
+    route.fulfill({
+      json: {
+        limit: 50,
+        collections: [
+          {
+            id: collectionId,
+            title: 'Editing album',
+            version: 3,
+            createdAt: expiresAt,
+            updatedAt: expiresAt,
+            photoIds: photos.map((photo) => photo.id),
+            photos,
+            unavailableCount: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${ownerRoot}/${collectionId}/invitations`, (route) =>
+    route.fulfill({
+      json: {
+        invitations: [
+          {
+            id: invitationId,
+            email: 'client@example.test',
+            createdAt: expiresAt,
+            expiresAt,
+            revokedAt: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/**/decisions', (route) =>
+    route.fulfill({
+      json: {
+        version: 5,
+        updatedAt: expiresAt,
+        decisions: [],
+        unavailableCount: 0,
+        submitted: { id: submissionId, round: 2, submittedAt: expiresAt },
+      },
+    }),
+  );
+  await page.route('**/api/**/submission', async (route) => {
+    reads += 1;
+    expect(route.request().method()).toBe('GET');
+    if (hold) {
+      hold = false;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      try {
+        await route.fulfill({ json: current });
+      } finally {
+        finishedHeld = true;
+      }
+      return;
+    }
+    if (failure)
+      return route.fulfill({
+        status: failure,
+        json: { error: { message: 'Export unavailable.' } },
+      });
+    return route.fulfill({ json: current });
+  });
+  async function openHistory() {
+    await page.goto(`/app/events/${eventId}`);
+    await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Client invitations for Editing album' })
+      .click();
+    await page
+      .getByRole('button', { name: 'View decisions from client@example.test' })
+      .click();
+    await page.getByRole('button', { name: 'View submitted rounds' }).click();
+    await expect(
+      page.getByRole('article', { name: 'Submitted round 2' }),
+    ).toBeVisible();
+  }
+  await openHistory();
+  const panel = page.getByRole('region', {
+    name: 'Client submission history',
+    exact: true,
+  });
+  const round = panel.getByRole('article', { name: 'Submitted round 2' });
+  const csv = round.getByRole('button', {
+    name: 'Export round 2 filenames CSV',
+  });
+  const txt = round.getByRole('button', {
+    name: 'Export round 2 filenames TXT',
+  });
+  const before = reads;
+  let downloadEvent = page.waitForEvent('download');
+  await csv.click();
+  let download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe(
+    `picfind-round-2-${submissionId}.csv`,
+  );
+  const duplicateCsv = await readFile((await download.path())!, 'utf8');
+  expect(duplicateCsv).toContain(`"${photos[0]!.id}","duplicate.jpg"`);
+  expect(duplicateCsv).toContain(`"${photos[1]!.id}","duplicate.jpg"`);
+  expect(duplicateCsv).not.toMatch(
+    /Private|client@example|Earlier|note|reason/,
+  );
+  expect(reads).toBe(before + 1);
+  await expect(round).toContainText('1 unavailable photo omitted.');
+  await expect(round).toContainText('Some filenames repeat.');
+
+  current.current!.photos = [
+    { photoId: photos[1]!.id, filename: '=SUM(1,2).jpg' },
+  ];
+  current.current!.unavailableCount = 2;
+  downloadEvent = page.waitForEvent('download');
+  await csv.click();
+  download = await downloadEvent;
+  const freshCsv = await readFile((await download.path())!, 'utf8');
+  expect(freshCsv).toContain(`"${photos[1]!.id}","'=SUM(1,2).jpg"`);
+  expect(freshCsv).not.toContain(photos[0]!.id);
+  await expect(round).toContainText('2 unavailable photos omitted.');
+
+  downloadEvent = page.waitForEvent('download');
+  await panel
+    .getByRole('button', { name: 'Export round 1 filenames TXT' })
+    .click();
+  download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe(`picfind-round-1-${oldId}.txt`);
+  expect(await readFile((await download.path())!, 'utf8')).toBe(
+    'Earlier.jpg\r\n',
+  );
+  const count = downloaded.length;
+  current.current!.photos[0]!.filename = 'line\nbreak.jpg';
+  await txt.click();
+  await expect(round).toContainText('Use CSV to preserve the filenames.');
+  expect(downloaded).toHaveLength(count);
+  current.current!.photos = [];
+  current.current!.unavailableCount = 3;
+  await csv.click();
+  await expect(round).toContainText(
+    'No selected photos are currently available to export.',
+  );
+  expect(downloaded).toHaveLength(count);
+  const retained = current.current!;
+  current.current = null;
+  await csv.click();
+  await expect(round).toContainText(
+    'This submitted round is no longer available.',
+  );
+  expect(downloaded).toHaveLength(count);
+  current.current = retained;
+  failure = 503;
+  await csv.click();
+  await expect(
+    round.getByText('Export unavailable.', { exact: true }),
+  ).toBeVisible();
+  expect(downloaded).toHaveLength(count);
+  failure = 404;
+  await csv.click();
+  await expect(panel.getByRole('article')).toHaveCount(0);
+  await expect(
+    panel.getByText('Export unavailable.', { exact: true }),
+  ).toBeVisible();
+  expect(downloaded).toHaveLength(count);
+
+  failure = 0;
+  current.current!.photos = [
+    { photoId: photos[0]!.id, filename: 'Current.jpg' },
+  ];
+  await openHistory();
+  hold = true;
+  await csv.click();
+  await expect.poll(() => Boolean(release)).toBe(true);
+  await expect(csv).toBeDisabled();
+  await expect(txt).toBeDisabled();
+  await page.goto('/app/events');
+  await expect(page.locator('.event-card')).toHaveCount(3);
+  release!();
+  await expect.poll(() => finishedHeld).toBe(true);
+  expect(downloaded).toHaveLength(count);
+});
+
 test('final proofing submission locks saved choices, retries safely and preserves reopened history', async ({
   page,
 }) => {
@@ -219,6 +456,9 @@ test('final proofing submission locks saved choices, retries safely and preserve
   await expect(
     panel.getByRole('article', { name: 'Submitted round 1' }),
   ).toContainText('1 submitted favorites');
+  await expect(panel.getByRole('button', { name: /Export round/ })).toHaveCount(
+    0,
+  );
 
   actor = 'owner';
   await page.goto(`/app/events/${eventId}`);
