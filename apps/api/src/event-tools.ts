@@ -18,6 +18,7 @@ import {
   SELECTION_STATUSES,
   type EventSelection,
   type SelectionReview,
+  type SelectionReceiptPage,
 } from '../../../packages/shared/src/proofing.js';
 import {
   DEFAULT_SELECTION_RULES,
@@ -424,6 +425,79 @@ export function createEventTools(
     });
     res.json({ review });
   });
+  router.get('/public/events/:id/my-selections', async (req, res) => {
+    const actor = await owner(req);
+    const event = await eventOf(req.params.id);
+    const query = z
+      .object({ cursor: z.uuid().optional() })
+      .strict()
+      .safeParse(req.query);
+    const invalidCursor = () =>
+      new ApiError(
+        400,
+        'INVALID_CURSOR',
+        'Refresh your request history to continue.',
+      );
+    if (!query.success) throw invalidCursor();
+    const requests = (await getStore().list(event.ownerId, 'job'))
+      .filter(
+        (row) =>
+          row.kind === 'job' &&
+          row.ownerId === event.ownerId &&
+          row.purpose === 'selection' &&
+          row.eventId === event.id &&
+          row.submittedById === actor &&
+          !row.deletionStartedAt,
+      )
+      .sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+      );
+    const cursorIndex = query.data.cursor
+      ? requests.findIndex((row) => row.id === query.data.cursor)
+      : -1;
+    if (query.data.cursor && cursorIndex < 0) throw invalidCursor();
+    const start = cursorIndex + 1;
+    const page = requests.slice(start, start + 25);
+    const photos = new Map(
+      (await getStore().list(event.ownerId, 'photo'))
+        .filter(
+          (photo) =>
+            photo.ownerId === event.ownerId &&
+            photo.eventId === event.id &&
+            !photo.deletionStartedAt &&
+            photoAvailable(photo),
+        )
+        .map((photo) => [photo.id, photo]),
+    );
+    const current = await eventOf(event.id);
+    if (!unlocked(req, current))
+      throw new ApiError(401, 'GALLERY_LOCKED', 'Unlock this gallery again.');
+    const result: SelectionReceiptPage = {
+      receipts: page.map((row) => {
+        const ids = [...new Set(row.selectedIds ?? [])];
+        const available = ids.flatMap((id) => {
+          const photo = photos.get(id);
+          return photo && photoAvailable(photo)
+            ? [{ id, filename: photo.filename ?? 'photo.jpg' }]
+            : [];
+        });
+        return {
+          id: row.id,
+          name: row.visitorName ?? '',
+          note: row.note ?? '',
+          createdAt: row.createdAt,
+          originalCount: ids.length,
+          unavailableCount: ids.length - available.length,
+          photos: available,
+        };
+      }),
+      nextCursor:
+        start + page.length < requests.length ? page.at(-1)!.id : null,
+    };
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(result);
+  });
   router.post(
     '/public/events/:id/selections',
     rateLimit({
@@ -434,6 +508,7 @@ export function createEventTools(
     }),
     async (req, res) => {
       const event = await eventOf(req.params.id);
+      const actor = await owner(req);
       const data = z
         .object({
           name: z.string().trim().min(1).max(100),
@@ -521,6 +596,7 @@ export function createEventTools(
             purpose: 'selection',
             eventId: event.id,
             selectedIds: ids,
+            submittedById: actor,
             visitorName: data.data.name,
             note: data.data.note,
             createdAt: new Date().toISOString(),

@@ -12,6 +12,7 @@ import {
   type SelectionCountRules,
 } from '../../../../packages/shared/src/selection-rules';
 import { SelectionRulesForm } from './selection-rules';
+import { SelectionHistory } from './selection-history';
 import type { SelectionWindow } from '../../../../packages/shared/src/selection-window';
 import {
   SelectionWindowForm,
@@ -140,6 +141,11 @@ export function GalleryAccess({
           if (result.error) throw result.error;
         }}
       />
+      <SelectionHistory
+        key={`${eventId}:${account.data.id}`}
+        eventId={eventId}
+        accountId={account.data.id}
+      />
     </div>
   );
 }
@@ -154,6 +160,7 @@ function GuestSelections({
   rules: SelectionCountRules | null;
   refreshRules: () => Promise<void>;
 }) {
+  const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const closed = useSelectionClosed(window);
   const photos = useQuery({
@@ -197,6 +204,9 @@ function GuestSelections({
       );
       setMessage(result.message);
       setSelected([]);
+      void client.invalidateQueries({
+        queryKey: ['selection-history', eventId],
+      });
     } catch (failure) {
       setError(failure);
       if (
