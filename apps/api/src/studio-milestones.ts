@@ -58,45 +58,6 @@ async function maybe(store: LibraryStore, id: string) {
     throw failure;
   }
 }
-// Delete only owned child records. A failure leaves the archived parent for retry.
-export async function removeProjectMilestones(
-  store: LibraryStore,
-  actorId: string,
-  projectId: string,
-  assertRemoval: () => Promise<void>,
-) {
-  const belongs = (row: LibraryRecord) =>
-    row.ownerId === actorId &&
-    row.kind === 'job' &&
-    row.purpose === 'studio-milestone' &&
-    !row.eventId &&
-    row.studioMilestone?.projectId === projectId;
-  const rows = (await store.list(actorId, 'job')).filter(belongs);
-  for (const row of rows) {
-    if (!z.uuid().safeParse(row.id).success)
-      throw new ApiError(
-        503,
-        'MILESTONE_METADATA_INVALID',
-        'A milestone identifier needs repair before project removal.',
-      );
-    const fresh = await maybe(store, row.id);
-    if (fresh && !belongs(fresh))
-      throw new ApiError(
-        409,
-        'PROJECT_CHANGED',
-        'Project work changed during removal. Reload and retry.',
-      );
-    if (fresh) {
-      await assertRemoval();
-      try {
-        await store.remove(row.id);
-      } catch (failure) {
-        if (!(failure instanceof ApiError && failure.status === 404))
-          throw failure;
-      }
-    }
-  }
-}
 export function createStudioMilestones(
   getStore: () => LibraryStore,
   owner: (req: Request) => Promise<string>,

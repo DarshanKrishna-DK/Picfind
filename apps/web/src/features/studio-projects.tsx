@@ -336,9 +336,9 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
             <h2>{selected ? 'Edit project' : 'New project'}</h2>
             {selected?.removalPending && (
               <p role="status">
-                Removal has started. Some milestones may already be removed.
-                Resume removal below to finish; this project cannot be edited or
-                restored.
+                Removal has started. Some milestones or appointments may already
+                be removed. Resume removal below to finish; this project cannot
+                be edited or restored.
               </p>
             )}
             <fieldset disabled={busy}>
@@ -475,8 +475,9 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
               {confirmRemove && (
                 <div role="group" aria-label="Confirm project removal">
                   <p>
-                    Remove this archived project, its milestones and its recent
-                    stage history? Linked client and event records are retained.
+                    Remove this archived project, its milestones, appointments
+                    and its recent stage history? Linked client and event
+                    records are retained.
                   </p>
                   <button
                     type="button"
