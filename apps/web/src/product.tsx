@@ -21,6 +21,7 @@ import { StudioProjects } from './features/studio-projects';
 import { StudioWork } from './features/studio-work';
 import { StudioSchedule } from './features/studio-schedule';
 import { DuplicateReview } from './features/duplicate-review';
+import { PublishedInvitationPage } from './features/event-invitation-page';
 import './features/billing.css';
 
 export function Product() {
@@ -49,6 +50,7 @@ export function Product() {
         <Route path="terms" element={<Information page="terms" />} />
         <Route path="contact" element={<Information page="contact" />} />
         <Route path="e/:eventId" element={<SharedEvent />} />
+        <Route path="invite/:eventId" element={<PublishedInvitationPage />} />
         <Route path="highlights/:eventId" element={<HighlightsPage />} />
         <Route
           path="proofing/:invitationId"

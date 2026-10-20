@@ -66,6 +66,7 @@ import { createPhotoNotes } from './photo-notes.js';
 import { createPhotoAttribution } from './photo-attribution.js';
 import { createHighlights } from './highlights.js';
 import { createEventCoverage } from './event-coverage.js';
+import { createEventInvitationPage } from './event-invitation-page.js';
 import { createStudioClients } from './studio-clients.js';
 import { createStudioProjects } from './studio-projects.js';
 import { createStudioMilestones } from './studio-milestones.js';
@@ -150,6 +151,7 @@ export interface LibraryRecord {
     | 'retouching-task'
     | 'event-highlights'
     | 'event-coverage'
+    | 'event-invitation-page'
     | 'studio-client'
     | 'studio-project'
     | 'studio-milestone'
@@ -189,6 +191,7 @@ export interface LibraryRecord {
   attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
   highlights?: import('../../../packages/shared/src/highlights.js').HighlightSet;
   coverage?: import('../../../packages/shared/src/event-coverage.js').StoredCoverage;
+  invitationPage?: import('../../../packages/shared/src/event-invitation-page.js').StoredInvitationPage;
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
   appointmentCommandDigest?: string;
   studioAppointment?: import('../../../packages/shared/src/studio-appointments.js').SavedAppointment;
@@ -686,6 +689,7 @@ export function createLibraryRouter(
   router.use(createPhotoAttribution(store, owner));
   router.use(createHighlights(store, owner, sendPhoto));
   router.use(createEventCoverage(store, owner));
+  router.use(createEventInvitationPage(store, owner));
   router.use(createStudioClients(store, owner));
   router.use(createStudioProjects(store, owner));
   router.use(createStudioMilestones(store, owner));

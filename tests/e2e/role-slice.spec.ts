@@ -223,7 +223,7 @@ test('personal packs and organizer yearly prices switch without navigation', asy
   await expect(pricing.getByRole('status')).toContainText('398');
   expect(f.writes).toEqual([]);
 });
-test('blank event creation immediately exposes invitation and QR download', async ({
+test('blank event creation immediately exposes its gallery link and QR download', async ({
   page,
 }) => {
   await fixture(page);
@@ -251,11 +251,11 @@ test('blank event creation immediately exposes invitation and QR download', asyn
   await page.getByRole('button', { name: 'Create event', exact: true }).click();
   const setup = page.getByRole('region', { name: 'Event setup' });
   await expect(setup).toBeVisible();
-  await expect(setup.getByLabel('Event invitation link')).toHaveValue(
+  await expect(setup.getByLabel('Event gallery link')).toHaveValue(
     new RegExp(`/e/${eventId}$`),
   );
   const download = page.waitForEvent('download');
-  await setup.getByRole('button', { name: 'Download invitation QR' }).click();
+  await setup.getByRole('button', { name: 'Download gallery QR' }).click();
   expect((await download).suggestedFilename()).toBe('picfind-event-qr.svg');
 });
 test('personal packs do not show a free event creation form', async ({

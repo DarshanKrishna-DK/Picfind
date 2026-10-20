@@ -1,0 +1,127 @@
+.invitation-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+.invitation-editor fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.invitation-editor legend {
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+.invitation-editor label {
+  display: grid;
+  gap: 0.4rem;
+}
+.invitation-editor input:not([type='checkbox']),
+.invitation-editor textarea,
+.invitation-editor select {
+  width: 100%;
+  min-width: 0;
+}
+.invitation-editor .invitation-check {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 0.6rem;
+}
+.invitation-check input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+.invitation-actions,
+.invitation-publication {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.invitation-publication {
+  padding: 1.2rem;
+  border: 1px solid #adc5c0;
+  border-radius: 1rem;
+}
+.invitation-publication p,
+.invitation-publication h3 {
+  margin: 0;
+}
+.invitation-card {
+  --invite-bg: #fbf6e9;
+  --invite-text: #312e26;
+  --invite-line: #b6a584;
+  background: var(--invite-bg);
+  color: var(--invite-text);
+  border: 1px solid var(--invite-line);
+  border-radius: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  overflow-wrap: anywhere;
+}
+.invitation-forest {
+  --invite-bg: #e9f2e9;
+  --invite-text: #1b372c;
+  --invite-line: #8ba58e;
+}
+.invitation-midnight {
+  --invite-bg: #202c3e;
+  --invite-text: #f3f1e7;
+  --invite-line: #8293ad;
+}
+.invitation-card h1,
+.invitation-card h4 {
+  color: inherit;
+  font-size: clamp(1.8rem, 4vw, 3.5rem);
+  line-height: 1.12;
+  margin: 1rem 0;
+}
+.invitation-card p {
+  color: inherit;
+}
+.invitation-card .invitation-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.8rem;
+}
+.invitation-card dl {
+  margin: 2rem 0;
+}
+.invitation-card dt {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  margin-top: 1rem;
+}
+.invitation-card dd {
+  margin: 0.3rem 0 0;
+  white-space: pre-wrap;
+}
+.invitation-instructions {
+  border-top: 1px solid var(--invite-line);
+  padding-top: 1rem;
+}
+.invitation-instructions p:last-child {
+  white-space: pre-wrap;
+}
+.invitation-card .invitation-footer {
+  margin-top: 2rem;
+  font-size: 0.8rem;
+}
+.invitation-public {
+  max-width: 850px;
+}
+.invitation-refresh {
+  text-align: center;
+}
+@media (max-width: 850px) {
+  .invitation-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
