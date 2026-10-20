@@ -34,7 +34,11 @@ export function SelectionRulesForm({
     setMessage('');
     setError(null);
     if (!validSelectionRules(next)) {
-      setError(new Error('The minimum must be no greater than the maximum.'));
+      setError(
+        new Error(
+          'Use whole numbers from 1 to 100. The minimum must be no greater than the maximum.',
+        ),
+      );
       return;
     }
     setBusy(true);
@@ -58,6 +62,12 @@ export function SelectionRulesForm({
         Set the number of photos guests can send in each request. Use the same
         minimum and maximum for an exact count. Existing requests are preserved.
       </p>
+      {!validSelectionRules(rules) && (
+        <p className="notice">
+          Stored limits are invalid. Guests can view the gallery, but favorites
+          submissions are paused until you save valid limits.
+        </p>
+      )}
       <form onSubmit={(event) => void save(event)}>
         <div className="selection-review-fields">
           <label>

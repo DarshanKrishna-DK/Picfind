@@ -556,10 +556,15 @@ describe('gallery protection and client proofing', () => {
       selectionMinimum: 20,
       selectionMaximum: 2,
     });
-    await request(app)
+    const access = await request(app)
       .get(`/api/public/events/${event.id}/access`)
       .set('Cookie', 'picfind_session=guest')
-      .expect(409);
+      .expect(200);
+    expect(access.body.selectionRules).toBeNull();
+    await request(app)
+      .get(`/api/public/events/${event.id}`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
     await request(app)
       .post(`/api/public/events/${event.id}/selections`)
       .set('Origin', origin)

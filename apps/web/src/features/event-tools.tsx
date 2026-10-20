@@ -27,7 +27,7 @@ export function GalleryAccess({
       api<{
         brandingName: string;
         accentColor: string;
-        selectionRules?: SelectionCountRules;
+        selectionRules?: SelectionCountRules | null;
       }>(`/public/events/${eventId}/access`),
     retry: false,
     enabled: Boolean(account.data),
@@ -122,7 +122,11 @@ export function GalleryAccess({
       <GuestSelections
         key={eventId}
         eventId={eventId}
-        rules={access.data?.selectionRules ?? DEFAULT_SELECTION_RULES}
+        rules={
+          access.data?.selectionRules === null
+            ? null
+            : (access.data?.selectionRules ?? DEFAULT_SELECTION_RULES)
+        }
         refreshRules={async () => {
           const result = await access.refetch();
           if (result.error) throw result.error;
@@ -137,7 +141,7 @@ function GuestSelections({
   refreshRules,
 }: {
   eventId: string;
-  rules: SelectionCountRules;
+  rules: SelectionCountRules | null;
   refreshRules: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -151,6 +155,17 @@ function GuestSelections({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState<unknown>(null);
+  async function refreshPolicy() {
+    setBusy(true);
+    setError(null);
+    try {
+      await refreshRules();
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -175,13 +190,34 @@ function GuestSelections({
       setError(failure);
       if (
         failure instanceof HttpError &&
-        failure.code === 'SELECTION_COUNT_REQUIRED'
+        (failure.code === 'SELECTION_COUNT_REQUIRED' ||
+          failure.code === 'SELECTION_RULES_INVALID')
       )
         await refreshRules().catch(() => {});
     } finally {
       setBusy(false);
     }
   }
+  if (!rules)
+    return (
+      <section className="wrap">
+        <div className="source-panel">
+          <h2>Favorites submissions are paused.</h2>
+          <p>
+            You can still view the gallery. The photographer needs to repair
+            this event selection policy before accepting requests.
+          </p>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void refreshPolicy()}
+          >
+            Refresh selection limits
+          </button>
+          <ErrorNote error={error} />
+        </div>
+      </section>
+    );
   return (
     <section className="wrap">
       <div className="source-panel">
@@ -236,6 +272,14 @@ function GuestSelections({
               favorites.
             </p>
             <p role="status">{selectionCountHint(selected.length, rules)}</p>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={busy}
+              onClick={() => void refreshPolicy()}
+            >
+              Refresh selection limits
+            </button>
             <label>
               Your name
               <input name="name" maxLength={100} required />

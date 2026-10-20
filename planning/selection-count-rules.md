@@ -14,12 +14,15 @@ The signed-in, passcode-protected gallery access response publishes only count
 rules alongside existing presentation fields. Submission validates the current
 event policy under the existing owner lock, after deduplicating requested photo
 IDs and before storing the request. Gallery ownership, retention, passcode and
-photo-membership checks continue to apply. Invalid persisted rules block guest
-submissions while owner insights and policy repair remain available.
+photo-membership checks continue to apply. Invalid persisted rules return a null
+public policy and pause favorites submissions. Gallery viewing, owner insights
+and policy repair remain available.
 
 Guest controls show the required count and remaining/removal feedback. A policy
 change discovered on submission refreshes the rules without clearing the
-selection. These are per-request limits, not a verified per-person quota.
+selection. Guests can also refresh limits explicitly when a photographer lowers
+the minimum and an old form cannot submit. These are per-request limits, not a
+verified per-person quota.
 Owner updates follow the existing last-write-wins event settings contract.
 Rules apply at server validation time; a policy change does not retroactively
 invalidate a saved request. The owner must choose a minimum the gallery can

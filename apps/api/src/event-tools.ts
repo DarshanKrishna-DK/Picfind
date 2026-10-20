@@ -174,10 +174,11 @@ export function createEventTools(
   });
   router.get('/public/events/:id/access', async (req, res) => {
     const event = await eventOf(req.params.id);
+    const rules = selectionRules(event, true);
     res.json({
       brandingName: event.brandingName ?? '',
       accentColor: event.accentColor ?? '#173f37',
-      selectionRules: selectionRules(event),
+      selectionRules: validSelectionRules(rules) ? rules : null,
     });
   });
   router.patch('/events/:id/selection-rules', async (req, res) => {

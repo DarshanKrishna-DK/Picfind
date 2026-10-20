@@ -305,7 +305,7 @@ test('guests see count limits and recover when the organizer changes them', asyn
 }) => {
   const { state, jpeg } = await fixture(page);
   state.unlocked = true;
-  let rules = { minimum: 2, maximum: 2 };
+  let rules = { minimum: 3, maximum: 3 };
   await page.route('**/api/public/events/event1/access', (route) =>
     route.fulfill({
       json: { brandingName: '', accentColor: '#173f37', selectionRules: rules },
@@ -358,12 +358,18 @@ test('guests see count limits and recover when the organizer changes them', asyn
     .getByRole('button', { name: 'Choose favorites for organizer' })
     .click();
   await expect(
-    page.getByText('Choose 2 more photos to send this request.'),
+    page.getByText('Choose 3 more photos to send this request.'),
   ).toBeVisible();
   await page.getByLabel('p1.jpg', { exact: true }).check();
   await expect(
     page.getByRole('button', { name: 'Send 1 favorites' }),
   ).toBeDisabled();
+  rules = { minimum: 2, maximum: 2 };
+  await page.getByRole('button', { name: 'Refresh selection limits' }).click();
+  await expect(
+    page.getByText('Choose 1 more photo to send this request.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('p1.jpg', { exact: true })).toBeChecked();
   await page.getByLabel('p2.jpg', { exact: true }).check();
   await page.getByLabel('Your name', { exact: true }).fill('Guest');
   await page.getByRole('button', { name: 'Send 2 favorites' }).click();
@@ -377,4 +383,54 @@ test('guests see count limits and recover when the organizer changes them', asyn
     page.getByText('Your selection was sent.', { exact: true }),
   ).toBeVisible();
   expect(submissions).toBe(2);
+});
+
+test('invalid selection limits pause favorites while keeping the gallery viewable', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  state.unlocked = true;
+  let rules: { minimum: number; maximum: number } | null = null;
+  await page.route('**/api/public/events/event1/access', (route) =>
+    route.fulfill({
+      json: { brandingName: '', accentColor: '#173f37', selectionRules: rules },
+    }),
+  );
+  await page.goto('/e/event1');
+  await expect(
+    page.getByRole('heading', { name: 'Test celebration' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Favorites submissions are paused.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Choose favorites for organizer' }),
+  ).toHaveCount(0);
+  rules = { minimum: 1, maximum: 100 };
+  await page.getByRole('button', { name: 'Refresh selection limits' }).click();
+  await page
+    .getByRole('button', { name: 'Choose favorites for organizer' })
+    .click();
+  await page.getByLabel('Cloud photo.jpg', { exact: true }).check();
+  await page.getByLabel('Your name', { exact: true }).fill('Guest');
+  await page.route('**/api/public/events/event1/selections', (route) => {
+    rules = null;
+    return route.fulfill({
+      status: 409,
+      json: {
+        error: {
+          code: 'SELECTION_RULES_INVALID',
+          message: 'Policy needs repair.',
+        },
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Send 1 favorites' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Favorites submissions are paused.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Test celebration' }),
+  ).toBeVisible();
+  expect(state.selections).toBe(0);
 });
