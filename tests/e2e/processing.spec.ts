@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { MatchingReadiness } from '../../packages/shared/src/matching-readiness';
 
 // Synthetic API responses only. No real event indexing or cloud calls.
 async function fixture(page: Page) {
@@ -40,6 +41,7 @@ async function fixture(page: Page) {
     loseAcknowledgement: false,
     unavailable: false,
     cancellations: 0,
+    readiness: undefined as MatchingReadiness | undefined,
   };
   await page.route('**/api/**', async (route) => {
     const req = route.request(),
@@ -96,7 +98,13 @@ async function fixture(page: Page) {
                 },
               },
             }
-          : { json: { enabled: true, jobs: state.jobs } },
+          : {
+              json: {
+                enabled: true,
+                jobs: state.jobs,
+                readiness: state.readiness,
+              },
+            },
       );
     if (path === '/api/events/event/index-faces') {
       state.calls++;
@@ -211,5 +219,67 @@ test('unavailable status has a recovery action and cannot start processing', asy
   state.unavailable = false;
   await panel.getByRole('button', { name: 'Retry processing status' }).click();
   await expect(panel.getByRole('checkbox')).toBeEnabled();
+  expect(state.calls).toBe(0);
+});
+
+test('readiness refreshes saved counts without processing and hides stale results on failure', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const state = await fixture(page);
+  state.readiness = {
+    checkedAt: new Date().toISOString(),
+    status: 'partial',
+    gallery: 'private',
+    provider: 'aws-rekognition',
+    searchAvailable: true,
+    processingAvailable: true,
+    counts: {
+      total: 2,
+      prepared: 1,
+      waiting: 1,
+      noFaces: 0,
+      failed: 0,
+      needsReview: 0,
+    },
+    models: [{ version: 'synthetic', photos: 1 }],
+    uncertain: 0,
+  };
+  await page.reload();
+  await page.getByRole('tab', { name: 'Sharing' }).click();
+  const panel = page.getByRole('region', { name: 'Face search readiness' });
+  await expect(
+    panel.getByRole('heading', { name: 'Some photos are prepared' }),
+  ).toBeVisible();
+  await expect(panel).toContainText('This gallery is private.');
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  state.readiness.status = 'ready';
+  state.readiness.counts.prepared = 2;
+  state.readiness.counts.waiting = 0;
+  await panel.getByRole('button', { name: 'Refresh readiness' }).click();
+  await expect(
+    panel.getByRole('heading', { name: 'Available photos are prepared' }),
+  ).toBeVisible();
+  expect(state.calls).toBe(0);
+  const processing = page.getByRole('region', {
+    name: 'Event face processing',
+    exact: true,
+  });
+  await processing.getByRole('checkbox').check();
+  state.unavailable = true;
+  await panel.getByRole('button', { name: 'Refresh readiness' }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(
+    processing.getByRole('button', { name: 'Prepare face search' }),
+  ).toBeDisabled();
+  state.unavailable = false;
+  await processing
+    .getByRole('button', { name: 'Retry processing status' })
+    .click();
+  await expect(panel).toBeVisible();
   expect(state.calls).toBe(0);
 });

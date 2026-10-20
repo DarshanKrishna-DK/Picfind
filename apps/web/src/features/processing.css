@@ -102,6 +102,44 @@
   font-size: 0.85rem;
   line-height: 1.6;
 }
+.matching-readiness {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid #d7e4de;
+  border-radius: 12px;
+  background: #ffffffb3;
+}
+.matching-readiness h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+.matching-readiness p,
+.matching-readiness details {
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.matching-readiness summary {
+  cursor: pointer;
+}
+.readiness-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.readiness-counts > div {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: #f0f5f1;
+}
+.readiness-counts dt {
+  font-size: 0.75rem;
+}
+.readiness-counts dd {
+  margin: 0.4rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+}
 @media (max-width: 560px) {
   .processing-panel {
     padding: 1rem;

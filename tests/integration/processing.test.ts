@@ -113,6 +113,68 @@ function fixture() {
   };
 }
 describe('durable event processing integration without live AWS', () => {
+  it('serves current owner-only readiness without provider calls or file reads', async () => {
+    const f = fixture();
+    const path = `/api/events/${f.event.id}/processing`;
+    await request(f.app).get(path).expect(401);
+    await request(f.app)
+      .get(path)
+      .set('Cookie', 'picfind_session=other')
+      .expect(404);
+    const first = await request(f.app)
+      .get(path)
+      .set('Cookie', `picfind_session=${f.ownerId}`)
+      .expect(200);
+    expect(first.body.readiness).toMatchObject({
+      status: 'not-prepared',
+      counts: { total: 2, waiting: 2, prepared: 0 },
+    });
+    await f.enqueue();
+    await f.worker.processNext();
+    for (const method of Object.values(f.matcher))
+      vi.mocked(method).mockClear();
+    vi.mocked(f.store.file).mockClear();
+    const second = await request(f.app)
+      .get(path)
+      .set('Cookie', `picfind_session=${f.ownerId}`)
+      .expect(200);
+    expect(second.body.readiness).toMatchObject({
+      status: 'ready',
+      counts: { total: 2, waiting: 0, prepared: 2 },
+      models: [{ version: 'synthetic', photos: 2 }],
+    });
+    expect(JSON.stringify(second.body.readiness)).not.toContain('face-');
+    for (const method of Object.values(f.matcher))
+      expect(method).not.toHaveBeenCalled();
+    expect(f.store.file).not.toHaveBeenCalled();
+  });
+
+  it('removes expired and deleting photos from readiness and retry warnings', async () => {
+    const f = fixture();
+    f.rows.set(f.photos[0]!.id, {
+      ...f.photos[0]!,
+      expiresAt: '2000-01-01T00:00:00Z',
+      indexState: 'failed',
+      provider: 'aws-rekognition',
+    });
+    f.rows.set(f.photos[1]!.id, {
+      ...f.photos[1]!,
+      deletionStartedAt: new Date().toISOString(),
+      indexState: 'queued',
+      provider: 'aws-rekognition',
+    });
+    const response = await request(f.app)
+      .get(`/api/events/${f.event.id}/processing`)
+      .set('Cookie', `picfind_session=${f.ownerId}`)
+      .expect(200);
+    expect(response.body.retryUncertainRequired).toBe(false);
+    expect(response.body.readiness).toMatchObject({
+      status: 'empty',
+      uncertain: 0,
+      counts: { total: 0, waiting: 0, failed: 0 },
+    });
+  });
+
   it('queues consented work and returns progress before calling the provider', async () => {
     const f = fixture();
     const result = await request(f.app)
