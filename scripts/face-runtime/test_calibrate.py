@@ -1,6 +1,8 @@
 import contextlib
 import copy
+import hashlib
 import io
+import itertools
 import json
 import math
 from pathlib import Path
@@ -8,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from calibrate import load_report, main, report
+from calibrate import choose_threshold, load_report, main, report
 
 
 def fixture():
@@ -52,6 +54,18 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(result["calibration"]["false_nonmatches"], 1)
         self.assertEqual(report(data, 0.5)["candidate_threshold"], 0.7)
 
+    def test_threshold_matches_brute_force_oracle_for_small_score_arrangements(self):
+        for scores in itertools.product([-1, 0, 1], repeat=4):
+            pairs = list(zip(scores, [True, True, False, False]))
+            for target in [0, 0.5, 1]:
+                candidates = sorted(set(scores) | {math.nextafter(1, math.inf)})
+                expected = next(
+                    cutoff for cutoff in candidates
+                    if sum(score >= cutoff for score in scores[2:]) / 2 <= target
+                )
+                with self.subTest(scores=scores, target=target):
+                    self.assertEqual(choose_threshold(pairs, target), expected)
+
     def test_reject_all_remains_explicit_when_top_score_is_impostor(self):
         data = fixture()
         data["pairs"][2]["score"] = 1
@@ -87,14 +101,29 @@ class CalibrationTests(unittest.TestCase):
             report(data, 0)
 
     def test_rejects_bad_scores_and_targets(self):
-        for value in [math.nan, math.inf, -1.1, 1.1, True, "0.5"]:
+        for value in [math.nan, math.inf, -1.1, 1.1, True, "0.5", 10 ** 400]:
             data = fixture()
             data["pairs"][0]["score"] = value
             with self.subTest(score=value), self.assertRaisesRegex(ValueError, "COSINE_SCORE"):
                 report(data, 0)
-        for value in [math.nan, math.inf, -0.1, 1.1, True]:
+        for value in [math.nan, math.inf, -0.1, 1.1, True, "0.5", 10 ** 400]:
             with self.subTest(target=value), self.assertRaisesRegex(ValueError, "TARGET_FMR"):
                 report(fixture(), value)
+
+    def test_malformed_structures_and_pair_bound_fail_with_validation_errors(self):
+        for document in [None, [], True, {"schema_version": True}]:
+            with self.subTest(document=document), self.assertRaises(ValueError):
+                report(document, 0)
+        for value in [None, [], {}, False]:
+            data = fixture()
+            data["pairs"][0]["split"] = value
+            with self.subTest(split=value), self.assertRaisesRegex(ValueError, "PAIR_SPLIT"):
+                report(data, 0)
+        with patch("calibrate.MAX_PAIRS", 7):
+            with self.assertRaisesRegex(ValueError, "PAIR_COUNT"):
+                report(fixture(), 0)
+        with patch("calibrate.MAX_PAIRS", 8):
+            self.assertEqual(report(fixture(), 0)["calibration"]["pairs"], 4)
 
     def test_requires_provenance_consent_and_both_classes_per_partition(self):
         for key, value in [
@@ -122,7 +151,15 @@ class CalibrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "private-scores.json"
             path.write_text(json.dumps(fixture()), encoding="utf8")
-            self.assertEqual(len(load_report(path, 0)["dataset_sha256"]), 64)
+            first = load_report(path, 0)
+            self.assertEqual(
+                first["dataset_sha256"], hashlib.sha256(path.read_bytes()).hexdigest()
+            )
+            # Semantically identical JSON has different provenance when bytes differ.
+            path.write_text(json.dumps(fixture(), indent=2), encoding="utf8")
+            second = load_report(path, 0)
+            self.assertNotEqual(first["dataset_sha256"], second["dataset_sha256"])
+            self.assertEqual(first["candidate_threshold"], second["candidate_threshold"])
             with patch("calibrate.MAX_BYTES", 10):
                 with self.assertRaisesRegex(ValueError, "DATASET_TOO_LARGE"):
                     load_report(path, 0)
