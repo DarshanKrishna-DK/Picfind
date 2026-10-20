@@ -274,7 +274,11 @@ function OwnerEditor({
       clientId: baseline.client.id,
       clientVersion: baseline.client.version,
       clientEmail: baseline.client.email,
-      services: selected.map((row) => ({ id: row.id, version: row.version })),
+      services: selected.map((row) => ({
+        id: row.id,
+        version: row.version,
+        snapshot: row,
+      })),
     });
     if (!command.success) return;
     if (
@@ -522,7 +526,15 @@ function OwnerEditor({
             </p>
             <p className="proposal-text">{proposal.introduction}</p>
             <Options options={proposal.options} showVersion />
-            <Preference response={row.response} options={proposal.options} />
+            {row.responseUnavailable ? (
+              <p role="alert">
+                The saved client preference needs repair and cannot be
+                displayed. You can still withdraw this proposal or remove it
+                when closed.
+              </p>
+            ) : (
+              <Preference response={row.response} options={proposal.options} />
+            )}
             <label>
               Private proposal link
               <input

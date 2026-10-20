@@ -5,6 +5,8 @@ export const PROPOSAL_ACTOR = 'X-PicFind-Proposal-Actor';
 export const PROPOSAL_CONSENT = 'proposal-preference-v1';
 export const PROPOSAL_LIMIT = 200;
 export const PROJECT_PROPOSAL_LIMIT = 20;
+// Read beyond the normal creation cap to permit removal of imported excess rows.
+export const PROPOSAL_RECOVERY_LIMIT = 500;
 const accountId = z.string().min(1).max(128);
 const version = z
   .number()
@@ -25,7 +27,9 @@ export const proposalCreate = z
     clientVersion: version,
     clientEmail: z.email().max(254),
     services: z
-      .array(z.object({ id: z.uuid(), version }).strict())
+      .array(
+        z.object({ id: z.uuid(), version, snapshot: savedService }).strict(),
+      )
       .min(1)
       .max(3),
   })
@@ -33,8 +37,13 @@ export const proposalCreate = z
   .refine(
     (value) =>
       new Set(value.services.map((row) => row.id)).size ===
-      value.services.length,
-  );
+        value.services.length &&
+      value.services.every(
+        (row) =>
+          row.snapshot.id === row.id && row.snapshot.version === row.version,
+      ),
+  )
+  .refine((value) => bytes(value, 12000));
 export const proposalFields = z
   .object({
     title,
@@ -168,6 +177,7 @@ export const ownerProposals = z
           .object({
             proposal: savedProposal,
             removalPending: z.boolean(),
+            responseUnavailable: z.boolean(),
             response: proposalResponseView.nullable(),
           })
           .strict(),

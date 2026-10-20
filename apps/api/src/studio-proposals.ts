@@ -26,6 +26,7 @@ import { savedService } from '../../../packages/shared/src/studio-services.js';
 import {
   PROPOSAL_ACTOR,
   PROPOSAL_LIMIT,
+  PROPOSAL_RECOVERY_LIMIT,
   PROJECT_PROPOSAL_LIMIT,
   clientProposal,
   ownerProposals,
@@ -102,7 +103,7 @@ export function createStudioProposals(
       (row) => row.ownerId === accountId && row.purpose === 'studio-proposal',
     );
     if (
-      values.length > 500 ||
+      values.length > PROPOSAL_RECOVERY_LIMIT ||
       new Set(values.map((row) => row.id)).size !== values.length
     )
       throw proposalInvalid();
@@ -116,18 +117,32 @@ export function createStudioProposals(
     if (selected.length > PROJECT_PROPOSAL_LIMIT) throw proposalInvalid();
     const proposals = [];
     for (const row of selected) {
-      const access = await owned(accountId, projectId, row.id),
+      const access = await owned(accountId, projectId, row.id);
+      let response: Awaited<ReturnType<typeof readProposalResponse>> = null;
+      let responseUnavailable = false;
+      try {
         response = await readProposalResponse(
           getStore(),
           accountId,
           access.proposal,
-        ),
-        fresh = await owned(accountId, projectId, row.id);
+        );
+      } catch (failure) {
+        if (
+          !(failure instanceof ApiError) ||
+          !['PROPOSAL_METADATA_INVALID', 'PROPOSAL_UNAVAILABLE'].includes(
+            failure.code,
+          )
+        )
+          throw failure;
+        responseUnavailable = true;
+      }
+      const fresh = await owned(accountId, projectId, row.id);
       if (JSON.stringify(access.proposal) !== JSON.stringify(fresh.proposal))
         throw changed();
       proposals.push({
         proposal: fresh.proposal,
         removalPending: Boolean(fresh.row.proposalRemovalStartedAt),
+        responseUnavailable,
         response: response ? publicProposalResponse(response) : null,
       });
     }
@@ -278,6 +293,14 @@ export function createStudioProposals(
         const options = await Promise.all(
           input.data.services.map((row) => service(row.id, row.version)),
         );
+        if (
+          options.some(
+            (option, index) =>
+              JSON.stringify(option) !==
+              JSON.stringify(input.data.services[index]!.snapshot),
+          )
+        )
+          throw changed();
         const fields = proposalFields.safeParse({
           title: input.data.title,
           introduction: input.data.introduction,

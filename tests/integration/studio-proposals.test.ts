@@ -65,6 +65,114 @@ describe('immutable package proposals and client preferences', () => {
       .expect(403);
     expect(f.records.has(f.responseId)).toBe(false);
   });
+  it('keeps damaged response content private while letting the owner close and remove the proposal', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    await f.respond().expect(200);
+    f.records.get(f.responseId)!.proposalResponse!.note = 'x'.repeat(5000);
+    await f.read(f.clientPath, f.clientId).expect(503);
+    const owner = ownerProposals.parse(
+      (await f.read(f.ownerPath).expect(200)).body,
+    );
+    expect(owner.proposals[0]).toMatchObject({
+      response: null,
+      responseUnavailable: true,
+    });
+    await f.withdraw().expect(204);
+    await f.removeProposal().expect(204);
+    expect(f.records.has(f.responseId)).toBe(false);
+  });
+  it('uses one unavailable response for missing, foreign and removal-started projects', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    const project = structuredClone(f.records.get(f.projectId)!);
+    f.records.delete(f.projectId);
+    const absent = await f.read(f.clientPath, f.clientId).expect(404);
+    f.records.set(f.projectId, { ...project, ownerId: f.strangerId });
+    const foreign = await f.read(f.clientPath, f.clientId).expect(404);
+    const unavailable = {
+      code: absent.body.error.code,
+      message: absent.body.error.message,
+    };
+    expect(foreign.body.error).toMatchObject(unavailable);
+    f.records.set(f.projectId, project);
+    f.archive();
+    f.records.get(f.projectId)!.projectRemovalStartedAt =
+      new Date().toISOString();
+    const removing = await f.read(f.clientPath, f.clientId).expect(404);
+    expect(removing.body.error).toMatchObject(unavailable);
+  });
+  it('creates a server-generated response generation and never accepts self-proposals', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    const response = proposalResponseView.parse(
+      (await f.respond().expect(200)).body.response,
+    );
+    expect(response.generation).toMatch(/^[a-f0-9-]{36}$/);
+    expect(
+      clientProposal.parse(
+        (await f.read(f.clientPath, f.clientId).expect(200)).body,
+      ).response?.generation,
+    ).toBe(response.generation);
+    vi.spyOn(f.provider, 'resolveEventMember').mockResolvedValue({
+      ...f.user(f.ownerId),
+      email: 'client@example.test',
+    });
+    await f.issue({}, randomUUID()).expect(400);
+  });
+  it('refuses a changed cleanup participant before deleting any account records', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    await f.respond().expect(200);
+    const list = f.store.list.bind(f.store);
+    let discoveries = 0;
+    vi.spyOn(f.store, 'list').mockImplementation(async (actor, kind) => {
+      if (actor === f.ownerId && kind === 'job' && ++discoveries === 2)
+        f.records.get(f.proposalId)!.studioProposal!.recipientId = f.strangerId;
+      return list(actor, kind);
+    });
+    const remove = vi.spyOn(f.store, 'remove'),
+      removeFile = vi.spyOn(f.store, 'removeFile');
+    await f
+      .remove('/api/account', {
+        password: 'test-password',
+        emailCode: '123456',
+        confirmation: 'DELETE',
+      })
+      .expect(409);
+    expect(remove).not.toHaveBeenCalled();
+    expect(removeFile).not.toHaveBeenCalled();
+    expect(f.records.has(f.responseId) && f.records.has(f.projectId)).toBe(
+      true,
+    );
+  });
+  it('rejects changed recipients after individual removal preflight without touching either response', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    await f.respond().expect(200);
+    await f.withdraw().expect(204);
+    const get = f.store.get.bind(f.store);
+    let reads = 0;
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      if (id === f.proposalId && ++reads === 2)
+        f.records.get(id)!.studioProposal!.recipientId = f.strangerId;
+      return get(id);
+    });
+    const remove = vi.spyOn(f.store, 'remove');
+    await f.removeProposal().expect(409);
+    expect(remove).not.toHaveBeenCalled();
+    expect(f.records.has(f.responseId)).toBe(true);
+  });
+  it('rejects a stored response from another proposal generation even when its retry digest matches', async () => {
+    const f = await fixture();
+    await f.issue().expect(200);
+    await f.respond().expect(200);
+    f.records.get(f.responseId)!.proposalResponse!.proposalGeneration =
+      randomUUID();
+    await f.respond().expect(503);
+    await f.read(f.clientPath, f.clientId).expect(503);
+    expect(f.records.get(f.responseId)!.proposalResponse!.version).toBe(1);
+  });
   it('rejects stale project, client and service versions and unverified recipient resolution', async () => {
     const f = await fixture();
     await f.issue({ projectVersion: 2 }).expect(409);
@@ -77,6 +185,29 @@ describe('immutable package proposals and client preferences', () => {
     });
     await f.issue().expect(400);
     expect(f.records.has(f.proposalId)).toBe(false);
+  });
+  it('rejects a reused catalog ID at the same version when the selected package snapshot changed', async () => {
+    const f = await fixture();
+    const selected = structuredClone(
+      f.records.get(f.serviceId)!.studioService!,
+    );
+    await f.save({ archived: true }, 1).expect(200);
+    await f.remove(`${f.root}/${f.serviceId}`, { version: 2 }).expect(204);
+    await f.save({ amountMinor: 900000 }).expect(200);
+    expect(f.records.get(f.serviceId)!.studioService!.version).toBe(1);
+    await f
+      .issue({
+        services: [{ id: f.serviceId, version: 1, snapshot: selected }],
+      })
+      .expect(409);
+    expect(f.records.has(f.proposalId)).toBe(false);
+    const current = structuredClone(f.records.get(f.serviceId)!.studioService!);
+    await f
+      .issue({ services: [{ id: f.serviceId, version: 1, snapshot: current }] })
+      .expect(200);
+    expect(
+      f.records.get(f.proposalId)!.studioProposal!.options[0]!.amountMinor,
+    ).toBe(900000);
   });
   it('rejects archived services, mixed currencies and oversized combined package snapshots', async () => {
     const f = await fixture(),

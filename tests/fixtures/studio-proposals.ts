@@ -43,13 +43,31 @@ export async function proposalFixture() {
     clientId: clientRecordId,
     clientVersion: 1,
     clientEmail: 'client@example.test',
-    services: [{ id: f.serviceId, version: 1 }],
+    services: [
+      {
+        id: f.serviceId,
+        version: 1,
+        snapshot: structuredClone(f.records.get(f.serviceId)!.studioService!),
+      },
+    ],
   };
   const issue = (
     changes: object = {},
     id: string = proposalId,
     actor = f.ownerId,
-  ) => f.put(`${ownerPath}/${id}`, { ...proposalInput, ...changes }, actor);
+  ) => {
+    const command = { ...proposalInput, ...changes };
+    // Explicit version overrides use a current fixture snapshot unless a test
+    // intentionally supplies an older snapshot to exercise replacement races.
+    command.services = command.services.map((row) => ({
+      ...row,
+      snapshot: row.snapshot ?? {
+        ...structuredClone(f.records.get(row.id)?.studioService),
+        version: row.version,
+      },
+    }));
+    return f.put(`${ownerPath}/${id}`, command, actor);
+  };
   const respond = (changes: object = {}, actor = f.clientId) =>
     f.put(
       `${clientPath}/response`,

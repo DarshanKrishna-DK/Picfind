@@ -67,7 +67,14 @@ export async function proposalProject(
 ) {
   const row = await maybeProposalRecord(store, id);
   if (!row) throw proposalUnavailable();
-  const result = ownedProjectRecord(row, ownerId, id);
+  let result;
+  try {
+    result = ownedProjectRecord(row, ownerId, id);
+  } catch (failure) {
+    if (failure instanceof ApiError && failure.status === 404)
+      throw proposalUnavailable();
+    throw failure;
+  }
   if (row.projectRemovalStartedAt) throw proposalUnavailable();
   return result;
 }

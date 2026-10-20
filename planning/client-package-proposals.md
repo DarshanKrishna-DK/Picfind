@@ -95,3 +95,16 @@ Desktop and mobile screenshots were inspected. Choice controls were adjusted to
 keep their labels beside their inputs, and package revision numbers are visible
 in photographer previews. This is local verification; production providers and
 deployment settings are unchanged. Shared account locks remain process-local.
+
+Review follow-up binds issuance to the complete selected catalog snapshots as
+well as their IDs and versions, preventing a reused service ID at revision one
+from silently replacing draft prices. The owner projection explicitly marks a
+damaged response as unavailable while preserving safe closure/removal, and
+unavailable project states share one public error. The project cleanup helper
+now requires its participant lock set. The 500-record recovery read ceiling is
+named separately from the 200-record creation quota.
+
+All 80 focused API and cleanup regressions pass after these changes, including
+changed deletion participants, server-generated response generations, stale
+generation replay and parent disappearance. Type checking and focused lint
+also pass. Final-head CI is required before merge.

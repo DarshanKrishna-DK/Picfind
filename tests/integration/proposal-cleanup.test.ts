@@ -118,6 +118,16 @@ describe('proposal participant cleanup boundaries', () => {
     );
     expect(f.records.has(other)).toBe(true);
   });
+  it('does not erase a child after its parent disappears before the final authorization check', async () => {
+    const f = await fixture(),
+      get = f.store.get.bind(f.store);
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      if (id === f.proposalId) f.records.delete(id);
+      return get(id);
+    });
+    await expect(f.cleanup()).rejects.toMatchObject({ status: 404 });
+    expect(f.records.has(f.responseId)).toBe(true);
+  });
   it('rejects missing participant locks and changed parent generations', async () => {
     const f = await fixture();
     await expect(

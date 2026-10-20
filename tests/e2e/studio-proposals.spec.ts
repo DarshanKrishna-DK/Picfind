@@ -275,6 +275,42 @@ test('requires recipient and catalog changes to be explicitly reviewed', async (
     page.getByRole('button', { name: 'Issue proposal', exact: true }),
   ).toBeEnabled();
 });
+test('retains a stale draft when a deleted package ID is recreated at the same revision', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.openOwner();
+  await page.getByRole('checkbox', { name: /Event portraits/ }).check();
+  await f.save({ archived: true }, 1).expect(200);
+  await f.remove(`${f.root}/${f.serviceId}`, { version: 2 }).expect(204);
+  await f.save({ amountMinor: 900000 }).expect(200);
+  await page
+    .getByRole('button', { name: 'Issue proposal', exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      'These proposal details changed. Refresh before continuing.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('checkbox', { name: /Event portraits/ }),
+  ).toBeChecked();
+  expect(
+    [...f.records.values()].filter((row) => row.purpose === 'studio-proposal'),
+  ).toHaveLength(0);
+  await page
+    .getByRole('button', { name: 'Reload proposals and catalog' })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Issue proposal', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('checkbox', { name: /Event portraits/ }).uncheck();
+  await page.getByRole('checkbox', { name: /Event portraits/ }).check();
+  await page
+    .getByRole('button', { name: 'Issue proposal', exact: true })
+    .click();
+  await expect(page.getByRole('status')).toContainText('Proposal issued');
+});
 test('withdraws and removes the proposal with its recipient-owned preference', async ({
   page,
 }) => {
@@ -316,6 +352,25 @@ test('hides private contents when the live account changes', async ({
     page.getByRole('heading', { name: 'Your portrait options', exact: true }),
   ).toHaveCount(0);
   await expect(page.getByLabel('Note for your photographer')).toHaveCount(0);
+});
+test('shows response repair status while retaining safe owner closure and removal', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.issue().expect(200);
+  await f.respond().expect(200);
+  f.records.get(f.responseId)!.proposalResponse!.note = 'x'.repeat(5000);
+  await f.openOwner();
+  await expect(page.getByRole('alert')).toContainText(
+    'The saved client preference needs repair',
+  );
+  await page.getByRole('button', { name: 'Withdraw proposal' }).click();
+  await expect(page.getByRole('status')).toHaveText('Proposal withdrawn.');
+  await page.getByRole('button', { name: 'Remove proposal' }).click();
+  await expect(page.getByRole('status')).toHaveText(
+    'Proposal and client preference removed.',
+  );
+  expect(f.records.has(f.responseId)).toBe(false);
 });
 test('preserves the private proposal route through sign-in', async ({
   page,

@@ -10,7 +10,7 @@ export async function removeProjectStudioWork(
   actorId: string,
   projectId: string,
   assertRemoval: () => Promise<void>,
-  lockedAccounts: ReadonlySet<string> = new Set([actorId]),
+  lockedAccounts: ReadonlySet<string>,
 ) {
   const belongs = (row: LibraryRecord) =>
     row.ownerId === actorId &&
