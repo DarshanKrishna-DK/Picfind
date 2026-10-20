@@ -17,3 +17,19 @@ export interface EventSelection extends SelectionReview {
   photos: { id: string; filename: string }[];
   createdAt: string;
 }
+
+// Guest-only projection. Do not add private organizer review fields here.
+export interface SelectionReceipt {
+  id: string;
+  name: string;
+  note: string;
+  createdAt: string;
+  originalCount: number;
+  unavailableCount: number;
+  photos: { id: string; filename: string }[];
+}
+
+export interface SelectionReceiptPage {
+  receipts: SelectionReceipt[];
+  nextCursor: string | null;
+}

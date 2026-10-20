@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { chooseMenu } from './menu';
+import type { SelectionReceipt } from '../../packages/shared/src/proofing';
 
 async function fixture(page: Page) {
   const jpeg = await sharp({
@@ -14,6 +15,7 @@ async function fixture(page: Page) {
     scans: 0,
     searches: 0,
     selections: 0,
+    receipts: [] as SelectionReceipt[],
   };
   const photo = {
     id: 'p1',
@@ -167,6 +169,10 @@ async function fixture(page: Page) {
       });
     if (path === '/api/public/events/event1')
       return route.fulfill({ json: { event, photos: [photo] } });
+    if (path === '/api/public/events/event1/my-selections')
+      return route.fulfill({
+        json: { receipts: state.receipts, nextCursor: null },
+      });
     if (path === '/api/public/events/event1/selections') {
       expect(req.postDataJSON()).toEqual({
         name: 'Guest',
@@ -174,6 +180,15 @@ async function fixture(page: Page) {
         photoIds: ['p1'],
       });
       state.selections++;
+      state.receipts.unshift({
+        id: `receipt-${state.selections}`,
+        name: 'Guest',
+        note: 'Please use this one',
+        originalCount: 1,
+        unavailableCount: 0,
+        photos: [{ id: photo.id, filename: photo.filename }],
+        createdAt: new Date().toISOString(),
+      });
       return route.fulfill({
         status: 201,
         json: { message: 'Your selection was sent to the organizer.' },
@@ -298,6 +313,125 @@ test('signed-in guests unlock a gallery and send a selection without purchasing'
     page.getByRole('status').filter({ hasText: 'Your selection was sent' }),
   ).toBeVisible();
   expect(state.selections).toBe(1);
+});
+
+test('guest request history refreshes after sending and survives reload with submissions closed', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  state.unlocked = true;
+  await page.goto('/e/event1');
+  const history = page.getByRole('region', { name: 'Your selection history' });
+  await history.getByText('Your previous requests', { exact: true }).click();
+  await expect(
+    history.getByText('No saved requests for this account.'),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Choose favorites for organizer' })
+    .click();
+  await page.getByLabel('Cloud photo.jpg', { exact: true }).check();
+  await page.getByLabel('Your name', { exact: true }).fill('Guest');
+  await page.getByLabel('Note for the organizer').fill('Please use this one');
+  await page.getByRole('button', { name: 'Send 1 favorites' }).click();
+  await expect(
+    history.getByRole('heading', { name: 'Request from Guest' }),
+  ).toBeVisible();
+  await expect(
+    history.getByRole('list', { name: 'Requested filenames' }),
+  ).toContainText('Cloud photo.jpg');
+  await page.route('**/api/public/events/event1/access', (route) =>
+    route.fulfill({
+      json: {
+        brandingName: '',
+        accentColor: '#173f37',
+        selectionWindow: {
+          closesAt: null,
+          closed: true,
+          invalid: false,
+          serverNow: new Date().toISOString(),
+        },
+      },
+    }),
+  );
+  state.receipts[0]!.photos = [];
+  state.receipts[0]!.unavailableCount = 1;
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Favorites submissions are closed.' }),
+  ).toBeVisible();
+  await history.getByText('Your previous requests', { exact: true }).click();
+  await expect(history.getByText('1 favorites submitted')).toBeVisible();
+  await expect(
+    history.getByText('1 photos are no longer available.'),
+  ).toBeVisible();
+  await expect(history.getByText('Please use this one')).toBeVisible();
+  expect(state.selections).toBe(1);
+});
+
+test('history loads older requests and hides stale receipts if access is revoked', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  state.unlocked = true;
+  const receipt = (id: string): SelectionReceipt => ({
+    id,
+    name: id,
+    note: '',
+    createdAt: '2026-10-20T12:00:00.000Z',
+    originalCount: 1,
+    unavailableCount: 0,
+    photos: [{ id: 'p1', filename: 'Cloud photo.jpg' }],
+  });
+  let revoked = false;
+  await page.route('**/api/public/events/event1/my-selections**', (route) => {
+    if (revoked)
+      return route.fulfill({
+        status: 401,
+        json: {
+          error: {
+            code: 'GALLERY_LOCKED',
+            message: 'Unlock this gallery again.',
+          },
+        },
+      });
+    const cursor = new URL(route.request().url()).searchParams.get('cursor');
+    return route.fulfill({
+      json: {
+        receipts: [receipt(cursor ? 'Older guest' : 'Newest guest')],
+        nextCursor: cursor ? null : 'first',
+      },
+    });
+  });
+  await page.goto('/e/event1');
+  const history = page.getByRole('region', { name: 'Your selection history' });
+  await history.getByText('Your previous requests', { exact: true }).click();
+  await expect(
+    history.getByRole('heading', { name: 'Request from Newest guest' }),
+  ).toBeVisible();
+  await history.getByRole('button', { name: 'Load older requests' }).click();
+  await expect(
+    history.getByRole('heading', { name: 'Request from Older guest' }),
+  ).toBeVisible();
+  await expect(
+    history.getByRole('button', { name: 'Load older requests' }),
+  ).toHaveCount(0);
+  revoked = true;
+  await history
+    .getByRole('button', { name: 'Refresh request history' })
+    .click();
+  await expect(history.getByRole('alert')).toContainText(
+    'Unlock this gallery again.',
+  );
+  await expect(
+    history.getByRole('heading', { name: /Request from/ }),
+  ).toHaveCount(0);
+  revoked = false;
+  await history
+    .getByRole('button', { name: 'Refresh request history' })
+    .click();
+  await expect(
+    history.getByRole('heading', { name: 'Request from Newest guest' }),
+  ).toBeVisible();
 });
 
 test('guests see count limits and recover when the organizer changes them', async ({

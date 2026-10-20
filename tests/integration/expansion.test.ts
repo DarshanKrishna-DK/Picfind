@@ -117,6 +117,219 @@ function matcher(): FaceMatchingProvider {
     deleteScope: vi.fn(async () => {}),
   };
 }
+
+describe('guest selection receipts', () => {
+  it('persists session identity and returns only the guest projection after submissions close', async () => {
+    const f = fixture();
+    const submit = (actor: string) =>
+      request(f.app)
+        .post(`/api/public/events/${f.event.id}/selections`)
+        .set('Origin', origin)
+        .set('Cookie', `picfind_session=${actor}`)
+        .send({
+          name: 'Same display name',
+          note: 'My album',
+          photoIds: [f.photo.id],
+        });
+    await submit('guest-a').expect(201);
+    await submit('guest-b').expect(201);
+    await submit('owner').expect(201);
+    const rows = [...f.records.values()].filter(
+      (row) => row.purpose === 'selection',
+    );
+    const own = rows.find((row) => row.submittedById === 'guest-a')!;
+    expect(own).toBeDefined();
+    own.reviewStatus = 'completed';
+    own.reviewNote = 'Private photographer note';
+    own.reviewVersion = 9;
+    const legacy = { ...own, id: randomUUID() };
+    delete legacy.submittedById;
+    f.records.set(legacy.id, legacy);
+    f.event.selectionClosesAt = new Date(Date.now() - 1000).toISOString();
+    const result = await request(f.app)
+      .get(`/api/public/events/${f.event.id}/my-selections`)
+      .set('Cookie', 'picfind_session=guest-a')
+      .expect(200);
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(result.body).toEqual({
+      receipts: [
+        {
+          id: own.id,
+          name: 'Same display name',
+          note: 'My album',
+          createdAt: own.createdAt,
+          originalCount: 1,
+          unavailableCount: 0,
+          photos: [{ id: f.photo.id, filename: f.photo.filename }],
+        },
+      ],
+      nextCursor: null,
+    });
+    const ownerHistory = await request(f.app)
+      .get(`/api/public/events/${f.event.id}/my-selections`)
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(
+      ownerHistory.body.receipts.map((row: { id: string }) => row.id),
+    ).toEqual([rows.find((row) => row.submittedById === 'owner')!.id]);
+    const secondGuestHistory = await request(f.app)
+      .get(`/api/public/events/${f.event.id}/my-selections`)
+      .set('Cookie', 'picfind_session=guest-b')
+      .expect(200);
+    expect(
+      secondGuestHistory.body.receipts.map((row: { id: string }) => row.id),
+    ).toEqual([rows.find((row) => row.submittedById === 'guest-b')!.id]);
+    // The subtree session gate still precedes validation of a malformed body.
+    await request(f.app)
+      .post(`/api/public/events/${f.event.id}/selections`)
+      .set('Origin', origin)
+      .send({})
+      .expect(401);
+    await request(f.app)
+      .post(`/api/public/events/${f.event.id}/selections`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=guest-a')
+      .send({
+        name: 'Impersonation',
+        photoIds: [f.photo.id],
+        submittedById: 'guest-b',
+      })
+      .expect(400);
+  });
+
+  it('omits expired, deleting and foreign photos without losing original counts', async () => {
+    const f = fixture();
+    const unavailable = ['expired', 'deleting', 'foreign'].map((kind) => ({
+      ...f.photo,
+      id: randomUUID(),
+      filename: `private-${kind}.jpg`,
+      ...(kind === 'expired' ? { expiresAt: new Date(0).toISOString() } : {}),
+      ...(kind === 'deleting'
+        ? { deletionStartedAt: new Date().toISOString() }
+        : {}),
+      ...(kind === 'foreign' ? { eventId: randomUUID() } : {}),
+    }));
+    unavailable.forEach((row) => f.records.set(row.id, row));
+    const row: LibraryRecord = {
+      id: randomUUID(),
+      kind: 'job',
+      purpose: 'selection',
+      ownerId: 'owner',
+      eventId: f.event.id,
+      submittedById: 'guest',
+      createdAt: new Date().toISOString(),
+      selectedIds: [
+        f.photo.id,
+        f.photo.id,
+        ...unavailable.map((photo) => photo.id),
+        randomUUID(),
+      ],
+    };
+    f.records.set(row.id, row);
+    const response = await request(f.app)
+      .get(`/api/public/events/${f.event.id}/my-selections`)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(200);
+    expect(response.body.receipts[0]).toMatchObject({
+      originalCount: 5,
+      unavailableCount: 4,
+      photos: [{ id: f.photo.id, filename: f.photo.filename }],
+    });
+    expect(JSON.stringify(response.body)).not.toContain('private-');
+    for (const photo of unavailable)
+      expect(JSON.stringify(response.body)).not.toContain(photo.id);
+  });
+
+  it('paginates only own requests with stable tie ordering and rejects foreign cursors', async () => {
+    const f = fixture();
+    const ownIds = Array.from({ length: 27 }, () => randomUUID())
+      .sort()
+      .reverse();
+    for (const id of ownIds)
+      f.records.set(id, {
+        id,
+        kind: 'job',
+        purpose: 'selection',
+        ownerId: 'owner',
+        eventId: f.event.id,
+        submittedById: 'guest',
+        createdAt: '2026-10-20T12:00:00.000Z',
+        selectedIds: [f.photo.id],
+      });
+    const get = (suffix = '') =>
+      request(f.app)
+        .get(`/api/public/events/${f.event.id}/my-selections${suffix}`)
+        .set('Cookie', 'picfind_session=guest');
+    const first = await get().expect(200);
+    expect(first.body.receipts.map((row: { id: string }) => row.id)).toEqual(
+      ownIds.slice(0, 25),
+    );
+    expect(first.body.nextCursor).toBe(ownIds[24]);
+    const next = await get(`?cursor=${first.body.nextCursor}`).expect(200);
+    expect(next.body.receipts.map((row: { id: string }) => row.id)).toEqual(
+      ownIds.slice(25),
+    );
+    expect(next.body.nextCursor).toBeNull();
+    const foreign = {
+      ...f.records.get(ownIds[0]!)!,
+      id: randomUUID(),
+      submittedById: 'another-guest',
+    };
+    f.records.set(foreign.id, foreign);
+    for (const cursor of ['bad', randomUUID(), foreign.id])
+      expect((await get(`?cursor=${cursor}`).expect(400)).body.error.code).toBe(
+        'INVALID_CURSOR',
+      );
+    await get('?limit=1000').expect(400);
+  });
+
+  it('requires sign-in and current passcode, including after storage reads', async () => {
+    const f = fixture();
+    const url = `/api/public/events/${f.event.id}/my-selections`;
+    await request(f.app).get(url).expect(401);
+    f.event.passcodeHash = await hashPasscode('secret123');
+    await request(f.app)
+      .get(url)
+      .set('Cookie', 'picfind_session=guest')
+      .expect(401);
+    const unlocked = await request(f.app)
+      .post(`/api/public/events/${f.event.id}/unlock`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=guest')
+      .send({ passcode: 'secret123' })
+      .expect(204);
+    const galleryCookie = String(unlocked.headers['set-cookie']![0]).split(
+      ';',
+    )[0];
+    const cookie = `picfind_session=guest; ${galleryCookie}`;
+    await request(f.app).get(url).set('Cookie', cookie).expect(200);
+    const list = f.store.list;
+    const rotated = await hashPasscode('rotated123');
+    f.store.list = async (...args) => {
+      const result = await list(...args);
+      if (args[1] === 'photo') f.event.passcodeHash = rotated;
+      return result;
+    };
+    await request(f.app).get(url).set('Cookie', cookie).expect(401);
+  });
+
+  it.each([
+    { visibility: 'private' as const },
+    { archived: true },
+    { expiresAt: new Date(0).toISOString() },
+    { deletionStartedAt: new Date().toISOString() },
+  ])(
+    'denies receipts when gallery access is unavailable: %j',
+    async (patch) => {
+      const f = fixture();
+      Object.assign(f.event, patch);
+      await request(f.app)
+        .get(`/api/public/events/${f.event.id}/my-selections`)
+        .set('Cookie', 'picfind_session=guest')
+        .expect(404);
+    },
+  );
+});
 const cookie = () =>
   `picfind_dropbox=${sealSource({ owner: 'owner', provider: 'dropbox', expires: Date.now() + 60_000, value: 'fixture-token' }, key)}`;
 const image = () =>

@@ -126,6 +126,7 @@ export interface LibraryRecord {
   privatePhotoNote?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
+  submittedById?: string;
   selectionMinimum?: number;
   selectionMaximum?: number;
   selectionClosesAt?: string;
