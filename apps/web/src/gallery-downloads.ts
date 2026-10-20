@@ -1,3 +1,10 @@
+import {
+  ATTRIBUTION_HEADER,
+  attributionCsv,
+  decodeAttributionHeader,
+  type PublishedAttribution,
+} from '../../../packages/shared/src/photo-attribution';
+
 export interface DownloadPhoto {
   id: string;
   filename: string;
@@ -25,6 +32,12 @@ export async function collectPhotoFiles(
 ) {
   if (!photos.length) throw new Error('Choose at least one photo to download.');
   const files: Record<string, Uint8Array> = {};
+  const credits: {
+    archiveName: string;
+    photoId: string;
+    filename: string;
+    credit: PublishedAttribution;
+  }[] = [];
   let totalBytes = 0;
   for (const [index, photo] of photos.entries()) {
     signal.throwIfAborted();
@@ -70,8 +83,27 @@ export async function collectPhotoFiles(
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    files[archiveFilename(photo.filename, index)] = bytes;
+    const archiveName = archiveFilename(photo.filename, index);
+    files[archiveName] = bytes;
+    const credit = decodeAttributionHeader(
+      response.headers.get(ATTRIBUTION_HEADER),
+    );
+    if (credit)
+      credits.push({
+        archiveName,
+        photoId: photo.id,
+        filename: photo.filename,
+        credit,
+      });
     onProgress(index + 1, photos.length);
+  }
+  if (credits.length) {
+    const manifest = new TextEncoder().encode(attributionCsv(credits));
+    if (totalBytes + manifest.byteLength > maxBytes)
+      throw new Error(
+        'This download is too large to include photographer credits. Select a smaller batch.',
+      );
+    files['credits.csv'] = manifest;
   }
   return files;
 }

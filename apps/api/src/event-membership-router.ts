@@ -6,6 +6,7 @@ import type { BillingService } from './billing/service.js';
 import type { LibraryStore } from './library.js';
 import { requireEventAccess } from './event-membership-access.js';
 import { photoAvailable } from './retention.js';
+import { publishedAttribution } from '../../../packages/shared/src/photo-attribution.js';
 
 export function createEventMembershipRouter(
   auth: AuthOptions,
@@ -124,6 +125,7 @@ export function createEventMembershipRouter(
           bytes,
           createdAt,
           expiresAt,
+          attribution,
         }) => ({
           id,
           eventId,
@@ -133,6 +135,9 @@ export function createEventMembershipRouter(
           bytes: bytes ?? 0,
           createdAt,
           ...(expiresAt ? { expiresAt } : {}),
+          ...(publishedAttribution(attribution)
+            ? { credit: publishedAttribution(attribution) }
+            : {}),
         }),
       ),
       remainingUploads: Math.max(

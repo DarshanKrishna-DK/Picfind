@@ -5,6 +5,7 @@ export interface User {
   emailVerified: boolean;
 }
 export interface Photo {
+  credit?: import('../../../packages/shared/src/photo-attribution').PublishedAttribution;
   id: string;
   expiresAt?: string;
   filename: string;

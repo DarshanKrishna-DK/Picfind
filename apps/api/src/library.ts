@@ -63,6 +63,11 @@ import {
 import { mapFaceError } from './face-errors.js';
 import { createEventTools } from './event-tools.js';
 import { createPhotoNotes } from './photo-notes.js';
+import { createPhotoAttribution } from './photo-attribution.js';
+import {
+  ATTRIBUTION_HEADER,
+  publishedAttribution,
+} from '../../../packages/shared/src/photo-attribution.js';
 import { createProofingCollections } from './proofing-collections.js';
 import { createCollectionInvitations } from './collection-invitations.js';
 import { createEventMembershipRouter } from './event-membership-router.js';
@@ -168,6 +173,7 @@ export interface LibraryRecord {
   commentText?: string;
   commentRemovedAt?: string;
   privatePhotoNote?: string;
+  attribution?: import('../../../packages/shared/src/photo-attribution.js').StoredAttribution;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
   submittedById?: string;
@@ -654,6 +660,7 @@ export function createLibraryRouter(
   router.use(createFolderSyncRouter(owner, options.folderSyncControls));
   router.use(createEventTools(auth, store, owner, saveEvent));
   router.use(createPhotoNotes(store, owner));
+  router.use(createPhotoAttribution(store, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(
@@ -753,9 +760,14 @@ export function createLibraryRouter(
         (photo) =>
           !photo.scanId && !photo.deletionStartedAt && photoAvailable(photo),
       )
-      .map(({ uploadInputDigest, ...photo }) => {
+      .map(({ uploadInputDigest, attribution, ...photo }) => {
         void uploadInputDigest;
-        return { ...photo, filename: photo.filename ?? 'photo.jpg' };
+        const credit = publishedAttribution(attribution);
+        return {
+          ...photo,
+          filename: photo.filename ?? 'photo.jpg',
+          ...(credit ? { credit } : {}),
+        };
       });
     const imports = jobs.filter(
       (job) => !job.purpose || job.purpose === 'import',
@@ -1211,6 +1223,32 @@ export function createLibraryRouter(
     res: express.Response,
     authorize?: () => Promise<void>,
   ) {
+    async function creditHeader() {
+      const current = await store().get(photo.id);
+      if (
+        current.id !== photo.id ||
+        current.kind !== 'photo' ||
+        current.ownerId !== photo.ownerId ||
+        current.eventId !== photo.eventId ||
+        current.scanId !== photo.scanId ||
+        current.digest !== photo.digest ||
+        current.bytes !== photo.bytes ||
+        current.deletionStartedAt ||
+        current.deletionCompletedAt ||
+        !photoAvailable(current)
+      )
+        throw new ApiError(
+          404,
+          'NOT_FOUND',
+          'This photograph is no longer available.',
+        );
+      const credit = publishedAttribution(current.attribution);
+      if (credit)
+        res.setHeader(
+          ATTRIBUTION_HEADER,
+          encodeURIComponent(JSON.stringify(credit)),
+        );
+    }
     const deliveryAttempt = randomUUID();
     assertPhotoAvailable(photo);
     if (photo.eventId) {
@@ -1225,6 +1263,7 @@ export function createLibraryRouter(
     }
     await authorize?.();
     if (req.method === 'HEAD') {
+      await creditHeader();
       res.type('image/jpeg');
       if (photo.bytes !== undefined)
         res.setHeader('Content-Length', photo.bytes);
@@ -1275,6 +1314,7 @@ export function createLibraryRouter(
       );
     }
     await authorize?.();
+    await creditHeader();
     res.type('image/jpeg');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (req.query.download === '1')
@@ -1321,15 +1361,29 @@ export function createLibraryRouter(
       );
     const photos = (await store().list(event.ownerId, 'photo'))
       .filter((row) => row.eventId === event.id && photoAvailable(row))
-      .map(({ id, filename, width, height, createdAt, bytes, expiresAt }) => ({
-        id,
-        filename,
-        width,
-        height,
-        createdAt,
-        bytes: bytes ?? 0,
-        ...(expiresAt ? { expiresAt } : {}),
-      }));
+      .map(
+        ({
+          id,
+          filename,
+          width,
+          height,
+          createdAt,
+          bytes,
+          expiresAt,
+          attribution,
+        }) => ({
+          id,
+          filename,
+          width,
+          height,
+          createdAt,
+          bytes: bytes ?? 0,
+          ...(expiresAt ? { expiresAt } : {}),
+          ...(publishedAttribution(attribution)
+            ? { credit: publishedAttribution(attribution) }
+            : {}),
+        }),
+      );
     res.json({
       event: {
         id: event.id,
