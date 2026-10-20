@@ -42,7 +42,7 @@ export function withAccountLocks<T>(
   if (
     !ordered.length ||
     ordered.length > 201 ||
-    ordered.some((id) => !id || id.length > 128) ||
+    ordered.some((id) => typeof id !== 'string' || !id || id.length > 128) ||
     [...allowed].some((id) => !ordered.includes(id))
   )
     throw new Error('Choose a bounded, nonempty set of account locks.');

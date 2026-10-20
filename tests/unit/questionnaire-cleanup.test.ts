@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apps/api/src/auth';
-import { markDeletedAccount } from '../../apps/api/src/locks';
+import { markDeletedAccount, withAccountLock } from '../../apps/api/src/locks';
 import {
   questionnaireResponseId,
   removeQuestionnaireResponse,
@@ -114,6 +114,91 @@ function fixture(owner = randomUUID(), recipient = randomUUID()) {
   };
 }
 describe('strictly scoped shared questionnaire cleanup', () => {
+  it('holds the owner queue throughout cleanup and never reacquires it while removing a response', async () => {
+    const f = fixture(),
+      events: string[] = [];
+    let entered!: () => void, release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cleanup = withQuestionnaireCleanupLocks(
+      f.store,
+      f.owner,
+      f.projectId,
+      async (locked) => {
+        expect(locked.has(f.owner) && locked.has(f.recipient)).toBe(true);
+        events.push('cleanup');
+        entered();
+        await gate;
+        await removeQuestionnaireResponse(f.store, f.form, locked);
+        events.push('response-removed');
+      },
+    );
+    await ready;
+    const edit = withAccountLock(f.owner, async () => {
+      events.push('owner-edit');
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(events).toEqual(['cleanup']);
+    release();
+    await Promise.all([cleanup, edit]);
+    expect(events).toEqual(['cleanup', 'response-removed', 'owner-edit']);
+  });
+  it('cleans newly discovered forms for an already locked recipient using the fresh project scope', async () => {
+    const f = fixture(),
+      second = fixture(f.owner, f.recipient);
+    second.form.studioQuestionnaire!.projectId = f.projectId;
+    second.response.questionnaireResponse!.projectId = f.projectId;
+    vi.mocked(f.store.list)
+      .mockImplementationOnce(f.list)
+      .mockImplementationOnce(async (actor, kind) => {
+        f.records.set(second.form.id, second.form);
+        f.records.set(second.response.id, second.response);
+        return f.list(actor, kind);
+      });
+    await withQuestionnaireCleanupLocks(
+      f.store,
+      f.owner,
+      f.projectId,
+      async (locked) => {
+        for (const row of await f.store.list(f.owner, 'job')) {
+          if (
+            row.purpose !== 'studio-questionnaire' ||
+            row.studioQuestionnaire?.projectId !== f.projectId
+          )
+            continue;
+          await removeQuestionnaireResponse(f.store, row, locked);
+          await f.store.remove(row.id);
+        }
+      },
+    );
+    expect([...f.records.keys()]).toEqual([f.unrelated.id]);
+  });
+  it('does not act on a removed preflight form or unrelated records of its deleted recipient', async () => {
+    const f = fixture();
+    vi.mocked(f.store.list)
+      .mockImplementationOnce(f.list)
+      .mockImplementationOnce(async (actor, kind) => {
+        f.records.delete(f.form.id);
+        f.records.delete(f.response.id);
+        markDeletedAccount(f.recipient);
+        return f.list(actor, kind);
+      });
+    await withQuestionnaireCleanupLocks(
+      f.store,
+      f.owner,
+      f.projectId,
+      async () => {
+        expect(await f.store.list(f.owner, 'job')).toEqual([]);
+      },
+    );
+    expect(f.store.remove).not.toHaveBeenCalled();
+    expect([...f.records.keys()]).toEqual([f.unrelated.id]);
+  });
   it('removes only the assigned response even when answer content needs repair', async () => {
     const f = fixture();
     f.response.questionnaireResponse!.version = -1;

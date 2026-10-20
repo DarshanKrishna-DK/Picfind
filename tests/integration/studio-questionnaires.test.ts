@@ -10,6 +10,79 @@ import {
 import { markDeletedAccount } from '../../apps/api/src/locks';
 
 describe('private photographer preparation questionnaires', () => {
+  it.each([1, 30])(
+    'computes %i expiry days from the exact persisted creation instant',
+    async (days) => {
+      const f = fixture();
+      const form = (
+        await f.put(`${f.root}/${f.formId}`, { ...f.fields, days }).expect(200)
+      ).body.questionnaire;
+      expect(Date.parse(form.expiresAt) - Date.parse(form.createdAt)).toBe(
+        days * 86_400_000,
+      );
+      expect(form.updatedAt).toBe(form.createdAt);
+    },
+  );
+  it('round-trips the highest writable response version and still permits withdrawal', async () => {
+    const f = fixture();
+    await f.issue().expect(200);
+    await f.write().expect(200);
+    const response = f.records.get(f.responseId)!.questionnaireResponse!;
+    response.version = Number.MAX_SAFE_INTEGER - 2;
+    const saved = (
+      await f
+        .write({ version: response.version, generation: response.generation })
+        .expect(200)
+    ).body;
+    expect(saved.response.version).toBe(Number.MAX_SAFE_INTEGER - 1);
+    expect(clientQuestionnaire.safeParse(saved).success).toBe(true);
+    expect(
+      (await f.read(f.clientPath, f.clientId).expect(200)).body.response
+        .version,
+    ).toBe(Number.MAX_SAFE_INTEGER - 1);
+    await f
+      .remove(
+        `${f.clientPath}/response`,
+        {
+          version: saved.response.version,
+          generation: saved.response.generation,
+        },
+        f.clientId,
+      )
+      .expect(204);
+  });
+  it.each(['', null, false, 0, 'not-a-date'])(
+    'denies every present removal marker before client metadata validation: %s',
+    async (marker) => {
+      const f = fixture();
+      await f.issue().expect(200);
+      Object.assign(f.records.get(f.formId)!, {
+        questionnaireRemovalStartedAt: marker,
+      });
+      await f.read(f.clientPath, f.clientId).expect(404);
+      await f.read(f.clientPath, f.strangerId).expect(404);
+      await f.read().expect(503);
+    },
+  );
+  it('allows the client to withdraw a response with unknown question IDs without exposing it', async () => {
+    const f = fixture();
+    await f.issue().expect(200);
+    await f.write().expect(200);
+    const response = f.records.get(f.responseId)!.questionnaireResponse!;
+    response.answers[0]!.questionId = randomUUID();
+    await f.read(f.clientPath, f.clientId).expect(503);
+    await f.read().expect(503);
+    await f
+      .remove(
+        `${f.clientPath}/response`,
+        { version: response.version, generation: response.generation },
+        f.clientId,
+      )
+      .expect(204);
+    expect(
+      (await f.read(f.clientPath, f.clientId).expect(200)).body.response,
+    ).toBeNull();
+  });
   it.each(['client', 'photographer'] as const)(
     'cleans retained answers during %s account deletion',
     async (who) => {
@@ -37,6 +110,15 @@ describe('private photographer preparation questionnaires', () => {
       expect(f.records.has(f.responseId)).toBe(false);
       expect(f.records.has(f.formId)).toBe(who === 'client');
       if (who === 'client') {
+        const retained = (await f.read().expect(200)).body.questionnaires[0];
+        expect(retained).toMatchObject({
+          questionnaire: {
+            recipientId: f.clientId,
+            recipientEmail: f.fields.email,
+          },
+          response: null,
+        });
+        await f.write().expect(401);
         await f.put(`${f.root}/${f.formId}/revoke`, { version: 1 }).expect(200);
         await f.remove(`${f.root}/${f.formId}`, { version: 2 }).expect(204);
       }

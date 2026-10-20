@@ -155,13 +155,13 @@ export async function clientQuestionnaireAccess(
   if (
     !row ||
     row.studioQuestionnaire?.recipientId !== recipientId ||
-    row.questionnaireRemovalStartedAt
+    row.questionnaireRemovalStartedAt !== undefined
   )
     throw questionnaireUnavailable();
   const result = readQuestionnaire(row, id);
   if (
     result.form.recipientId !== recipientId ||
-    row.questionnaireRemovalStartedAt
+    row.questionnaireRemovalStartedAt !== undefined
   )
     throw questionnaireUnavailable();
   const project = await questionnaireProject(

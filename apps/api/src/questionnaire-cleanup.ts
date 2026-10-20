@@ -62,6 +62,8 @@ export async function withQuestionnaireCleanupLocks<T>(
       ...new Set(before.map((row) => questionnaireIdentity(row).recipientId)),
     ];
   if (recipients.length > 200) throw invalid();
+  // Discovery chooses locks, not a frozen deletion list. The operation rereads
+  // all current forms in the authorized account/project scope under these locks.
   const lockedAccounts = new Set([ownerId, ...recipients]);
   return withAccountLocks(
     [...lockedAccounts],
@@ -81,6 +83,7 @@ export async function removeQuestionnaireResponse(
   lockedAccounts: ReadonlySet<string>,
   assertRemoval: () => Promise<void> = async () => {},
 ) {
+  // The caller already holds these queues. Never reacquire a participant here.
   const form = questionnaireIdentity(formRow);
   if (
     !lockedAccounts.has(form.ownerId) ||

@@ -122,3 +122,11 @@ restores those guards before reads and repeats them after acquiring all locks.
 Locks coordinate one API process. These tests do not establish distributed
 transactions, live Appwrite account lookup or a production deployment. Existing
 non-fatal Zod annotation and frontend chunk-size build warnings remain.
+
+Shipwright follow-up hardened runtime lock-ID validation and denied every present
+removal marker, including malformed falsy values, before client metadata parsing.
+Seventy-one focused tests passed after review. New evidence directly checks owner
+queue serialization, fresh same-recipient cleanup, removed preflight forms,
+maximum-version round trips, exact 1/30-day expiry, malformed-marker privacy and
+withdrawal of unknown-question content. The owner retains an issued form after
+client deletion, can review its now-empty response, revoke it and remove it.

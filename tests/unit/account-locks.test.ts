@@ -116,6 +116,8 @@ describe('ordered account locks for shared questionnaire lifecycle', () => {
     for (const ids of [
       [],
       [''],
+      [1] as unknown as string[],
+      [{}] as unknown as string[],
       Array.from({ length: 202 }, (_, i) => String(i)),
     ])
       expect(() => withAccountLocks(ids, async () => undefined)).toThrow();
