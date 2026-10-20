@@ -124,6 +124,7 @@ export interface LibraryRecord {
   selectedIds?: string[];
   selectionMinimum?: number;
   selectionMaximum?: number;
+  selectionClosesAt?: string;
   visitorName?: string;
   note?: string;
   reviewStatus?: SelectionStatus;

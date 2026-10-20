@@ -68,6 +68,12 @@ async function fixture(page: Page) {
     conflict: false,
     failDownload: false,
     selectionRules: { minimum: 1, maximum: 100 },
+    selectionWindow: {
+      closesAt: null as string | null,
+      serverNow: new Date().toISOString(),
+      closed: false,
+      invalid: false,
+    },
     writes: [] as { path: string; body: Record<string, unknown> }[],
     unexpectedWrites: [] as string[],
   };
@@ -130,6 +136,7 @@ async function fixture(page: Page) {
           brandingName: '',
           accentColor: '#173f37',
           selectionRules: state.selectionRules,
+          selectionWindow: state.selectionWindow,
           selections,
         },
       });
@@ -139,6 +146,27 @@ async function fixture(page: Page) {
     ) {
       state.selectionRules = request.postDataJSON();
       return route.fulfill({ json: { selectionRules: state.selectionRules } });
+    }
+    if (
+      path === `/api/events/${eventId}/selection-window` &&
+      method === 'PATCH'
+    ) {
+      const body = request.postDataJSON();
+      const now = new Date().toISOString();
+      state.selectionWindow = {
+        closesAt:
+          body.action === 'open'
+            ? null
+            : body.action === 'close'
+              ? now
+              : body.closesAt,
+        closed: body.action === 'close',
+        invalid: false,
+        serverNow: now,
+      };
+      return route.fulfill({
+        json: { selectionWindow: state.selectionWindow },
+      });
     }
     if (
       path === `/api/events/${eventId}/selections/${selection.id}` &&
@@ -435,6 +463,52 @@ test('organizers save selection count rules and see them after reload', async ({
   await expect(page.getByLabel('Maximum favorites per request')).toHaveValue(
     '3',
   );
+});
+
+test('organizers schedule, close and reopen favorites without changing the gallery', async ({
+  page,
+}) => {
+  const { eventId, state, events } = await fixture(page);
+  const before = structuredClone(events[0]);
+  await page.goto(`/app/events/${eventId}`);
+  await page
+    .getByText('Favorites submission deadline', { exact: true })
+    .click();
+  const form = page
+    .locator('details')
+    .filter({ hasText: 'Favorites submission deadline' });
+  await expect(
+    form.getByText('Favorites submissions are open.', { exact: true }),
+  ).toBeVisible();
+  const tomorrow = new Date(Date.now() + 86400000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const local = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T18:30`;
+  await page.getByLabel('Submission deadline in your time zone').fill(local);
+  await page
+    .getByRole('button', { name: 'Schedule submission deadline' })
+    .click();
+  await expect(
+    form.getByText('Submission window saved. Existing requests are unchanged.'),
+  ).toBeVisible();
+  expect(state.selectionWindow.closesAt).toBe(new Date(local).toISOString());
+  await expect(form.getByText(/Time zone:/)).toBeVisible();
+  await page.reload();
+  await page
+    .getByText('Favorites submission deadline', { exact: true })
+    .click();
+  await expect(
+    page.getByLabel('Submission deadline in your time zone'),
+  ).toHaveValue(local);
+  await page.getByRole('button', { name: 'Close submissions now' }).click();
+  await expect(
+    form.getByText('Favorites submissions are closed.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Reopen without deadline' }).click();
+  await expect(
+    form.getByText('Favorites submissions are open.', { exact: true }),
+  ).toBeVisible();
+  expect(state.selectionWindow.closesAt).toBeNull();
+  expect(events[0]).toEqual(before);
 });
 
 test('compare requests, filter shared favorites and export current availability', async ({

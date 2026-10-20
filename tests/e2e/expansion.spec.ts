@@ -434,3 +434,52 @@ test('invalid selection limits pause favorites while keeping the gallery viewabl
   ).toBeVisible();
   expect(state.selections).toBe(0);
 });
+
+test('a server-relative deadline closes an open guest form and reopening preserves favorites', async ({
+  page,
+}) => {
+  const { state } = await fixture(page);
+  state.unlocked = true;
+  // Deliberately wrong device wall clock. Policy time comes from the server.
+  await page.clock.install({ time: new Date('2040-01-01T00:00:00Z') });
+  let window = {
+    closesAt: '2026-10-20T12:01:00.000Z' as string | null,
+    serverNow: '2026-10-20T12:00:00.000Z',
+    closed: false,
+    invalid: false,
+  };
+  await page.route('**/api/public/events/event1/access', (route) =>
+    route.fulfill({
+      json: {
+        brandingName: '',
+        accentColor: '#173f37',
+        selectionWindow: window,
+      },
+    }),
+  );
+  await page.goto('/e/event1');
+  await page
+    .getByRole('button', { name: 'Choose favorites for organizer' })
+    .click();
+  await page.getByLabel('Cloud photo.jpg', { exact: true }).check();
+  await expect(
+    page.getByRole('button', { name: 'Send 1 favorites' }),
+  ).toBeEnabled();
+  await expect(page.getByText(/Shown in your device time zone/)).toBeVisible();
+  await page.clock.runFor(61_000);
+  await expect(
+    page.getByRole('heading', { name: 'Favorites submissions are closed.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Test celebration' }),
+  ).toBeVisible();
+  window = { ...window, closesAt: null, serverNow: '2026-10-20T12:02:00.000Z' };
+  await page.getByRole('button', { name: 'Refresh selection limits' }).click();
+  await expect(
+    page.getByLabel('Cloud photo.jpg', { exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Send 1 favorites' }),
+  ).toBeEnabled();
+  expect(state.selections).toBe(0);
+});

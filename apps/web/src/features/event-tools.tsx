@@ -12,6 +12,12 @@ import {
   type SelectionCountRules,
 } from '../../../../packages/shared/src/selection-rules';
 import { SelectionRulesForm } from './selection-rules';
+import type { SelectionWindow } from '../../../../packages/shared/src/selection-window';
+import {
+  SelectionWindowForm,
+  SelectionWindowNote,
+  useSelectionClosed,
+} from './selection-window';
 
 export function GalleryAccess({
   eventId,
@@ -28,6 +34,7 @@ export function GalleryAccess({
         brandingName: string;
         accentColor: string;
         selectionRules?: SelectionCountRules | null;
+        selectionWindow?: SelectionWindow;
       }>(`/public/events/${eventId}/access`),
     retry: false,
     enabled: Boolean(account.data),
@@ -122,6 +129,7 @@ export function GalleryAccess({
       <GuestSelections
         key={eventId}
         eventId={eventId}
+        window={access.data?.selectionWindow}
         rules={
           access.data?.selectionRules === null
             ? null
@@ -137,14 +145,17 @@ export function GalleryAccess({
 }
 function GuestSelections({
   eventId,
+  window,
   rules,
   refreshRules,
 }: {
   eventId: string;
+  window: SelectionWindow | undefined;
   rules: SelectionCountRules | null;
   refreshRules: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const closed = useSelectionClosed(window);
   const photos = useQuery({
     queryKey: ['selection-photos', eventId],
     queryFn: () => api<{ photos: Photo[] }>(`/public/events/${eventId}`),
@@ -191,22 +202,29 @@ function GuestSelections({
       if (
         failure instanceof HttpError &&
         (failure.code === 'SELECTION_COUNT_REQUIRED' ||
-          failure.code === 'SELECTION_RULES_INVALID')
+          failure.code === 'SELECTION_RULES_INVALID' ||
+          failure.code === 'SELECTIONS_CLOSED')
       )
         await refreshRules().catch(() => {});
     } finally {
       setBusy(false);
     }
   }
-  if (!rules)
+  if (!rules || closed)
     return (
       <section className="wrap">
         <div className="source-panel">
-          <h2>Favorites submissions are paused.</h2>
+          <h2>
+            {closed
+              ? 'Favorites submissions are closed.'
+              : 'Favorites submissions are paused.'}
+          </h2>
           <p>
-            You can still view the gallery. The photographer needs to repair
-            this event selection policy before accepting requests.
+            {closed
+              ? 'You can still view the gallery. Ask the photographer to reopen submissions if you need to send a request.'
+              : 'You can still view the gallery. The photographer needs to repair this event selection policy before accepting requests.'}
           </p>
+          <SelectionWindowNote window={window} />
           <button
             className="button secondary"
             disabled={busy}
@@ -222,6 +240,7 @@ function GuestSelections({
     <section className="wrap">
       <div className="source-panel">
         <h2>Send favorites to your photographer.</h2>
+        <SelectionWindowNote window={window} />
         <p>
           Choose photos from the full event gallery for edits or an album. Your
           name, note and chosen photo IDs will be visible to the organizer. No
@@ -315,6 +334,7 @@ type Insights = {
   accentColor: string;
   selections: EventSelection[];
   selectionRules?: SelectionCountRules;
+  selectionWindow?: SelectionWindow;
 };
 export function OrganizerTools({ eventId }: { eventId: string }) {
   const client = useQueryClient();
@@ -439,6 +459,15 @@ export function OrganizerTools({ eventId }: { eventId: string }) {
               Export selections CSV
             </button>
           </div>
+          <SelectionWindowForm
+            key={`window:${eventId}`}
+            eventId={eventId}
+            window={insights.data.selectionWindow}
+            refresh={async () => {
+              const result = await insights.refetch();
+              if (result.error) throw result.error;
+            }}
+          />
           <SelectionRulesForm
             key={eventId}
             eventId={eventId}
