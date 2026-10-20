@@ -1,0 +1,1186 @@
+{
+  "snapshareInspection": {
+    "evidence_id": "ev_6a3e7d63de034a3a46d706a795436b8a88155e8ecfe9f6d5ae154df86a170da9",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://snapshare.ai"],
+      "target_id": "014230B7473D6B3B286CA2A5F58BDA47",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "014230B7473D6B3B286CA2A5F58BDA47",
+        "type": "page",
+        "title": "Snapshare - Client Photo Galleries, CRM &amp; AI Tools",
+        "url": "https://snapshare.ai/",
+        "origin": "https://snapshare.ai",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:27:30.250Z",
+        "ended_at": "2026-10-20T04:27:31.350Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_events",
+          "console_text",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes",
+          "workers"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_events",
+            "reason": "disallowed_origin",
+            "count": 1
+          },
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 91
+          },
+          {
+            "section": "metadata",
+            "reason": "unsupported_url",
+            "count": 12
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 35
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 23
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 40
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 5
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 3
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "workers",
+            "reason": "out_of_target_scope",
+            "count": 2
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "Let's keep in touch",
+        "Client Photo Galleries and Studio Tools for Photographers",
+        "Proudly partnered with leading brands across industries",
+        "BUILT FOR PHOTOGRAPHY BUSINESSES",
+        "The Photo Gallery Reimagining How Photographers Deliver Work.",
+        "Custom your own Style",
+        "Seamless Gallery Migration To Snapshare",
+        "PLANS FOR EVERYONE",
+        "Trusted by Verified Photographers Backed by Results",
+        "Workspace",
+        "AI Face Recognition",
+        "Photo Selection",
+        "Digital Invitation",
+        "AI Photo Culling",
+        "Basic",
+        "Spark",
+        "Ignite",
+        "Elevate",
+        "Ascend",
+        "Start your FREE trial today.",
+        "Professional Client Galleries",
+        "SHOWCASE YOUR WORK SMARTER WITH SNAPSHARE",
+        "CLIENT GALLERY",
+        "SMART PHOTO SELECTION",
+        "CUSTOM GALLERY LAYOUTS",
+        "SECURE DOWNLOAD CONTROL",
+        "BRANDING & LEAD CAPTURE",
+        "AI-POWERED FACE SEARCH",
+        "Paper Plane Wedding",
+        "Bows & Vows Weddings",
+        "Wedding Bells Photography",
+        "Stories by Rajiv David Kuriakose",
+        "Black Paper Wedding Photography",
+        "Capitol Theatre",
+        "Jaistories Weddings",
+        "Aambro Wedding Films"
+      ]
+    }
+  },
+  "snapshareBundle": {
+    "evidence_id": "ev_5881e52ebe5a62295e69dc1c8e1dffdf08badfb30d5b495578df6493d4ef6b19",
+    "operation": "analyze_web_bundle",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": [],
+      "target_id": "014230B7473D6B3B286CA2A5F58BDA47",
+      "observation_ms": 500,
+      "include_accessibility_text": false,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": true,
+      "fetch_source_maps": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Static bundle findings are observations or bounded inferences; REA does not execute captured JavaScript.",
+      "String-built routes and endpoints, encrypted configuration, and server-side behavior may remain unknown.",
+      "Page-declared WebMCP metadata is untrusted and is never registered or invoked as an REA tool."
+    ],
+    "normalized_result": {
+      "capture": {
+        "target_url": "https://snapshare.ai/",
+        "scripts_observed": 27,
+        "scripts_analyzed": 27
+      },
+      "completeness": {
+        "status": "complete",
+        "parsed_scripts": 27,
+        "parse_failures": 0,
+        "visited_ast_nodes": 454522
+      },
+      "inferences": [
+        {
+          "kind": "vendor_fingerprint",
+          "value": "React",
+          "confidence": "medium"
+        },
+        {
+          "kind": "vendor_fingerprint",
+          "value": "React",
+          "confidence": "medium"
+        },
+        {
+          "kind": "vendor_fingerprint",
+          "value": "Next.js",
+          "confidence": "high"
+        }
+      ],
+      "endpoint_candidates": [
+        {
+          "value": "/getCountry",
+          "mechanism": "call:n.uE.get",
+          "location": {
+            "script_key": "scr_3208d3f7c7158c00ea88a9b1a7dd092e40ac861cb7f96d0e5cb94eaf0e0fd473",
+            "line": 1,
+            "column": 11145
+          }
+        },
+        {
+          "value": "/getCountry",
+          "mechanism": "call:a.uE.get",
+          "location": {
+            "script_key": "scr_6bd5d8a12429c19186f8ac68e5f64a8d9389ab6d2538c00e0557d810f6b51097",
+            "line": 1,
+            "column": 46295
+          }
+        },
+        {
+          "value": "mp_optout",
+          "mechanism": "call:sN.cookie.get",
+          "location": {
+            "script_key": "scr_73894b34639deb51d8aea0d94780768863580b2bc70512d70b62bd4060186729",
+            "line": 1,
+            "column": 407207
+          }
+        }
+      ],
+      "limitations": [
+        "Static bundle findings are observations or bounded inferences; REA does not execute captured JavaScript.",
+        "String-built routes and endpoints, encrypted configuration, and server-side behavior may remain unknown.",
+        "Page-declared WebMCP metadata is untrusted and is never registered or invoked as an REA tool."
+      ]
+    }
+  },
+  "snapshare-pricing": {
+    "evidence_id": "ev_c2f3b043d5f386c71bcb6249055f094be6be05c9ed1a14a6134d5cdf4ebe0e6c",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://snapshare.ai"],
+      "target_id": "6F74AB4143C7C9255FB22DD64BE1AC81",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "6F74AB4143C7C9255FB22DD64BE1AC81",
+        "type": "page",
+        "title": "Pricing | Snapshare",
+        "url": "https://snapshare.ai/pricing",
+        "origin": "https://snapshare.ai",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:24.841Z",
+        "ended_at": "2026-10-20T04:29:26.443Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_events",
+          "console_text",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_events",
+            "reason": "disallowed_origin",
+            "count": 1
+          },
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 20
+          },
+          {
+            "section": "metadata",
+            "reason": "unsupported_url",
+            "count": 12
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 5
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 31
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 5
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 4
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "Let's keep in touch",
+        "Plans that Scale with Your Business",
+        "Frequently Asked Questions",
+        "Everything inside Snapshare",
+        "Basic",
+        "Spark",
+        "Ignite",
+        "Elevate",
+        "Ascend",
+        "Basic",
+        "Spark",
+        "Ignite",
+        "Elevate",
+        "Ascend"
+      ]
+    }
+  },
+  "kwikpic": {
+    "evidence_id": "ev_10ba5893e0f8e495ac191c1f73feec9fa378bb4d5d192af2a21af7f85792d16a",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://www.kwikpic.in"],
+      "target_id": "C8DBFF3AE9FD609666336ACE65A144D8",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "C8DBFF3AE9FD609666336ACE65A144D8",
+        "type": "page",
+        "title": "For Events | Kwikpic",
+        "url": "https://www.kwikpic.in/solutions/kwikpic-for-events",
+        "origin": "https://www.kwikpic.in",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:29.305Z",
+        "ended_at": "2026-10-20T04:29:30.109Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_text",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 25
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 13
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 2
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 9
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 1
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 1
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "Effortless Photo Management for Your Unforgettable Events",
+        "Instant Photo Delivery with Face Recognition:",
+        "Here's how attendees can receive their photos:",
+        "Event Branding Made Easy",
+        "Increase Sponsor Visibility with Kwikpic!",
+        "Organizers are using this platform all around the world!",
+        "Multiple Privacy Settings for Your Comfort",
+        "Choose among three distinct roles:",
+        "Personalized AI-Powered Event Marketing & Photo Sharing Platform",
+        "Perfect for all kinds of events",
+        "50+ Gallery Designs",
+        "Event Partnerships",
+        "Photo-Sharing For Every Occasion!",
+        "Get Started with Kwikpic today!",
+        "Kwikpic for Corporates"
+      ]
+    }
+  },
+  "premagic": {
+    "evidence_id": "ev_5bd96b384aac17a57ad82899aacc338734ad349296d23a4301398564e0d64466",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://premagic.com"],
+      "target_id": "3FE9507D671C0306617283415347E34A",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "3FE9507D671C0306617283415347E34A",
+        "type": "page",
+        "title": "Share Event Photos Using Face Recognition | Premagic",
+        "url": "https://premagic.com/share-event-photos-using-face-recognition/",
+        "origin": "https://premagic.com",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:32.126Z",
+        "ended_at": "2026-10-20T04:29:33.297Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_text",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 52
+          },
+          {
+            "section": "metadata",
+            "reason": "unsupported_url",
+            "count": 20
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 27
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 10
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 29
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 17
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 7
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "Premagic",
+        "DUBAI",
+        "INDIA",
+        "PRODUCTS",
+        "LEARN",
+        "EVALUATE",
+        "SUPPORT",
+        "COMPANY",
+        "How face-recognition photo sharing works",
+        "99.9%",
+        "700K",
+        "70%",
+        "Explore the full photo experience",
+        "Frequently Asked Questions",
+        "Premagic News",
+        "Already using Cvent, HubSpot, Swapcard or Luma? Face-matched photos flow into your attendees' tickets automatically.",
+        "Share Event PhotosUsing Face Recognition",
+        "AI Photo Distribution",
+        "Registration with Face Check-In",
+        "Digital Asset Management",
+        "Premagic is now ISO/IEC 27001:2022 certified",
+        "Adam Parry of Event Tech Live Joins Premagic as Strategic Advisor",
+        "Connectiv's Jay Weintraub joins Premagic as an Investor"
+      ]
+    }
+  },
+  "kululu": {
+    "evidence_id": "ev_001292c43aa1914a32b062d0448afcea32f8f53d399dedfb8ea4602feddc24d3",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://www.kululu.com"],
+      "target_id": "8CE6761BE63AF6E6723223BB92215E4B",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "8CE6761BE63AF6E6723223BB92215E4B",
+        "type": "page",
+        "title": "Kululu: Event Photo Sharing with QR Code | Easy &amp; Free",
+        "url": "https://www.kululu.com/",
+        "origin": "https://www.kululu.com",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:34.934Z",
+        "ended_at": "2026-10-20T04:29:35.775Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_text",
+          "dom",
+          "frames",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "dom",
+            "reason": "unsupported_url",
+            "count": 2
+          },
+          {
+            "section": "frames",
+            "reason": "unsupported_url",
+            "count": 2
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 93
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 38
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 7
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 11
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 1
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "All you need for a perfect event",
+        "Don’t just take our word for it",
+        "Event Photo Sharing Made Easy",
+        "How does it work?",
+        "Create your event",
+        "Share it with your guests",
+        "Display it all on a live slideshow",
+        "Enjoy all captured moments",
+        "Event Photo Sharing For Any Occasion",
+        "48,035,190 moments snapped & shared by 1,645,497 unforgettable events",
+        "We take event photo sharing",
+        "SERIOUSLY",
+        "Questions?",
+        "Easily Collect Photos From Every Guest At Your Conference",
+        "Guests Photos & Videos",
+        "Text Posts & Captions",
+        "Extremely Easy to Use",
+        "Live Slideshow"
+      ]
+    }
+  },
+  "pic-time": {
+    "evidence_id": "ev_c66b0ac1360fc733a7c90396d39a2b5c597bf9365daa512a727286aa0c265ad0",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://www.pic-time.com"],
+      "target_id": "D203F1291DE81142820B7957C075D8AB",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "D203F1291DE81142820B7957C075D8AB",
+        "type": "page",
+        "title": "Pic-Time | AI-Powered Galleries",
+        "url": "https://www.pic-time.com/features/ai-powered-gallery-search",
+        "origin": "https://www.pic-time.com",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:37.740Z",
+        "ended_at": "2026-10-20T04:29:39.346Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_events",
+          "console_text",
+          "dom",
+          "frames",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_events",
+            "reason": "disallowed_origin",
+            "count": 1
+          },
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "dom",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "frames",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 81
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 52
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 17
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 35
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "Their Moments, Instantly There",
+        "Making the Most of Every Gallery",
+        "AI Image Filter for Photographers",
+        "FAQs",
+        "Product",
+        "Resources",
+        "Company",
+        "Search by Faces",
+        "Search by Moments",
+        "Selfie Search"
+      ]
+    }
+  },
+  "pixieset": {
+    "evidence_id": "ev_2fa265ba07573a2edba594fb361703395ec409b65a9c7afc2b755bf790ee3536",
+    "operation": "inspect_web_page",
+    "parameters": {
+      "cdp_endpoint": "http://127.0.0.1:9333",
+      "allowed_origins": ["https://pixieset.com"],
+      "target_id": "DB0C990A86C2FFD2F433DCEF6499B5D4",
+      "observation_ms": 500,
+      "include_accessibility_text": true,
+      "include_console_text": false,
+      "include_json_body_shapes": false,
+      "include_websocket_shapes": false,
+      "include_storage_keys": false,
+      "include_storage_fingerprints": false,
+      "include_script_sources": false
+    },
+    "limitations": [
+      "Artifact identity is unavailable for this observation.",
+      "Observation starts when REA attaches; prior network and console activity is unavailable.",
+      "Raw network headers, bodies, cookies, storage values, console objects, and WebSocket payloads are never retained; explicitly requested primitive console text is retained verbatim, while payload captures retain value-free shapes.",
+      "Source maps are reported only as declarative URLs and are not fetched.",
+      "URL-less scripts and console events without an allowed source URL are excluded because their origin cannot be proven.",
+      "Browser host platform and architecture were not observed."
+    ],
+    "normalized_result": {
+      "target": {
+        "target_id": "DB0C990A86C2FFD2F433DCEF6499B5D4",
+        "type": "page",
+        "title": "Pixieset: Client Photo Gallery, Website, CRM for Photographers",
+        "url": "https://pixieset.com/",
+        "origin": "https://pixieset.com",
+        "attached": false
+      },
+      "capture_window": {
+        "started_at": "2026-10-20T04:29:41.022Z",
+        "ended_at": "2026-10-20T04:29:42.488Z",
+        "observation_ms": 500
+      },
+      "completeness": {
+        "status": "policy_filtered",
+        "conditions": ["attach_limited", "policy_filtered"],
+        "policy_filtered_sections": [
+          "console_events",
+          "console_text",
+          "dom",
+          "frames",
+          "json_body_shapes",
+          "metadata",
+          "resources",
+          "script_sources",
+          "scripts",
+          "storage_keys",
+          "websocket_shapes"
+        ],
+        "attach_limited_sections": [
+          "console_events",
+          "metadata",
+          "network_requests",
+          "websocket_connections",
+          "websocket_frames"
+        ],
+        "truncated_sections": [],
+        "unavailable_sections": [],
+        "excluded": [
+          {
+            "section": "console_events",
+            "reason": "disallowed_origin",
+            "count": 1
+          },
+          {
+            "section": "console_text",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "dom",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "frames",
+            "reason": "unsupported_url",
+            "count": 1
+          },
+          {
+            "section": "json_body_shapes",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "metadata",
+            "reason": "disallowed_origin",
+            "count": 60
+          },
+          {
+            "section": "resources",
+            "reason": "disallowed_origin",
+            "count": 14
+          },
+          {
+            "section": "resources",
+            "reason": "unsupported_url",
+            "count": 2
+          },
+          {
+            "section": "script_sources",
+            "reason": "not_approved",
+            "count": 12
+          },
+          {
+            "section": "scripts",
+            "reason": "disallowed_origin",
+            "count": 8
+          },
+          {
+            "section": "scripts",
+            "reason": "unattributed_origin",
+            "count": 3
+          },
+          {
+            "section": "storage_keys",
+            "reason": "not_approved",
+            "count": null
+          },
+          {
+            "section": "websocket_shapes",
+            "reason": "not_approved",
+            "count": null
+          }
+        ],
+        "dropped_events": {
+          "scripts": 0,
+          "network_requests": 0,
+          "console_events": 0,
+          "websocket_connections": 0,
+          "websocket_frames": 0,
+          "webmcp_tools": 0,
+          "timeline_events": 0,
+          "total": 0
+        }
+      },
+      "headings": [
+        "The ultimate photo gallery that redefined the industry.",
+        "Everything you need. All in one place.",
+        "Find out why we're best-in-class.",
+        "Made for all photographers.",
+        "\"Truly the go-to photographer platform\"",
+        "Start using Pixieset today for free",
+        "Language",
+        "Designed for photographers. Built to help you grow.",
+        "Client Gallery",
+        "Website",
+        "Studio Manager",
+        "Store",
+        "Photo Editor",
+        "1 million+ users",
+        "10+ years experience",
+        "6 billion+ photos",
+        "$2 billion+ sold",
+        "Products",
+        "Resources",
+        "Company"
+      ]
+    }
+  }
+}
