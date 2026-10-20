@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { unzipSync } from 'fflate';
@@ -23,6 +23,7 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
   let reads = 0,
     failure = 0,
+    transientFailure = 0,
     hold = false,
     finishedHeld = false;
   let release: (() => void) | undefined;
@@ -124,6 +125,14 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
       }
       return;
     }
+    if (transientFailure) {
+      const status = transientFailure;
+      transientFailure = 0;
+      return route.fulfill({
+        status,
+        json: { error: { message: 'Export unavailable.' } },
+      });
+    }
     if (failure)
       return route.fulfill({
         status: failure,
@@ -157,9 +166,13 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   const txt = round.getByRole('button', {
     name: 'Export round 2 filenames TXT',
   });
-  const before = reads;
+  async function clickExport(button: Locator, expectedReads = 1) {
+    const before = reads;
+    await button.click();
+    await expect.poll(() => reads).toBe(before + expectedReads);
+  }
   let downloadEvent = page.waitForEvent('download');
-  await csv.click();
+  await clickExport(csv);
   let download = await downloadEvent;
   expect(download.suggestedFilename()).toBe(
     `picfind-round-2-${submissionId}.csv`,
@@ -170,7 +183,6 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   expect(duplicateCsv).not.toMatch(
     /Private|client@example|Earlier|note|reason/,
   );
-  expect(reads).toBe(before + 1);
   await expect(round).toContainText('1 unavailable photo omitted.');
   await expect(round).toContainText('Some filenames repeat.');
 
@@ -178,8 +190,12 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
     { photoId: photos[1]!.id, filename: '=SUM(1,2).jpg' },
   ];
   current.current!.unavailableCount = 2;
+  // Changing the next API response does not change the already rendered snapshot.
+  await expect(round.getByText('duplicate.jpg', { exact: true })).toHaveCount(
+    2,
+  );
   downloadEvent = page.waitForEvent('download');
-  await csv.click();
+  await clickExport(csv);
   download = await downloadEvent;
   const freshCsv = await readFile((await download.path())!, 'utf8');
   expect(freshCsv).toContain(`"${photos[1]!.id}","'=SUM(1,2).jpg"`);
@@ -187,9 +203,9 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   await expect(round).toContainText('2 unavailable photos omitted.');
 
   downloadEvent = page.waitForEvent('download');
-  await panel
-    .getByRole('button', { name: 'Export round 1 filenames TXT' })
-    .click();
+  await clickExport(
+    panel.getByRole('button', { name: 'Export round 1 filenames TXT' }),
+  );
   download = await downloadEvent;
   expect(download.suggestedFilename()).toBe(`picfind-round-1-${oldId}.txt`);
   expect(await readFile((await download.path())!, 'utf8')).toBe(
@@ -197,32 +213,47 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   );
   const count = downloaded.length;
   current.current!.photos[0]!.filename = 'line\nbreak.jpg';
-  await txt.click();
+  await clickExport(txt);
   await expect(round).toContainText('Use CSV to preserve the filenames.');
   expect(downloaded).toHaveLength(count);
   current.current!.photos = [];
   current.current!.unavailableCount = 3;
-  await csv.click();
+  await clickExport(csv);
   await expect(round).toContainText(
     'No selected photos are currently available to export.',
   );
   expect(downloaded).toHaveLength(count);
   const retained = current.current!;
   current.current = null;
-  await csv.click();
+  await clickExport(csv);
   await expect(round).toContainText(
     'This submitted round is no longer available.',
   );
   expect(downloaded).toHaveLength(count);
   current.current = retained;
+  for (const status of [401, 403]) {
+    current.current.photos = [
+      { photoId: photos[1]!.id, filename: `Recovered ${status}.jpg` },
+    ];
+    current.current.unavailableCount = 2;
+    transientFailure = status;
+    await clickExport(csv, 2);
+    await expect(
+      round.getByText(`Recovered ${status}.jpg`, { exact: true }),
+    ).toBeVisible();
+    await expect(round.getByText('duplicate.jpg', { exact: true })).toHaveCount(
+      0,
+    );
+    expect(downloaded).toHaveLength(count);
+  }
   failure = 503;
-  await csv.click();
+  await clickExport(csv);
   await expect(
     round.getByText('Export unavailable.', { exact: true }),
   ).toBeVisible();
   expect(downloaded).toHaveLength(count);
   failure = 404;
-  await csv.click();
+  await clickExport(csv, 2);
   await expect(panel.getByRole('article')).toHaveCount(0);
   await expect(
     panel.getByText('Export unavailable.', { exact: true }),
@@ -235,7 +266,7 @@ test('submitted round exports reauthorize, preserve round identity and omit priv
   ];
   await openHistory();
   hold = true;
-  await csv.click();
+  await clickExport(csv);
   await expect.poll(() => Boolean(release)).toBe(true);
   await expect(csv).toBeDisabled();
   await expect(txt).toBeDisabled();

@@ -58,9 +58,12 @@ describe('selection filename exports', () => {
     },
   );
 
-  it('does not generate a misleading empty export', () => {
-    expect(() => exportSelectionFilenames([], 'txt')).toThrow(
-      'No selected photos',
-    );
-  });
+  it.each(['txt', 'csv'] as const)(
+    'does not generate a misleading empty %s export',
+    (format) => {
+      expect(() => exportSelectionFilenames([], format)).toThrow(
+        'No selected photos',
+      );
+    },
+  );
 });
