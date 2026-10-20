@@ -20,6 +20,7 @@ import { StudioClients } from './features/studio-clients';
 import { PhotographerCredits } from './features/credit-presets';
 import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioServices } from './features/studio-services';
+import { StudioExpenses } from './features/studio-expenses';
 import { StudioProjects } from './features/studio-projects';
 import { ProjectQuestionnaires } from './features/project-questionnaires';
 import { ProjectProposals } from './features/project-proposals';
@@ -87,6 +88,7 @@ export function Product() {
         <Route path="library" element={<LibraryPage />} />
         <Route path="clients" element={<StudioClients />} />
         <Route path="services" element={<StudioServices />} />
+        <Route path="expenses" element={<StudioExpenses />} />
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
         <Route path="projects" element={<StudioProjects />} />
