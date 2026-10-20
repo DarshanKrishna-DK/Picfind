@@ -98,11 +98,13 @@ async function replayFixture(inEvent = false) {
 describe('photo library isolation and bounded processing, no external calls', () => {
   it('accepts an upload and replay for the authenticated expected actor', async () => {
     const f = await replayFixture();
+    expect(f.store.upload).toHaveBeenCalledOnce();
     const replay = await f
       .send()
       .set('X-PicFind-Upload-Actor', 'owner')
       .expect(201);
     expect(replay.body.photo.id).toBe(f.photo.id);
+    expect(f.store.upload).toHaveBeenCalledOnce();
     const bytes = await sharp({
       create: { width: 20, height: 20, channels: 3, background: '#861228' },
     })
