@@ -83,6 +83,7 @@ import {
 } from './cloud-sources.js';
 import { processingUsage } from './processing-budget.js';
 import { matchingReadiness } from './matching-readiness.js';
+import { createEventReadiness } from './event-readiness.js';
 import { uploadMetadata } from './upload-metadata.js';
 import type { BillingService } from './billing/service.js';
 import {
@@ -680,6 +681,7 @@ export function createLibraryRouter(
   router.use(createStudioClients(store, owner));
   router.use(createStudioProjects(store, owner));
   router.use(createStudioMilestones(store, owner));
+  router.use(createEventReadiness(options, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(

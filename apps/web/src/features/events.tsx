@@ -30,6 +30,7 @@ import { ProofingCollections } from './proofing-collections';
 import { RawJpegPairing } from './raw-jpeg-pairing';
 import { HighlightsEditor } from './highlights';
 import { QrPrintPack } from './qr-print-pack';
+import { EventDayReadiness } from './event-readiness';
 
 export function EventForm({
   existing,
@@ -416,6 +417,7 @@ export function EventDetail() {
       <div className="tabs" role="tablist" aria-label="Event sections">
         {[
           'photos',
+          'readiness',
           'collections',
           'editing',
           'highlights',
@@ -440,6 +442,13 @@ export function EventDetail() {
         ))}
       </div>
       <ErrorNote error={error} />
+      {tab === 'readiness' && (
+        <EventDayReadiness
+          key={event.id}
+          eventId={event.id}
+          onAction={setTab}
+        />
+      )}
       {tab === 'photos' && (
         <>
           {!event.archived && (
