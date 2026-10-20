@@ -207,9 +207,9 @@ test('event folders, search and visibility filters survive reload', async ({
   await expect(cards).toHaveCount(1);
   await expect(cards.first()).toContainText('Garden wedding');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Event folder', exact: true })).toHaveText(
-    'Weddings 2026',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Event folder', exact: true }),
+  ).toHaveText('Weddings 2026');
   await expect(cards).toHaveCount(1);
   await page.getByLabel('Search events').fill('not present');
   await expect(page.getByText('No events match these filters.')).toBeVisible();
@@ -347,6 +347,53 @@ test('an expired photo stops the ZIP with an actionable error', async ({
   );
   await expect(
     card.getByRole('button', { name: 'Download favorites ZIP' }),
+  ).toBeEnabled();
+  expect(downloads).toBe(0);
+});
+
+test('filename export refreshes availability and excludes private notes', async ({
+  page,
+}) => {
+  const { eventId, selection, state } = await fixture(page);
+  await page.goto(`/app/events/${eventId}`);
+  const card = page.getByRole('article', { name: 'Selection from Asha' });
+  await expect(card).toBeVisible();
+  selection.photos = selection.photos.slice(0, 1);
+  selection.reviewNote = 'Private editing instruction';
+  const pending = page.waitForEvent('download');
+  await card.getByRole('button', { name: 'Export filenames CSV' }).click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe(
+    `picfind-selection-${selection.id}.csv`,
+  );
+  const content = await readFile((await download.path())!, 'utf8');
+  expect(content).toContain('"Photo ID","Filename"');
+  expect(content).toContain('"Ceremony.jpg"');
+  expect(content).not.toContain('Garden.jpg');
+  expect(content).not.toContain('Private editing instruction');
+  await expect(
+    card.getByRole('status').filter({ hasText: 'filename exported' }),
+  ).toHaveText('1 filename exported. 2 unavailable photos omitted.');
+  expect(state.writes).toEqual([]);
+});
+
+test('a revoked owner session blocks filename export', async ({ page }) => {
+  const { eventId } = await fixture(page);
+  await page.goto(`/app/events/${eventId}`);
+  const card = page.getByRole('article', { name: 'Selection from Asha' });
+  await expect(card).toBeVisible();
+  await page.route(`**/api/events/${eventId}/insights`, (route) =>
+    route.fulfill({
+      status: 401,
+      json: { error: { message: 'Sign in again to export selections.' } },
+    }),
+  );
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  await card.getByRole('button', { name: 'Export filenames TXT' }).click();
+  await expect(card.getByRole('alert')).toContainText('Sign in again');
+  await expect(
+    card.getByRole('button', { name: 'Export filenames TXT' }),
   ).toBeEnabled();
   expect(downloads).toBe(0);
 });
