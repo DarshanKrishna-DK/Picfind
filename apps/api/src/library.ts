@@ -133,6 +133,12 @@ export interface LibraryRecord {
   invitationRecipientId?: string;
   invitationEmail?: string;
   invitationRevokedAt?: string;
+  proofingDecisions?: {
+    photoId: string;
+    status: import('../../../packages/shared/src/proofing-decisions.js').ProofingDecision;
+  }[];
+  proofingDecisionVersion?: number;
+  proofingDecisionUpdatedAt?: string;
   privatePhotoNote?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;

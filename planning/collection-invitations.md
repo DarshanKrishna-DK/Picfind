@@ -36,5 +36,5 @@ recipient access without altering photos. No database schema migration is needed
 
 The owner collection card reveals an invitation panel on demand. The recipient
 page survives sign-in and reload, shows a restricted gallery and explicit access
-errors, and periodically revalidates access. Saved decisions, comments and final
+errors, and periodically revalidates access. Saved decisions are covered in [Client proofing decisions](client-proofing-decisions.md). Comments and final
 submission are separate workflows.

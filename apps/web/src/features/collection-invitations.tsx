@@ -3,6 +3,10 @@ import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, session } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
+import {
+  ClientCollectionReview,
+  OwnerClientDecisions,
+} from './proofing-decisions';
 import type {
   CollectionInvitation,
   InvitedCollection,
@@ -164,6 +168,11 @@ function InvitationManager({
                         : 'Active'}{' '}
                     · Expires {new Date(invitation.expiresAt).toLocaleString()}
                   </p>
+                  <OwnerClientDecisions
+                    root={root}
+                    invitationId={invitation.id}
+                    email={invitation.email}
+                  />
                   {!invitation.revokedAt && !expired && (
                     <>
                       <label>
@@ -286,30 +295,12 @@ export function InvitedCollectionPage() {
             {query.data.photos.length === 0 && (
               <p>No photos are currently available in this collection.</p>
             )}
-            <div className="proofing-photo-options">
-              {query.data.photos.map((photo) => {
-                const url = `/api/proofing-invitations/${invitationId}/photos/${photo.id}`;
-                return (
-                  <figure key={photo.id} style={{ minWidth: 0, margin: 0 }}>
-                    <a href={url} aria-label={`Open ${photo.filename}`}>
-                      <img
-                        src={url}
-                        alt={photo.filename}
-                        loading="lazy"
-                        style={{
-                          width: '100%',
-                          aspectRatio: '4 / 3',
-                          objectFit: 'contain',
-                        }}
-                      />
-                    </a>
-                    <figcaption style={{ overflowWrap: 'anywhere' }}>
-                      {photo.filename}
-                    </figcaption>
-                  </figure>
-                );
-              })}
-            </div>
+            <ClientCollectionReview
+              key={`${invitationId}:${account.data.id}`}
+              invitationId={invitationId!}
+              accountId={account.data.id}
+              photos={query.data.photos}
+            />
           </>
         )
       )}

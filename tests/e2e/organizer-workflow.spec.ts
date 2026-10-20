@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { unzipSync } from 'fflate';
 import { chooseMenu } from './menu';
 import type { ProofingCollection } from '../../packages/shared/src/proofing-collection';
+import type { ProofingDecisions } from '../../packages/shared/src/proofing-decisions';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
 async function fixture(page: Page) {
@@ -252,6 +253,13 @@ test('collection invitations persist, survive client reload and stop access afte
   } | null = null;
   let signedIn = true;
   let recipient = false;
+  let conflict = false;
+  let decisions: ProofingDecisions = {
+    version: 0,
+    updatedAt: null,
+    unavailableCount: 0,
+    decisions: [],
+  };
   await page.route('**/api/auth/session', (route) =>
     route.fulfill({
       json: {
@@ -286,6 +294,8 @@ test('collection invitations persist, survive client reload and stop access afte
     }),
   );
   await page.route(`**${root}/${collectionId}/invitations**`, (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/decisions'))
+      return route.fulfill({ json: decisions });
     if (route.request().method() === 'POST') {
       expect(route.request().postDataJSON()).toEqual({
         email: 'client@example.test',
@@ -314,6 +324,50 @@ test('collection invitations persist, survive client reload and stop access afte
         status: 404,
         json: { error: { message: 'Invitation unavailable.' } },
       });
+    if (new URL(route.request().url()).pathname.endsWith('/decisions')) {
+      if (route.request().method() === 'PATCH') {
+        const input = route.request().postDataJSON();
+        if (conflict) {
+          conflict = false;
+          decisions = {
+            ...decisions,
+            version: decisions.version + 1,
+            decisions: [
+              {
+                photoId: photos[0]!.id,
+                filename: photos[0]!.filename,
+                status: 'maybe',
+              },
+            ],
+          };
+          return route.fulfill({
+            status: 409,
+            json: {
+              error: {
+                message:
+                  'Choices changed in another tab. Refresh saved decisions.',
+              },
+            },
+          });
+        }
+        expect(input.version).toBe(decisions.version);
+        decisions = {
+          version: decisions.version + 1,
+          updatedAt: new Date().toISOString(),
+          unavailableCount: 0,
+          decisions: input.status
+            ? [
+                {
+                  photoId: input.photoId,
+                  filename: photos[0]!.filename,
+                  status: input.status,
+                },
+              ]
+            : [],
+        };
+      }
+      return route.fulfill({ json: decisions });
+    }
     if (new URL(route.request().url()).pathname.includes('/photos/'))
       return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
     return route.fulfill({
@@ -371,10 +425,36 @@ test('collection invitations persist, survive client reload and stop access afte
   await expect(
     page.getByRole('img', { name: photos[1]!.filename }),
   ).toHaveCount(0);
+  const review = page.getByRole('region', { name: 'Your photo decisions' });
+  const choice = review.getByLabel(`Decision for ${photos[0]!.filename}`);
+  await choice.selectOption('favorite');
+  await expect(choice).toHaveValue('favorite');
+  await expect(review).toContainText('1 favorites');
   await page.reload();
   await expect(
     page.getByRole('heading', { name: 'Album round' }),
   ).toBeVisible();
+  await expect(choice).toHaveValue('favorite');
+  await review.getByLabel('Filter photo decisions').selectOption('undecided');
+  await expect(
+    review.getByText('No photos match this decision filter.'),
+  ).toBeVisible();
+  await review.getByLabel('Filter photo decisions').selectOption('all');
+  conflict = true;
+  await choice.selectOption('rejected');
+  await expect(choice).toBeDisabled();
+  await expect(
+    review.getByText(
+      'Choices changed in another tab. Refresh saved decisions.',
+    ),
+  ).toBeVisible();
+  await review.getByRole('button', { name: 'Refresh saved decisions' }).click();
+  await expect(choice).toHaveValue('maybe');
+  await choice.selectOption('');
+  await expect(choice).toHaveValue('');
+  await expect(review).toContainText('1 undecided');
+  await choice.selectOption('favorite');
+  await expect(choice).toHaveValue('favorite');
   invitation!.revokedAt = new Date().toISOString();
   await page
     .getByRole('button', { name: 'Refresh collection', exact: true })
@@ -393,6 +473,12 @@ test('collection invitations persist, survive client reload and stop access afte
   await page
     .getByRole('button', { name: 'Client invitations for Album round' })
     .click();
+  await manager
+    .getByRole('button', { name: 'View decisions from client@example.test' })
+    .click();
+  await expect(
+    manager.getByText(`${photos[0]!.filename}: Favorite`, { exact: true }),
+  ).toBeVisible();
   page.once('dialog', (dialog) => void dialog.dismiss());
   await manager
     .getByRole('button', { name: 'Revoke access for client@example.test' })
