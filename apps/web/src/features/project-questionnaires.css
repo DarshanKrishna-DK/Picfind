@@ -1,0 +1,98 @@
+.questionnaire-page {
+  max-width: 960px;
+  min-width: 0;
+}
+.questionnaire-page > p {
+  max-width: 74ch;
+}
+.questionnaire-page h1,
+.questionnaire-page h3,
+.questionnaire-page dd {
+  overflow-wrap: anywhere;
+}
+.questionnaire-card {
+  margin: 1.4rem 0;
+  padding: 1.4rem;
+  border: 1px solid var(--line, #d9d4c8);
+  border-radius: 18px;
+}
+.questionnaire-page fieldset {
+  display: grid;
+  gap: 1rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.questionnaire-page label {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+}
+.questionnaire-page input:not([type='checkbox']),
+.questionnaire-page textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line, #d9d4c8);
+  border-radius: 10px;
+  background: var(--paper, #fffdf8);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+.questionnaire-page textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.questionnaire-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+.questionnaire-question {
+  border-top: 1px solid var(--line, #d9d4c8);
+  padding-top: 1rem;
+}
+.questionnaire-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+  margin: 0.8rem 0;
+}
+.questionnaire-page .questionnaire-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-weight: 400;
+  margin: 0;
+}
+.questionnaire-check input {
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+}
+.questionnaire-page dl > div {
+  margin: 1rem 0;
+}
+.questionnaire-page dt {
+  font-weight: 700;
+}
+.questionnaire-page dd {
+  margin: 0.4rem 0;
+  white-space: pre-wrap;
+}
+@media (max-width: 600px) {
+  .questionnaire-grid {
+    grid-template-columns: 1fr;
+  }
+  .questionnaire-card {
+    padding: 1rem;
+  }
+  .questionnaire-actions .button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
