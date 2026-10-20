@@ -1,0 +1,279 @@
+import { randomUUID } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import { createApp } from '../../apps/api/src/app';
+import { ApiError } from '../../apps/api/src/auth';
+import type { LibraryRecord, LibraryStore } from '../../apps/api/src/library';
+
+const origin = 'http://localhost:5173';
+function fixture() {
+  const event: LibraryRecord = {
+    id: randomUUID(),
+    kind: 'event',
+    ownerId: 'owner',
+    createdAt: new Date().toISOString(),
+    visibility: 'link',
+    title: 'Collections',
+    members: [
+      {
+        userId: 'moderator',
+        role: 'moderator',
+        grantId: randomUUID(),
+        addedAt: new Date().toISOString(),
+      },
+    ],
+  };
+  const photos: LibraryRecord[] = Array.from({ length: 2 }, () => ({
+    id: randomUUID(),
+    kind: 'photo',
+    ownerId: 'owner',
+    eventId: event.id,
+    createdAt: new Date().toISOString(),
+    filename: 'same-name.jpg',
+    privatePhotoNote: 'Private retouching instructions',
+  }));
+  const records = new Map([event, ...photos].map((row) => [row.id, row]));
+  const store: LibraryStore = {
+    get: async (id) => {
+      const row = records.get(id);
+      if (!row) throw new ApiError(404, 'NOT_FOUND', 'Unavailable.');
+      return structuredClone(row);
+    },
+    list: async (ownerId, kind) =>
+      [...records.values()]
+        .filter((row) => row.ownerId === ownerId && row.kind === kind)
+        .map((row) => structuredClone(row)),
+    put: async (row) => {
+      records.set(row.id, structuredClone(row));
+    },
+    remove: async (id) => {
+      records.delete(id);
+    },
+    upload: vi.fn(),
+    file: vi.fn(),
+    removeFile: vi.fn(),
+  };
+  const app = createApp(
+    {
+      webOrigin: origin,
+      secureCookies: false,
+      provider: {
+        getUser: async (id) => ({
+          id,
+          name: id,
+          email: `${id}@example.test`,
+          emailVerified: true,
+        }),
+        register: vi.fn(),
+        login: vi.fn(),
+        logout: vi.fn(),
+      },
+    },
+    { store },
+  );
+  const root = `/api/events/${event.id}/proofing-collections`;
+  const create = (
+    body: object = { title: 'Album round', photoIds: photos.map((p) => p.id) },
+    actor = 'owner',
+  ) =>
+    request(app)
+      .post(root)
+      .set('Origin', origin)
+      .set('Cookie', `picfind_session=${actor}`)
+      .send(body);
+  const read = (path = root, actor = 'owner') =>
+    request(app).get(path).set('Cookie', `picfind_session=${actor}`);
+  const patch = (id: string, body: object) =>
+    request(app)
+      .patch(`${root}/${id}`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send(body);
+  const remove = (id: string, version: number) =>
+    request(app)
+      .delete(`${root}/${id}`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .send({ version });
+  return { app, event, photos, records, root, create, read, patch, remove };
+}
+
+describe('private named proofing collections', () => {
+  it('creates, reloads, updates and deletes a set without changing photos or guest submissions', async () => {
+    const f = fixture();
+    const ids = f.photos.map((p) => p.id);
+    const guestRequest: LibraryRecord = {
+      id: randomUUID(),
+      kind: 'job',
+      ownerId: 'owner',
+      purpose: 'selection',
+      eventId: f.event.id,
+      createdAt: new Date().toISOString(),
+      selectedIds: ids,
+    };
+    f.records.set(guestRequest.id, guestRequest);
+    const created = (
+      await f
+        .create({ title: '  Album round  ', photoIds: [...ids, ids[0]] })
+        .expect(201)
+    ).body.collection;
+    expect(created).toMatchObject({
+      title: 'Album round',
+      photoIds: ids,
+      version: 1,
+      unavailableCount: 0,
+    });
+    expect(created.photos).toEqual(
+      ids.map((id) => ({ id, filename: 'same-name.jpg' })),
+    );
+    expect(JSON.stringify(created)).not.toContain('Private retouching');
+    const first = await f.read().expect(200);
+    expect(first.body).toEqual({ collections: [created], limit: 50 });
+    expect(
+      (await f.read(`${f.root}/${created.id}`).expect(200)).body.collection,
+    ).toEqual(created);
+    const updated = await f
+      .patch(created.id, {
+        title: 'Retouch round',
+        photoIds: [ids[1]],
+        version: 1,
+      })
+      .expect(200);
+    expect(updated.body.collection).toMatchObject({
+      title: 'Retouch round',
+      photoIds: [ids[1]],
+      version: 2,
+    });
+    await f.remove(created.id, 1).expect(409);
+    await f.remove(created.id, 2).expect(204);
+    expect((await f.read().expect(200)).body.collections).toEqual([]);
+    for (const photo of f.photos)
+      expect(f.records.get(photo.id)).toEqual(photo);
+    expect(f.records.get(guestRequest.id)).toEqual(guestRequest);
+    const library = await request(f.app)
+      .get('/api/library')
+      .set('Cookie', 'picfind_session=owner')
+      .expect(200);
+    expect(library.body.jobs).toEqual([]);
+  });
+  it('denies guests, actual moderators, other owners and cross-event collection access', async () => {
+    const f = fixture();
+    const row = (await f.create().expect(201)).body.collection;
+    await request(f.app).get(f.root).expect(401);
+    for (const actor of ['guest', 'moderator', 'another-owner']) {
+      await f.read(f.root, actor).expect(404);
+      await f.read(`${f.root}/${row.id}`, actor).expect(404);
+      await f.create(undefined, actor).expect(404);
+      await request(f.app)
+        .patch(`${f.root}/${row.id}`)
+        .set('Origin', origin)
+        .set('Cookie', `picfind_session=${actor}`)
+        .send({
+          title: 'Unauthorized',
+          photoIds: [f.photos[0]!.id],
+          version: 1,
+        })
+        .expect(404);
+      await request(f.app)
+        .delete(`${f.root}/${row.id}`)
+        .set('Origin', origin)
+        .set('Cookie', `picfind_session=${actor}`)
+        .send({ version: 1 })
+        .expect(404);
+    }
+    const other = { ...f.event, id: randomUUID() };
+    f.records.set(other.id, other);
+    await f
+      .read(`/api/events/${other.id}/proofing-collections/${row.id}`)
+      .expect(404);
+    f.event.deletionStartedAt = new Date().toISOString();
+    await f.read().expect(404);
+  });
+  it.each([
+    'foreign-event',
+    'foreign-owner',
+    'expired',
+    'deleting',
+    'scan',
+    'missing',
+  ])('rejects a %s photo on creation and update', async (state) => {
+    const f = fixture();
+    const created = (await f.create().expect(201)).body.collection;
+    const photo = f.photos[1]!;
+    if (state === 'foreign-event') photo.eventId = randomUUID();
+    if (state === 'foreign-owner') photo.ownerId = 'another';
+    if (state === 'expired') photo.expiresAt = new Date(0).toISOString();
+    if (state === 'deleting')
+      photo.deletionStartedAt = new Date().toISOString();
+    if (state === 'scan') photo.scanId = randomUUID();
+    if (state === 'missing') f.records.delete(photo.id);
+    await f.create().expect(400);
+    await f
+      .patch(created.id, {
+        title: 'Unsafe edit',
+        photoIds: [photo.id],
+        version: 1,
+      })
+      .expect(400);
+    const latest = (await f.read(`${f.root}/${created.id}`).expect(200)).body
+      .collection;
+    expect(latest.unavailableCount).toBe(1);
+    expect(latest.photoIds).toContain(photo.id);
+    expect(latest.photos.map((p: { id: string }) => p.id)).not.toContain(
+      photo.id,
+    );
+    await f
+      .patch(created.id, {
+        title: 'Removed unavailable photo',
+        photoIds: [f.photos[0]!.id],
+        version: 1,
+      })
+      .expect(200);
+  });
+  it('prevents concurrent stale updates and enforces the event collection limit', async () => {
+    const f = fixture();
+    const row = (await f.create().expect(201)).body.collection;
+    const changes = await Promise.all(
+      ['First', 'Second'].map((title) =>
+        f.patch(row.id, { title, photoIds: [f.photos[0]!.id], version: 1 }),
+      ),
+    );
+    expect(changes.map((r) => r.status).sort()).toEqual([200, 409]);
+    const template = f.records.get(row.id)!;
+    for (let i = 0; i < 48; i++) {
+      const copy = { ...template, id: randomUUID() };
+      f.records.set(copy.id, copy);
+    }
+    const creates = await Promise.all([f.create(), f.create()]);
+    expect(creates.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect((await f.read().expect(200)).body.collections).toHaveLength(50);
+  });
+  it.each([
+    { title: '', photoIds: [] },
+    { title: 'x'.repeat(101), photoIds: [randomUUID()] },
+    {
+      title: 'Too many',
+      photoIds: Array.from({ length: 101 }, () => randomUUID()),
+    },
+    { title: 'Spoof', photoIds: [randomUUID()], ownerId: 'another' },
+  ])('rejects invalid create payloads: %j', async (body) => {
+    await fixture().create(body).expect(400);
+  });
+  it('event erasure removes its collections and preserves another event collection', async () => {
+    const f = fixture();
+    const row = (await f.create().expect(201)).body.collection;
+    const other = {
+      ...f.records.get(row.id)!,
+      id: randomUUID(),
+      eventId: randomUUID(),
+    };
+    f.records.set(other.id, other);
+    await request(f.app)
+      .delete(`/api/events/${f.event.id}`)
+      .set('Origin', origin)
+      .set('Cookie', 'picfind_session=owner')
+      .expect(204);
+    expect(f.records.has(row.id)).toBe(false);
+    expect(f.records.has(other.id)).toBe(true);
+  });
+});

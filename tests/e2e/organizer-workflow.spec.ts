@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { unzipSync } from 'fflate';
 import { chooseMenu } from './menu';
+import type { ProofingCollection } from '../../packages/shared/src/proofing-collection';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
 async function fixture(page: Page) {
@@ -231,8 +232,156 @@ async function fixture(page: Page) {
     }
     return route.fulfill({ json: {} });
   });
-  return { eventId, events, selection, selections, state, jpeg };
+  return { eventId, events, photos, selection, selections, state, jpeg };
 }
+
+test('named collections persist, recover conflicts, remove unavailable photos and delete only the set', async ({
+  page,
+}) => {
+  const { eventId, photos } = await fixture(page);
+  let collection: ProofingCollection | null = null;
+  let conflict = false;
+  await page.route(
+    `**/api/events/${eventId}/proofing-collections**`,
+    (route) => {
+      const req = route.request();
+      const single = new URL(req.url()).pathname.endsWith('/collection1');
+      if (req.method() === 'GET')
+        return route.fulfill({
+          json: single
+            ? { collection }
+            : { collections: collection ? [collection] : [], limit: 50 },
+        });
+      const body = req.postDataJSON();
+      if (req.method() === 'DELETE') {
+        expect(body.version).toBe(collection!.version);
+        collection = null;
+        return route.fulfill({ status: 204 });
+      }
+      if (conflict) {
+        conflict = false;
+        collection = {
+          ...collection!,
+          title: 'Changed in another tab',
+          version: collection!.version + 1,
+        };
+        return route.fulfill({
+          status: 409,
+          json: {
+            error: {
+              code: 'COLLECTION_CHANGED',
+              message: 'Load the latest collection.',
+            },
+          },
+        });
+      }
+      if (single) expect(body.version).toBe(collection!.version);
+      collection = {
+        id: 'collection1',
+        title: body.title.trim(),
+        version: (collection?.version ?? 0) + 1,
+        createdAt: '2026-10-20T12:00:00.000Z',
+        updatedAt: '2026-10-20T12:00:00.000Z',
+        photoIds: body.photoIds,
+        unavailableCount: 0,
+        photos: photos
+          .filter((photo) => body.photoIds.includes(photo.id))
+          .map(({ id, filename }) => ({ id, filename })),
+      };
+      return route.fulfill({
+        status: single ? 200 : 201,
+        json: { collection },
+      });
+    },
+  );
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Proofing collections' });
+  await panel.getByRole('button', { name: 'New collection' }).click();
+  const editor = panel.getByRole('form', { name: 'Collection editor' });
+  await editor
+    .getByLabel('Collection name', { exact: true })
+    .fill('Album round');
+  await editor.getByLabel('Ceremony.jpg', { exact: true }).check();
+  await editor.getByLabel('Garden.jpg', { exact: true }).check();
+  const editorWidth = await editor.evaluate((element) => ({
+    visible: element.clientWidth,
+    content: element.scrollWidth,
+  }));
+  expect(editorWidth.content).toBeLessThanOrEqual(editorWidth.visible + 1);
+  await editor
+    .getByRole('button', { name: 'Save collection', exact: true })
+    .click();
+  await expect(
+    panel.getByRole('heading', { name: 'Album round', exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await panel
+    .getByRole('button', { name: 'Edit Album round', exact: true })
+    .click();
+  await expect(editor.getByLabel('Garden.jpg', { exact: true })).toBeChecked();
+  await editor
+    .getByLabel('Collection name', { exact: true })
+    .fill('My revision');
+  conflict = true;
+  await editor
+    .getByRole('button', { name: 'Save collection', exact: true })
+    .click();
+  await expect(editor.getByRole('alert')).toContainText('Load the latest');
+  await expect(
+    editor.getByLabel('Collection name', { exact: true }),
+  ).toHaveValue('My revision');
+  await editor
+    .getByRole('button', { name: 'Replace draft with latest collection' })
+    .click();
+  await expect(
+    editor.getByLabel('Collection name', { exact: true }),
+  ).toHaveValue('Changed in another tab');
+  await editor
+    .getByLabel('Collection name', { exact: true })
+    .fill('Retouch round');
+  await editor
+    .getByRole('button', { name: 'Save collection', exact: true })
+    .click();
+  await expect(
+    panel.getByRole('heading', { name: 'Retouch round', exact: true }),
+  ).toBeVisible();
+  photos.pop();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await panel
+    .getByRole('button', { name: 'Edit Retouch round', exact: true })
+    .click();
+  await expect(
+    editor.getByRole('button', { name: 'Save collection', exact: true }),
+  ).toBeDisabled();
+  await editor
+    .getByRole('button', {
+      name: 'Remove unavailable photos from this collection',
+    })
+    .click();
+  await editor
+    .getByRole('button', { name: 'Save collection', exact: true })
+    .click();
+  await expect(
+    panel.getByText('1 selected photos', { exact: true }),
+  ).toBeVisible();
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await panel.getByRole('button', { name: 'Delete Retouch round' }).click();
+  await expect(
+    panel.getByRole('heading', { name: 'Retouch round', exact: true }),
+  ).toBeVisible();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await panel.getByRole('button', { name: 'Delete Retouch round' }).click();
+  await expect(
+    panel.getByText('No collections yet. Create your first photo set.'),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Photos (1)', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Open Ceremony.jpg' }),
+  ).toBeVisible();
+});
 
 test('event folders, search and visibility filters survive reload', async ({
   page,
