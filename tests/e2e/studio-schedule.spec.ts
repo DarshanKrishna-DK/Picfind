@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import ICAL from 'ical.js';
 import { expect, test, type Page } from '@playwright/test';
 import request from 'supertest';
 import { createApp } from '../../apps/api/src/app';
@@ -84,11 +86,25 @@ async function fixture(page: Page) {
     },
     { store },
   );
-  const state = { actor: 'owner', loseReply: false };
+  const state = {
+    actor: 'owner',
+    loseReply: false,
+    holdRead: false,
+    release: null as (() => void) | null,
+  };
   await page.route('**/api/**', async (route) => {
     const incoming = route.request(),
       path = new URL(incoming.url()).pathname,
       target = request(app);
+    if (
+      state.holdRead &&
+      incoming.method() === 'GET' &&
+      path === '/api/studio/appointments'
+    ) {
+      await new Promise<void>((resolve) => {
+        state.release = resolve;
+      });
+    }
     const outgoing =
       incoming.method() === 'PUT'
         ? target.put(path)
@@ -212,6 +228,14 @@ test('persists timezone reservations with date, project and text filters across 
   await expect(
     page.getByLabel('Start local time', { exact: true }),
   ).toHaveValue('2026-11-01T10:00');
+  await expect(page.locator('.studio-calendar-choice')).toHaveCSS(
+    'display',
+    'flex',
+  );
+  await expect(page.locator('.studio-calendar-choice')).toHaveCSS(
+    'flex-direction',
+    'row',
+  );
   await page.screenshot({
     path: info.outputPath('studio-schedule.png'),
     fullPage: true,
@@ -428,4 +452,187 @@ test('hides private reservations after a browser account change', async ({
   ).toBeVisible();
   await expect(list(page)).toHaveCount(0);
   await expect(page.getByLabel('Private appointment note')).toHaveCount(0);
+});
+
+async function calendar(page: Page) {
+  const waiting = page.waitForEvent('download');
+  await page
+    .getByRole('button', {
+      name: 'Export filtered calendar (.ics)',
+      exact: true,
+    })
+    .click();
+  const download = await waiting;
+  expect(download.suggestedFilename()).toBe('picfind-studio-schedule.ics');
+  const text = await readFile((await download.path())!, 'utf8');
+  return {
+    text,
+    entries: new ICAL.Component(ICAL.parse(text)).getAllSubcomponents('vevent'),
+  };
+}
+test('calendar export reads the latest filtered saved reservation without changing the editor draft', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await fill(page, f.projectId);
+  await save(page);
+  await page
+    .getByLabel('Appointment title', { exact: true })
+    .fill('Unsaved title');
+  await page
+    .getByLabel('Private appointment note')
+    .fill('Unsaved private instruction');
+  await f
+    .externalEdit({ title: 'Fresh saved title', note: 'Fresh private note' })
+    .expect(200);
+  await page
+    .getByLabel('Search appointments', { exact: true })
+    .fill('Fresh saved');
+  await expect(
+    page.getByText('0 matching appointments', { exact: true }),
+  ).toBeVisible();
+  const output = await calendar(page);
+  expect(output.entries).toHaveLength(1);
+  const entry = new ICAL.Event(output.entries[0]!);
+  expect(entry.summary).toBe('Fresh saved title');
+  expect(entry.startDate.toJSDate().toISOString()).toBe(
+    '2026-11-01T04:30:00.000Z',
+  );
+  expect(entry.description).not.toContain('Fresh private note');
+  expect(entry.description).not.toContain('Wedding booking');
+  expect(entry.description).not.toContain('Unsaved');
+  await expect(
+    page.getByLabel('Appointment title', { exact: true }),
+  ).toHaveValue('Unsaved title');
+  await expect(page.getByLabel('Private appointment note')).toHaveValue(
+    'Unsaved private instruction',
+  );
+  await expect(
+    page.getByText(
+      '1 saved appointments exported. Your editor draft was preserved. This file does not synchronize your calendar.',
+    ),
+  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Save appointment', exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      'Your appointment draft is preserved. Reload the current schedule before saving again.',
+    ),
+  ).toBeVisible();
+});
+test('calendar export includes private details only when selected and carries explicit cancellation revisions', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await fill(page, f.projectId);
+  await save(page);
+  const first = await calendar(page);
+  await page
+    .getByRole('button', { name: 'Cancel saved appointment', exact: true })
+    .click();
+  await expect(
+    page.getByText('Saved appointment cancelled. Its time is available again.'),
+  ).toBeVisible();
+  await page
+    .getByRole('combobox', { name: 'Appointment filter', exact: true })
+    .selectOption('all');
+  await page
+    .getByLabel('Include private notes and project names in the file')
+    .check();
+  const second = await calendar(page);
+  const description = new ICAL.Event(second.entries[0]!).description;
+  expect(description).toContain('Private location instructions');
+  expect(description).toContain('Wedding booking');
+  expect(second.entries[0]!.getFirstPropertyValue('uid')).toBe(
+    first.entries[0]!.getFirstPropertyValue('uid'),
+  );
+  expect(second.entries[0]!.getFirstPropertyValue('sequence')).toBe(2);
+  expect(second.entries[0]!.getFirstPropertyValue('status')).toBe('CANCELLED');
+});
+test('calendar export rejects invalid ranges and empty results and fails closed after account access changes', async ({
+  page,
+}) => {
+  const f = await fixture(page),
+    downloads: string[] = [];
+  page.on('download', (entry) => downloads.push(entry.suggestedFilename()));
+  await fill(page, f.projectId);
+  await save(page);
+  await page.getByLabel('From date', { exact: true }).fill('2026-11-02');
+  await page.getByLabel('Through date', { exact: true }).fill('2026-11-01');
+  await expect(
+    page.getByRole('button', {
+      name: 'Export filtered calendar (.ics)',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText('0 matching appointments', { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel('From date', { exact: true }).fill('');
+  await page.getByLabel('Through date', { exact: true }).fill('');
+  await page
+    .getByLabel('Search appointments', { exact: true })
+    .fill('no matching booking');
+  await page
+    .getByRole('button', {
+      name: 'Export filtered calendar (.ics)',
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      'No saved appointments match these filters. No calendar file was created.',
+    ),
+  ).toBeVisible();
+  await page.getByLabel('Search appointments', { exact: true }).fill('');
+  f.state.actor = 'other';
+  await page
+    .getByRole('button', {
+      name: 'Export filtered calendar (.ics)',
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(
+      'Private appointments are hidden until your account is checked again.',
+    ),
+  ).toBeVisible();
+  expect(downloads).toEqual([]);
+});
+test('calendar export aborts a pending fresh read when leaving the schedule', async ({
+  page,
+}) => {
+  const f = await fixture(page),
+    downloads: string[] = [];
+  page.on('download', (entry) => downloads.push(entry.suggestedFilename()));
+  await fill(page, f.projectId);
+  await save(page);
+  f.state.holdRead = true;
+  await page
+    .getByRole('button', {
+      name: 'Export filtered calendar (.ics)',
+      exact: true,
+    })
+    .click();
+  await expect.poll(() => Boolean(f.state.release)).toBe(true);
+  await expect(
+    page.getByLabel('Search appointments', { exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole('link', { name: 'Manage projects', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Private schedule', exact: true }),
+  ).toHaveCount(0);
+  f.state.holdRead = false;
+  f.state.release!();
+  await page.goBack();
+  await expect(
+    page.getByRole('heading', { name: 'Private schedule', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('1 matching appointments', { exact: true }),
+  ).toBeVisible();
+  expect(downloads).toEqual([]);
 });

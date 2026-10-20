@@ -38,6 +38,7 @@
     "@types/supertest": "^6.0.0",
     "eslint": "^9.39.0",
     "globals": "^16.0.0",
+    "ical.js": "2.2.1",
     "jsqr": "1.4.0",
     "prettier": "^3.6.0",
     "supertest": "^7.1.0",

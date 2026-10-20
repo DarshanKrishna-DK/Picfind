@@ -54,3 +54,25 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.studio-calendar-export {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(71, 124, 121, 0.3);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+.studio-calendar-export h2,
+.studio-calendar-export p {
+  margin: 0;
+}
+.studio-calendar-export .studio-calendar-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 0.6rem;
+}
+.studio-calendar-choice input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+}
