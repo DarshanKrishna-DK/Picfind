@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, session } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { ProofingComments } from './proofing-comments';
+import { SubmittedRoundComparison } from './submitted-round-comparison';
 import {
   ClientCollectionReview,
   OwnerClientDecisions,
@@ -154,74 +155,83 @@ function InvitationManager({
       ) : (
         !query.error &&
         query.data && (
-          <ul className="selection-list">
-            {query.data.invitations.map((invitation) => {
-              const url = `${window.location.origin}/proofing/${invitation.id}`;
-              const expired = !(Date.parse(invitation.expiresAt) > Date.now());
-              return (
-                <li className="selection-card" key={invitation.id}>
-                  <strong>{invitation.email}</strong>
-                  <p>
-                    {invitation.revokedAt
-                      ? 'Revoked'
-                      : expired
-                        ? 'Expired'
-                        : 'Active'}{' '}
-                    · Expires {new Date(invitation.expiresAt).toLocaleString()}
-                  </p>
-                  <OwnerClientDecisions
-                    root={root}
-                    invitationId={invitation.id}
-                    email={invitation.email}
-                  />
-                  <ProofingComments
-                    root={`${root}/${invitation.id}/comments`}
-                    title={`Photo discussion with ${invitation.email}`}
-                  />
-                  {!invitation.revokedAt && !expired && (
-                    <>
-                      <label>
-                        Invitation link for {invitation.email}
-                        <input
-                          readOnly
-                          value={url}
-                          onFocus={(event) => event.target.select()}
-                        />
-                      </label>
-                      <button
-                        className="button secondary"
-                        onClick={() => {
-                          if (!navigator.clipboard) {
-                            setMessage(
-                              'Select the invitation link to copy it manually.',
-                            );
-                            return;
-                          }
-                          void navigator.clipboard
-                            .writeText(url)
-                            .then(() => setMessage('Invitation link copied.'))
-                            .catch(() =>
+          <>
+            <SubmittedRoundComparison
+              root={root}
+              invitations={query.data.invitations}
+            />
+            <ul className="selection-list">
+              {query.data.invitations.map((invitation) => {
+                const url = `${window.location.origin}/proofing/${invitation.id}`;
+                const expired = !(
+                  Date.parse(invitation.expiresAt) > Date.now()
+                );
+                return (
+                  <li className="selection-card" key={invitation.id}>
+                    <strong>{invitation.email}</strong>
+                    <p>
+                      {invitation.revokedAt
+                        ? 'Revoked'
+                        : expired
+                          ? 'Expired'
+                          : 'Active'}{' '}
+                      · Expires{' '}
+                      {new Date(invitation.expiresAt).toLocaleString()}
+                    </p>
+                    <OwnerClientDecisions
+                      root={root}
+                      invitationId={invitation.id}
+                      email={invitation.email}
+                    />
+                    <ProofingComments
+                      root={`${root}/${invitation.id}/comments`}
+                      title={`Photo discussion with ${invitation.email}`}
+                    />
+                    {!invitation.revokedAt && !expired && (
+                      <>
+                        <label>
+                          Invitation link for {invitation.email}
+                          <input
+                            readOnly
+                            value={url}
+                            onFocus={(event) => event.target.select()}
+                          />
+                        </label>
+                        <button
+                          className="button secondary"
+                          onClick={() => {
+                            if (!navigator.clipboard) {
                               setMessage(
                                 'Select the invitation link to copy it manually.',
-                              ),
-                            );
-                        }}
-                      >
-                        Copy invitation link
-                      </button>
-                      <button
-                        className="button secondary"
-                        disabled={busy}
-                        onClick={() => void revoke(invitation)}
-                      >
-                        Revoke access for {invitation.email}
-                      </button>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                              );
+                              return;
+                            }
+                            void navigator.clipboard
+                              .writeText(url)
+                              .then(() => setMessage('Invitation link copied.'))
+                              .catch(() =>
+                                setMessage(
+                                  'Select the invitation link to copy it manually.',
+                                ),
+                              );
+                          }}
+                        >
+                          Copy invitation link
+                        </button>
+                        <button
+                          className="button secondary"
+                          disabled={busy}
+                          onClick={() => void revoke(invitation)}
+                        >
+                          Revoke access for {invitation.email}
+                        </button>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )
       )}
     </section>

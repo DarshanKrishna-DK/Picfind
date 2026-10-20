@@ -7,8 +7,319 @@ import type { ProofingCollection } from '../../packages/shared/src/proofing-coll
 import type { ProofingDecisions } from '../../packages/shared/src/proofing-decisions';
 import type { ProofingComment } from '../../packages/shared/src/proofing-comments';
 import type { ProofingSubmissionState } from '../../packages/shared/src/proofing-submission';
+import type { SubmissionComparison } from '../../packages/shared/src/submission-comparison';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
+test('submitted round comparison filters by identity, exports fresh availability and clears denied results', async ({
+  page,
+}) => {
+  // Multiple exports, a full reload and cancellation need time on mobile WebKit.
+  test.setTimeout(90_000);
+  const { eventId, photos } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const firstInvitationId = '77777777-7777-4777-8777-777777777777';
+  const secondInvitationId = '88888888-8888-4888-8888-888888888888';
+  const firstSubmissionId = '99999999-9999-4999-8999-999999999999';
+  const secondSubmissionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const root = `/api/events/${eventId}/proofing-collections`;
+  const createdAt = new Date().toISOString();
+  const invitations = [firstInvitationId, secondInvitationId].map(
+    (id, index) => ({
+      id,
+      email: `client${index + 1}@example.test`,
+      createdAt,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      revokedAt: null,
+    }),
+  );
+  let reads = 0,
+    failure = 0,
+    hold = false;
+  let finishedHeld = false;
+  let holdRounds = false;
+  let releaseRounds: (() => void) | undefined;
+  let release: (() => void) | undefined;
+  const downloads: string[] = [];
+  page.on('download', (download) =>
+    downloads.push(download.suggestedFilename()),
+  );
+  const result: SubmissionComparison = {
+    collectionVersion: 1,
+    checkedAt: createdAt,
+    shared: 1,
+    first: {
+      invitationId: firstInvitationId,
+      submissionId: firstSubmissionId,
+      round: 1,
+      submittedAt: createdAt,
+      favoriteCount: 2,
+      unavailableCount: 0,
+    },
+    second: {
+      invitationId: secondInvitationId,
+      submissionId: secondSubmissionId,
+      round: 1,
+      submittedAt: createdAt,
+      favoriteCount: 1,
+      unavailableCount: 0,
+    },
+    photos: [
+      { id: photos[0]!.id, filename: '=Budget.jpg', selectedBy: 'first' },
+      { id: photos[1]!.id, filename: '=Budget.jpg', selectedBy: 'both' },
+    ],
+  };
+  await page.route(`**${root}**`, async (route) => {
+    const url = new URL(route.request().url()),
+      path = url.pathname;
+    if (path.endsWith('/submission-comparison')) {
+      reads += 1;
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        firstInvitationId,
+        firstSubmissionId,
+        secondInvitationId,
+        secondSubmissionId: result.second.submissionId,
+      });
+      if (hold) {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        try {
+          return await route.fulfill({ json: result });
+        } finally {
+          finishedHeld = true;
+        }
+      }
+      if (failure)
+        return route.fulfill({
+          status: failure,
+          json: { error: { message: 'Comparison access unavailable.' } },
+        });
+      return route.fulfill({ json: result });
+    }
+    if (path.endsWith('/submission')) {
+      const first = path.includes(firstInvitationId);
+      if (!first && holdRounds)
+        await new Promise<void>((resolve) => {
+          releaseRounds = resolve;
+        });
+      const round = first ? result.first : result.second;
+      return route.fulfill({
+        json: {
+          round: 1,
+          decisionVersion: 1,
+          collectionVersion: 1,
+          current: {
+            id: round.submissionId,
+            round: 1,
+            submittedAt: createdAt,
+            decisionVersion: 1,
+            collectionVersion: 1,
+            favoriteCount: round.favoriteCount,
+            unavailableCount: 0,
+            note: 'Private final note',
+            photos: [],
+          },
+          history: [],
+          reopenReason: null,
+          canReopen: true,
+        },
+      });
+    }
+    if (path.endsWith('/invitations'))
+      return route.fulfill({ json: { invitations } });
+    return route.fulfill({
+      json: {
+        limit: 50,
+        collections: [
+          {
+            id: collectionId,
+            title: 'Album choices',
+            version: 1,
+            createdAt,
+            updatedAt: createdAt,
+            photoIds: photos.map((photo) => photo.id),
+            photos,
+            unavailableCount: 0,
+          },
+        ],
+      },
+    });
+  });
+  async function openComparison() {
+    await page.goto(`/app/events/${eventId}`);
+    await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Client invitations for Album choices' })
+      .click();
+    await page
+      .getByRole('button', { name: 'Compare submitted rounds', exact: true })
+      .click();
+  }
+  await openComparison();
+  const panel = page.getByRole('region', {
+    name: 'Submitted round comparison',
+    exact: true,
+  });
+  const view = panel.locator('[aria-label="Compared submitted photos"]');
+  const load = panel.getByRole('button', { name: 'Load round comparison' });
+  const csv = panel.getByRole('button', {
+    name: 'Export submitted comparison CSV',
+  });
+  async function choose(slowSwitch = false) {
+    await panel
+      .getByRole('combobox', { name: 'First invitation', exact: true })
+      .selectOption(firstInvitationId);
+    await panel
+      .getByRole('combobox', { name: 'First round', exact: true })
+      .selectOption(firstSubmissionId);
+    if (slowSwitch) {
+      await panel
+        .getByRole('combobox', { name: 'Second invitation', exact: true })
+        .selectOption(firstInvitationId);
+      await panel
+        .getByRole('combobox', { name: 'Second round', exact: true })
+        .selectOption(firstSubmissionId);
+      holdRounds = true;
+    }
+    await panel
+      .getByRole('combobox', { name: 'Second invitation', exact: true })
+      .selectOption(secondInvitationId);
+    if (slowSwitch) {
+      await expect.poll(() => Boolean(releaseRounds)).toBe(true);
+      await expect(
+        panel.getByRole('combobox', { name: 'Second round', exact: true }),
+      ).toHaveCount(0);
+      holdRounds = false;
+      releaseRounds!();
+    }
+    await panel
+      .getByRole('combobox', { name: 'Second round', exact: true })
+      .selectOption(secondSubmissionId);
+  }
+  await expect(load).toBeDisabled();
+  await choose(true);
+  await load.click();
+  await expect(view).toContainText('2 available photos, 1 shared favorites.');
+  await expect(view.getByRole('listitem')).toHaveCount(2);
+  await expect(panel).not.toContainText('Private final note');
+  await panel
+    .getByRole('combobox', { name: 'Submitted comparison photos', exact: true })
+    .selectOption('shared');
+  await expect(view.getByRole('listitem')).toHaveCount(1);
+  await expect(view.getByRole('listitem')).toContainText(photos[1]!.id);
+  await panel
+    .getByRole('combobox', { name: 'Submitted comparison photos', exact: true })
+    .selectOption('first');
+  await expect(view.getByRole('listitem')).toContainText(photos[0]!.id);
+  const filteredDownload = page.waitForEvent('download');
+  await csv.click();
+  const firstOnly = await filteredDownload;
+  const filteredCsv = await readFile((await firstOnly.path())!, 'utf8');
+  expect(firstOnly.suggestedFilename()).toBe(
+    'picfind-submitted-comparison-first.csv',
+  );
+  expect(filteredCsv).toContain(photos[0]!.id);
+  expect(filteredCsv).not.toContain(photos[1]!.id);
+  await panel
+    .getByRole('combobox', { name: 'Submitted comparison photos', exact: true })
+    .selectOption('all');
+  let downloadEvent = page.waitForEvent('download');
+  await csv.click();
+  let download = await downloadEvent;
+  expect(reads).toBe(3);
+  const duplicateCsv = await readFile((await download.path())!, 'utf8');
+  expect(duplicateCsv).toContain(`"${photos[0]!.id}","'=Budget.jpg"`);
+  expect(duplicateCsv).toContain(`"${photos[1]!.id}","'=Budget.jpg"`);
+  expect(duplicateCsv).not.toMatch(/example.test|Private|note/);
+  await expect(panel).toContainText('Some filenames repeat');
+  result.photos = [
+    { id: photos[1]!.id, filename: 'Current.jpg', selectedBy: 'both' },
+  ];
+  result.first.unavailableCount = 1;
+  downloadEvent = page.waitForEvent('download');
+  await csv.click();
+  download = await downloadEvent;
+  expect(reads).toBe(4);
+  const refreshedCsv = await readFile((await download.path())!, 'utf8');
+  expect(refreshedCsv).toContain('Current.jpg');
+  expect(refreshedCsv).not.toContain(photos[0]!.id);
+  await expect(view).toContainText('First round: 1 unavailable.');
+  await panel
+    .getByRole('combobox', { name: 'Second invitation', exact: true })
+    .selectOption(firstInvitationId);
+  await expect(view).toHaveCount(0);
+  await panel
+    .getByRole('combobox', { name: 'Second round', exact: true })
+    .selectOption(firstSubmissionId);
+  await expect(panel).toContainText('Choose two different submitted rounds.');
+  await expect(load).toBeDisabled();
+  await choose();
+  await load.click();
+  await expect(view).toBeVisible();
+  failure = 403;
+  await csv.click();
+  await expect(panel).toContainText('Comparison access unavailable.');
+  await expect(view).toHaveCount(0);
+  expect(downloads).toHaveLength(3);
+  failure = 0;
+  await load.click();
+  await expect(view).toBeVisible();
+  result.photos = [];
+  result.shared = 0;
+  await csv.click();
+  await expect(view).toContainText(
+    'No available photos match this comparison.',
+  );
+  await expect(csv).toBeDisabled();
+  expect(downloads).toHaveLength(3);
+  await page.reload();
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Album choices' })
+    .click();
+  await page
+    .getByRole('button', { name: 'Compare submitted rounds', exact: true })
+    .click();
+  await expect(load).toBeDisabled();
+  result.photos = [
+    { id: photos[1]!.id, filename: 'Current.jpg', selectedBy: 'both' },
+  ];
+  await choose();
+  result.second.submissionId = firstSubmissionId;
+  await panel.getByRole('button', { name: 'Refresh second rounds' }).click();
+  await panel
+    .getByRole('combobox', { name: 'Second round', exact: true })
+    .selectOption(firstSubmissionId);
+  await expect(load).toBeEnabled();
+  await load.click();
+  await expect(view).toBeVisible();
+  hold = true;
+  await csv.click();
+  await expect.poll(() => Boolean(release)).toBe(true);
+  await expect(
+    panel.getByRole('combobox', { name: 'First invitation', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    panel.getByRole('combobox', { name: 'Second round', exact: true }),
+  ).toBeDisabled();
+  await expect(load).toBeDisabled();
+  await expect(
+    panel.getByRole('combobox', {
+      name: 'Submitted comparison photos',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await panel
+    .getByRole('button', { name: 'Compare submitted rounds', exact: true })
+    .click();
+  await expect(
+    panel.getByRole('combobox', { name: 'First invitation', exact: true }),
+  ).toHaveCount(0);
+  release!();
+  await expect.poll(() => finishedHeld).toBe(true);
+  expect(downloads).toHaveLength(3);
+});
+
 test('submitted round exports reauthorize, preserve round identity and omit private or unavailable data', async ({
   page,
 }) => {

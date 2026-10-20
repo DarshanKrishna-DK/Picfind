@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 17 pushed after review, 24 merged and
-reviewed, and 24 opened. This is a
+on 2026-10-20, Picfind had 18 pushed after review, 25 merged and
+reviewed, and 25 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 
 | PR                                                         | Outcome                                      | Merge and review evidence                                                                           |
@@ -37,7 +37,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [24](https://github.com/DarshanKrishna-DK/Picfind/pull/24) | Submitted-round filename exports             | Reviewed, fresh-request and transient-access tests strengthened after review, re-reviewed, merged   |
 | [25](https://github.com/DarshanKrishna-DK/Picfind/pull/25) | Resumable local JPEG batch indexing          | Reviewed with no actionable findings, Python and all browser CI passed, merged                      |
 
-GitHub currently proves twenty-four merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23 and #24 were visibly
+| [26](https://github.com/DarshanKrishna-DK/Picfind/pull/26) | Collection final submission rules | Reviewed, automatic count refresh and policy preservation improved after review, re-reviewed, approved and merged |
+
+GitHub currently proves twenty-five merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24 and #26 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
