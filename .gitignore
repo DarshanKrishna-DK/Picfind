@@ -24,3 +24,7 @@ skills-lock.json
 
 # Personal reference photos must stay local.
 *Headshot*
+
+# Local Python evaluation bytecode.
+__pycache__/
+*.pyc

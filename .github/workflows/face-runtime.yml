@@ -1,0 +1,23 @@
+name: Face runtime artifact safety
+on:
+  pull_request:
+    paths:
+      - 'scripts/face-runtime/**'
+      - '.github/workflows/face-runtime.yml'
+  push:
+    paths:
+      - 'scripts/face-runtime/**'
+      - '.github/workflows/face-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  artifact-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Test artifact integrity and resource bounds without models or network
+        run: python -m unittest discover -s scripts/face-runtime -p "test_*.py"
