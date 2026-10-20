@@ -6,8 +6,8 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 19 pushed after review, 26 merged and
-reviewed, and 26 opened. This is a
+on 2026-10-20, Picfind had 19 pushed after review, 27 merged and
+reviewed, and 27 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
 
 | PR                                                         | Outcome                                      | Merge and review evidence                                                                                                           |
@@ -38,8 +38,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [25](https://github.com/DarshanKrishna-DK/Picfind/pull/25) | Resumable local JPEG batch indexing          | Reviewed with no actionable findings, Python and all browser CI passed, merged                                                      |
 | [26](https://github.com/DarshanKrishna-DK/Picfind/pull/26) | Collection final submission rules            | Reviewed, automatic count refresh and policy preservation improved after review, re-reviewed, approved and merged                   |
 | [27](https://github.com/DarshanKrishna-DK/Picfind/pull/27) | Final submitted round comparison             | Reviewed, invitation-scoped selection and structural snapshot checks fixed after review, re-reviewed, all browser CI passed, merged |
+| [28](https://github.com/DarshanKrishna-DK/Picfind/pull/28) | Invitation-scoped submission archives        | Reviewed with no actionable findings, quality and all browser CI passed, merged                                                     |
 
-GitHub currently proves twenty-six merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26 and #27 were visibly
+GitHub currently proves twenty-seven merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26 and #27 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 

@@ -8,8 +8,232 @@ import type { ProofingDecisions } from '../../packages/shared/src/proofing-decis
 import type { ProofingComment } from '../../packages/shared/src/proofing-comments';
 import type { ProofingSubmissionState } from '../../packages/shared/src/proofing-submission';
 import type { SubmissionComparison } from '../../packages/shared/src/submission-comparison';
+import type { RetouchingChecklist } from '../../packages/shared/src/retouching';
 
 // Synthetic metadata/photos and intercepted APIs. No cloud services are contacted.
+test('retouching checklist persists round progress, refreshes conflicts and clears private denied results', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const { eventId, photos } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const submissionId = '88888888-8888-4888-8888-888888888888';
+  const root = `/api/events/${eventId}/proofing-collections`;
+  const now = new Date().toISOString();
+  const checklist: RetouchingChecklist = {
+    submissionId,
+    round: 1,
+    readOnly: false,
+    unavailableCount: 1,
+    items: [
+      {
+        photoId: photos[0]!.id,
+        filename: 'Cover.jpg',
+        version: 0,
+        status: 'queued',
+        note: '',
+        history: [],
+      },
+    ],
+  };
+  let failure = 0,
+    conflict = false,
+    writes = 0;
+  const snapshot: ProofingSubmissionState = {
+    round: 1,
+    decisionVersion: 1,
+    collectionVersion: 1,
+    canReopen: false,
+    reopenReason: null,
+    history: [],
+    current: {
+      id: submissionId,
+      round: 1,
+      decisionVersion: 1,
+      collectionVersion: 1,
+      submittedAt: now,
+      note: '',
+      favoriteCount: 2,
+      unavailableCount: 1,
+      photos: [{ photoId: photos[0]!.id, filename: 'Cover.jpg' }],
+    },
+  };
+  await page.route(`**${root}**`, async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.includes('/retouching')) {
+      if (failure)
+        return route.fulfill({
+          status: failure,
+          json: { error: { message: 'Checklist access unavailable.' } },
+        });
+      if (route.request().method() === 'PATCH') {
+        writes++;
+        if (conflict)
+          return route.fulfill({
+            status: 409,
+            json: {
+              error: {
+                message:
+                  'The checklist changed. Refresh it before saving again.',
+              },
+            },
+          });
+        const body = route.request().postDataJSON();
+        expect(path.endsWith(`/${photos[0]!.id}`)).toBe(true);
+        expect(body.version).toBe(checklist.items[0]!.version);
+        const item = checklist.items[0]!;
+        item.version++;
+        item.status = body.status;
+        item.note = body.note;
+        item.history.push({
+          version: item.version,
+          status: item.status,
+          note: item.note,
+          at: now,
+        });
+        return route.fulfill({ json: { saved: true } });
+      }
+      return route.fulfill({ json: checklist });
+    }
+    if (path.endsWith('/submission')) return route.fulfill({ json: snapshot });
+    if (path.endsWith('/decisions'))
+      return route.fulfill({
+        json: {
+          version: 1,
+          updatedAt: now,
+          decisions: [],
+          unavailableCount: 0,
+          submitted: { id: submissionId, round: 1, submittedAt: now },
+        },
+      });
+    if (path.endsWith('/invitations'))
+      return route.fulfill({
+        json: {
+          invitations: [
+            {
+              id: invitationId,
+              email: 'client@example.test',
+              createdAt: now,
+              expiresAt: new Date(Date.now() + 86400000).toISOString(),
+              revokedAt: null,
+            },
+          ],
+        },
+      });
+    if (path === root)
+      return route.fulfill({
+        json: {
+          limit: 50,
+          collections: [
+            {
+              id: collectionId,
+              title: 'Retouching album',
+              version: 1,
+              createdAt: now,
+              updatedAt: now,
+              photoIds: photos.map((p) => p.id),
+              photos,
+              unavailableCount: 0,
+            },
+          ],
+        },
+      });
+    return route.fallback();
+  });
+  async function open() {
+    await page.goto(`/app/events/${eventId}`);
+    await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Client invitations for Retouching album' })
+      .click();
+    await page
+      .getByRole('button', { name: 'View decisions from client@example.test' })
+      .click();
+    await page.getByRole('button', { name: 'View submitted rounds' }).click();
+    await page
+      .getByRole('button', { name: 'Open retouching checklist' })
+      .click();
+  }
+  await open();
+  const panel = page.getByRole('region', {
+    name: 'Retouching checklist',
+    exact: true,
+  });
+  const item = panel.getByRole('article', {
+    name: `Retouch Cover.jpg ${photos[0]!.id}`,
+    exact: true,
+  });
+  await expect(panel.getByText('0 of 1 available photos ready.')).toBeVisible();
+  await expect(
+    panel.getByText('1 submitted photos are unavailable in this collection.'),
+  ).toBeVisible();
+  await item
+    .getByRole('combobox', { name: 'Work status', exact: true })
+    .selectOption('ready');
+  await expect(
+    item.getByRole('button', { name: 'Save work progress' }),
+  ).toBeDisabled();
+  await item
+    .getByRole('combobox', { name: 'Work status', exact: true })
+    .selectOption('editing');
+  await item
+    .getByRole('textbox', { name: 'Private work note' })
+    .fill('Remove dust on the cover');
+  await item.getByRole('button', { name: 'Save work progress' }).click();
+  await expect(panel.getByText('Retouching progress saved.')).toBeVisible();
+  await item
+    .getByRole('combobox', { name: 'Work status', exact: true })
+    .selectOption('ready');
+  await item.getByRole('button', { name: 'Save work progress' }).click();
+  await expect(panel.getByText('1 of 1 available photos ready.')).toBeVisible();
+  await open();
+  await expect(
+    item.getByRole('textbox', { name: 'Private work note' }),
+  ).toHaveValue('Remove dust on the cover');
+  await expect(
+    item.getByRole('combobox', { name: 'Work status', exact: true }),
+  ).toHaveValue('ready');
+  await item.getByText('Work history (2)', { exact: true }).click();
+  await expect(item.getByRole('listitem')).toHaveCount(2);
+  conflict = true;
+  await item
+    .getByRole('textbox', { name: 'Private work note' })
+    .fill('Another pass');
+  await item
+    .getByRole('combobox', { name: 'Work status', exact: true })
+    .selectOption('editing');
+  await item.getByRole('button', { name: 'Save work progress' }).click();
+  await expect(
+    panel.getByText('The checklist changed. Refresh it before saving again.'),
+  ).toBeVisible();
+  await expect(item).toHaveCount(0);
+  conflict = false;
+  await panel
+    .getByRole('button', { name: 'Refresh retouching checklist' })
+    .click();
+  await expect(
+    item.getByRole('combobox', { name: 'Work status', exact: true }),
+  ).toHaveValue('ready');
+  checklist.readOnly = true;
+  await panel
+    .getByRole('button', { name: 'Refresh retouching checklist' })
+    .click();
+  await expect(
+    item.getByRole('textbox', { name: 'Private work note' }),
+  ).toBeDisabled();
+  failure = 403;
+  await panel
+    .getByRole('button', { name: 'Refresh retouching checklist' })
+    .click();
+  await expect(panel.getByText('Checklist access unavailable.')).toBeVisible();
+  await expect(item).toHaveCount(0);
+  await expect(
+    panel.getByText('Remove dust on the cover', { exact: true }),
+  ).toHaveCount(0);
+  expect(writes).toBe(3);
+});
+
 test('submitted round comparison filters by identity, exports fresh availability and clears denied results', async ({
   page,
 }) => {

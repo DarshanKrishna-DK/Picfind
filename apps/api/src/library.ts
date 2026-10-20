@@ -128,9 +128,11 @@ export interface LibraryRecord {
     | 'collection-invitation'
     | 'proofing-comment'
     | 'proofing-submission'
+    | 'retouching-task'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
+  retouchingTask?: import('../../../packages/shared/src/retouching.js').StoredRetouchingTask;
   brandingName?: string;
   accentColor?: string;
   selectedIds?: string[];
