@@ -25,4 +25,5 @@ export interface ProofingSubmissionState {
   history: ProofingSubmission[];
   reopenReason: string | null;
   canReopen: boolean;
+  requirements?: import('./proofing-policy.js').ProofingSubmissionRequirements;
 }

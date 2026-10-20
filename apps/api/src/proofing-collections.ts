@@ -5,6 +5,8 @@ import { ApiError } from './auth.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
+import { proofingPolicy, readProofingPolicy } from './proofing-policy.js';
+import { DEFAULT_PROOFING_POLICY } from '../../../packages/shared/src/proofing-policy.js';
 import {
   PROOFING_COLLECTION_LIMIT,
   PROOFING_COLLECTION_PHOTO_LIMIT,
@@ -14,6 +16,7 @@ import {
 const draft = z.object({
   title: z.string().trim().min(1).max(100),
   photoIds: z.array(z.uuid()).min(1).max(PROOFING_COLLECTION_PHOTO_LIMIT),
+  submissionPolicy: proofingPolicy.optional(),
 });
 const version = z
   .number()
@@ -107,6 +110,7 @@ export function createProofingCollections(
       photoIds,
       photos: available,
       unavailableCount: photoIds.length - available.length,
+      submissionPolicy: readProofingPolicy(row),
     };
   }
   async function validatePhotos(actor: string, eventId: string, ids: string[]) {
@@ -182,7 +186,11 @@ export function createProofingCollections(
         collectionVersion: 1,
         createdAt: now,
         collectionUpdatedAt: now,
+        submissionPolicy: data.data.submissionPolicy ?? {
+          ...DEFAULT_PROOFING_POLICY,
+        },
       };
+      validateMinimum(row);
       await getStore().put(row, true);
       return present(row, photos);
     });
@@ -209,7 +217,9 @@ export function createProofingCollections(
         selectedIds: ids,
         collectionVersion: data.data.version + 1,
         collectionUpdatedAt: new Date().toISOString(),
+        submissionPolicy: data.data.submissionPolicy ?? readProofingPolicy(row),
       };
+      validateMinimum(updated);
       await getStore().put(updated);
       return present(updated, photos);
     });
@@ -233,4 +243,13 @@ export function createProofingCollections(
     res.status(204).end();
   });
   return router;
+}
+
+function validateMinimum(row: LibraryRecord) {
+  if (readProofingPolicy(row).minimum > new Set(row.selectedIds).size)
+    throw new ApiError(
+      400,
+      'COLLECTION_MINIMUM',
+      'The minimum favorites count cannot exceed the selected photo count.',
+    );
 }

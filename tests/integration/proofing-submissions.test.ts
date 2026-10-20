@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apps/api/src/auth';
 import { invitationFixture, origin } from '../fixtures/collection-invitations';
 import type { LibraryRecord } from '../../apps/api/src/library';
@@ -67,6 +67,135 @@ async function fixture() {
 }
 
 describe('final proofing submissions', () => {
+  it('enforces the final favorite range and projects saved counts without counting maybe decisions', async () => {
+    const f = await fixture();
+    f.collection.submissionPolicy = { minimum: 1, maximum: 1, closesAt: null };
+    await f.save(f.photos[0]!.id, 'maybe', 0).expect(200);
+    expect((await f.submit().expect(409)).body.error.code).toBe(
+      'SUBMISSION_COUNT',
+    );
+    expect(f.record().proofingSubmission).toBeUndefined();
+    await f.save(f.photos[0]!.id, 'favorite', 1).expect(200);
+    await f.save(f.photos[1]!.id, 'favorite', 2).expect(200);
+    expect((await f.submit().expect(409)).body.error.code).toBe(
+      'SUBMISSION_COUNT',
+    );
+    const state = (await f.read(f.root).expect(200)).body;
+    expect(state.requirements).toMatchObject({
+      policy: { minimum: 1, maximum: 1, closesAt: null },
+      favoriteCount: 2,
+      unavailableCount: 0,
+      window: { closed: false },
+    });
+    await f.save(f.photos[1]!.id, 'rejected', 3).expect(200);
+    await f.submit().expect(200);
+    expect(f.record().proofingSubmission!.favoriteIds).toEqual([
+      f.photos[0]!.id,
+    ]);
+  });
+  it('counts unavailable favorites and refuses to silently submit a smaller set', async () => {
+    const f = await fixture();
+    f.collection.submissionPolicy = { minimum: 1, maximum: 2, closesAt: null };
+    await f.save(f.photos[0]!.id, 'favorite', 0).expect(200);
+    f.photos[0]!.deletionStartedAt = new Date().toISOString();
+    expect((await f.read(f.root).expect(200)).body.requirements).toMatchObject({
+      favoriteCount: 1,
+      unavailableCount: 1,
+    });
+    expect((await f.submit().expect(409)).body.error.code).toBe(
+      'SUBMISSION_PHOTO_UNAVAILABLE',
+    );
+    expect(f.record().proofingSubmission).toBeUndefined();
+  });
+  it.each([-1, 0, 1])(
+    'enforces the exact deadline boundary with %i ms remaining',
+    async (remaining) => {
+      const f = await fixture();
+      const now = Date.now();
+      f.collection.submissionPolicy = {
+        minimum: 0,
+        maximum: 100,
+        closesAt: new Date(now + remaining).toISOString(),
+      };
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      try {
+        const state = (await f.read(f.root).expect(200)).body;
+        expect(state.requirements.window.closed).toBe(remaining <= 0);
+        await f.submit().expect(remaining <= 0 ? 409 : 200);
+        expect(Boolean(f.record().proofingSubmission)).toBe(remaining > 0);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+  it('checks the deadline after asynchronous availability reads', async () => {
+    const f = await fixture();
+    await f.save(f.photos[0]!.id, 'favorite', 0).expect(200);
+    const before = Date.now(),
+      deadline = before + 500;
+    f.collection.submissionPolicy = {
+      minimum: 1,
+      maximum: 2,
+      closesAt: new Date(deadline).toISOString(),
+    };
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(before);
+    const get = f.store.get;
+    f.store.get = async (id) => {
+      const row = await get(id);
+      if (id === f.photos[0]!.id) clock.mockReturnValue(deadline);
+      return row;
+    };
+    try {
+      expect((await f.submit().expect(409)).body.error.code).toBe(
+        'SUBMISSION_CLOSED',
+      );
+      expect(f.record().proofingSubmission).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('keeps exact retries and history valid after closure but requires extension for the reopened round', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.submit(input).expect(200);
+    const snapshot = structuredClone(f.record().proofingSubmission);
+    f.collection.submissionPolicy = {
+      minimum: 1,
+      maximum: 2,
+      closesAt: '2020-01-01T00:00:00.000Z',
+    };
+    f.collection.collectionVersion = 2;
+    await f.submit(input).expect(200);
+    expect(f.record().proofingSubmission).toEqual(snapshot);
+    await f.reopen(input.id).expect(200);
+    await f.save(f.photos[0]!.id, 'favorite', 1).expect(200);
+    expect((await f.submit().expect(409)).body.error.code).toBe(
+      'SUBMISSION_CLOSED',
+    );
+    const state = (await f.read(f.root).expect(200)).body;
+    expect(state.history[0].id).toBe(input.id);
+    const stale = f.input();
+    f.collection.submissionPolicy.closesAt = null;
+    f.collection.collectionVersion = 3;
+    await f.submit(stale).expect(409);
+    await f.submit().expect(200);
+    expect(f.record().proofingSubmission!.round).toBe(2);
+  });
+  it.each([
+    null,
+    {},
+    { minimum: 0, maximum: 101, closesAt: null },
+    { minimum: 0, maximum: 100, closesAt: '' },
+  ])('fails closed on corrupt stored policy: %j', async (submissionPolicy) => {
+    const f = await fixture();
+    Object.assign(f.collection, { submissionPolicy });
+    await f.read(f.root).expect(503);
+    await f.read(f.ownerRoot, 'owner').expect(503);
+    expect((await f.submit().expect(503)).body.error.code).toBe(
+      'COLLECTION_POLICY_INVALID',
+    );
+    expect(f.record().proofingSubmission).toBeUndefined();
+  });
   it('persists only favorites, locks edits, projects private metadata and survives reload', async () => {
     const f = await fixture();
     await f.save(f.photos[0]!.id, 'favorite', 0).expect(200);

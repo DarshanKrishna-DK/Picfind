@@ -246,6 +246,7 @@ export function ClientCollectionReview({
             <ProofingSubmissions
               root={`/proofing-invitations/${invitationId}/submission`}
               accountId={accountId}
+              decisionVersion={query.data.version}
               disabled={busy || conflict || query.isFetching}
               onBusy={setSubmissionBusy}
               onChanged={() => query.refetch()}

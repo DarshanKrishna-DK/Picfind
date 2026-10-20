@@ -8,6 +8,11 @@ import {
 } from '../../../../packages/shared/src/proofing-collection';
 import './proofing-collections.css';
 import { CollectionInvitations } from './collection-invitations';
+import {
+  policyDraft,
+  parsePolicyDraft,
+  ProofingPolicyFields,
+} from './proofing-policy-fields';
 
 export function ProofingCollections({
   eventId,
@@ -212,18 +217,23 @@ function CollectionEditor({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [ids, setIds] = useState(initial?.photoIds ?? []);
   const [version, setVersion] = useState(initial?.version ?? 1);
+  const [policy, setPolicy] = useState(() =>
+    policyDraft(initial?.submissionPolicy),
+  );
   const [search, setSearch] = useState('');
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [baseline, setBaseline] = useState({
     title: initial?.title ?? '',
     photoIds: initial?.photoIds ?? [],
+    policy: policyDraft(initial?.submissionPolicy),
   });
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const dirty =
     title !== baseline.title ||
+    JSON.stringify(policy) !== JSON.stringify(baseline.policy) ||
     ids.length !== baseline.photoIds.length ||
     ids.some((id) => !baseline.photoIds.includes(id));
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
@@ -250,6 +260,10 @@ function CollectionEditor({
         body: JSON.stringify({
           title,
           photoIds: ids,
+          ...(!initial ||
+          JSON.stringify(policy) !== JSON.stringify(baseline.policy)
+            ? { submissionPolicy: parsePolicyDraft(policy) }
+            : {}),
           ...(initial ? { version } : {}),
         }),
       });
@@ -280,9 +294,11 @@ function CollectionEditor({
       setTitle(result.collection.title);
       setIds(result.collection.photoIds);
       setVersion(result.collection.version);
+      setPolicy(policyDraft(result.collection.submissionPolicy));
       setBaseline({
         title: result.collection.title,
         photoIds: result.collection.photoIds,
+        policy: policyDraft(result.collection.submissionPolicy),
       });
       setConflict(false);
     } catch (failure) {
@@ -309,6 +325,12 @@ function CollectionEditor({
           onChange={(event) => setTitle(event.target.value)}
         />
       </label>
+      <ProofingPolicyFields
+        value={policy}
+        onChange={setPolicy}
+        disabled={busy}
+        photoCount={ids.length}
+      />
       <label>
         Filter collection photos
         <input
