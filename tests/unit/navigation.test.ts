@@ -14,6 +14,7 @@ describe('authentication return destinations', () => {
     '/app/billing?context=personal',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa',
     '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa',
+    '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa/wall',
   ])('retains product route %s', (value) =>
     expect(studioReturnPath(value)).toBe(value),
   );
@@ -38,6 +39,10 @@ describe('authentication return destinations', () => {
     '/app/billing?context=organizer#outside',
     '/proofing/not-an-id',
     '/highlights/not-an-id',
+    '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa/wall/extra',
+    '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa/wall?redirect=outside',
+    '/e/ad851772-ef2a-46a2-8f66-066975c7b0aa/wall',
+    '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa/wall',
     '/highlights/ad851772-ef2a-46a2-8f66-066975c7b0aa?redirect=outside',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa?redirect=outside',
     '/proofing/ad851772-ef2a-46a2-8f66-066975c7b0aa/../app',

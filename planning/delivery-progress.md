@@ -6,9 +6,11 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-20, Picfind had 24 pushed after review, 32 merged and
-reviewed, and 32 opened. This is a
+on 2026-10-20, Picfind had 25 pushed after review, 33 merged and
+reviewed, and 33 opened. This is a
 timestamped observation, not a live counter or a promise of event credit.
+The table records completed merges only. The PR carrying a ledger update is
+excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | PR                                                         | Outcome                                          | Merge and review evidence                                                                                                             |
 | ---------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,8 +46,9 @@ timestamped observation, not a live counter or a promise of event credit.
 | [31](https://github.com/DarshanKrishna-DK/Picfind/pull/31) | Saved browser upload batches                     | Reviewed, replay checkpoints strengthened after review, re-reviewed, owner-delegated approval applied, all CI passed, merged          |
 | [32](https://github.com/DarshanKrishna-DK/Picfind/pull/32) | Local RAW to event JPEG mapping                  | Reviewed, Unicode CSV and disabled-control evidence added after review with explicit button types, re-reviewed, all CI passed, merged |
 | [33](https://github.com/DarshanKrishna-DK/Picfind/pull/33) | Published photographer credits and ZIP manifests | Reviewed, final delivery authorization and early manifest budgeting strengthened after review, re-reviewed, all CI passed, merged     |
+| [34](https://github.com/DarshanKrishna-DK/Picfind/pull/34) | Curated highlights with scoped photo delivery    | Reviewed, full sign-in return and stored version-zero rejection verified after review, re-reviewed, all CI passed, merged             |
 
-GitHub currently proves thirty-two merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32 and #33 were visibly
+GitHub currently proves thirty-three merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33 and #34 were visibly
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 

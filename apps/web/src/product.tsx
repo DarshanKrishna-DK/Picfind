@@ -15,11 +15,13 @@ import { SettingsPage } from './features/account';
 import { BillingPage } from './features/billing';
 import { InvitedCollectionPage } from './features/collection-invitations';
 import { HighlightsPage } from './features/highlights';
+import { HighlightWall } from './features/highlight-wall';
 import './features/billing.css';
 
 export function Product() {
   return (
     <Routes>
+      <Route path="highlights/:eventId/wall" element={<HighlightWall />} />
       <Route element={<PublicLayout />}>
         <Route index element={<LandingPage />} />
         <Route path="discover" element={<Navigate to="/#discover" replace />} />
