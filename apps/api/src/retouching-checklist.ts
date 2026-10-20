@@ -73,7 +73,7 @@ export function createRetouchingChecklist({
         throw error;
       });
   }
-  async function grant(req: Request, actor: string) {
+  async function accessGrant(req: Request, actor: string) {
     const { event, collection } = await ownerCollection(req, actor);
     const invitation = await optional(uuid(req.params.invitationId));
     if (
@@ -86,14 +86,18 @@ export function createRetouchingChecklist({
       invitation.deletionStartedAt
     )
       throw missing();
+    return { event, collection, invitation };
+  }
+  async function grant(req: Request, actor: string) {
+    const access = await accessGrant(req, actor);
     const submissionId = uuid(req.params.submissionId);
     const jobs = await store().list(actor, 'job');
-    const state = readSubmissionHistory(invitation, jobs);
+    const state = readSubmissionHistory(access.invitation, jobs);
     const submission = [state.current, ...state.history].find(
       (item) => item?.id === submissionId,
     );
     if (!submission) throw missing();
-    return { event, collection, invitation, submission, jobs };
+    return { ...access, submission, jobs };
   }
   type Grant = Awaited<ReturnType<typeof grant>>;
   function scope(g: Grant, photoId: string) {
@@ -106,11 +110,14 @@ export function createRetouchingChecklist({
       photoId,
     };
   }
-  function unchanged(a: Grant, b: Grant) {
+  function unchanged(
+    a: Awaited<ReturnType<typeof accessGrant>>,
+    b: Awaited<ReturnType<typeof accessGrant>>,
+  ) {
     if (
       !isDeepStrictEqual(
-        [a.event, a.collection, a.invitation, a.submission],
-        [b.event, b.collection, b.invitation, b.submission],
+        [a.event, a.collection, a.invitation],
+        [b.event, b.collection, b.invitation],
       )
     )
       throw changed();
@@ -136,7 +143,7 @@ export function createRetouchingChecklist({
     const result = await withAccountLock(
       actor,
       async (): Promise<RetouchingChecklist> => {
-        const initial = await grant(req, actor);
+        const initial = await accessGrant(req, actor);
         const photos = await store().list(actor, 'photo');
         const latest = await grant(req, actor);
         unchanged(initial, latest);
@@ -198,6 +205,8 @@ export function createRetouchingChecklist({
       const saved = readRetouching(existing, scope(initial, photoId));
       const latest = await grant(req, actor);
       unchanged(initial, latest);
+      if (!isDeepStrictEqual(initial.submission, latest.submission))
+        throw changed();
       checkedKey(latest, photoId);
       const latestPhoto = await optional(photoId);
       const latestTask = await optional(key);

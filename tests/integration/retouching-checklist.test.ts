@@ -65,7 +65,14 @@ async function fixture() {
 describe('round-bound photographer retouching checklist', () => {
   it('persists work, notes and complete history without exposing other private metadata', async () => {
     const f = await fixture();
+    const list = f.store.list;
+    let jobLists = 0;
+    f.store.list = async (owner, kind) => {
+      if (kind === 'job') jobLists++;
+      return list(owner, kind);
+    };
     const initial = await f.read().expect(200);
+    expect(jobLists).toBe(1);
     expect(initial.headers['cache-control']).toContain('no-store');
     expect(initial.body.items).toEqual([
       {
@@ -105,6 +112,24 @@ describe('round-bound photographer retouching checklist', () => {
     expect(f.records.get(f.key)).toEqual(saved);
     await f.save(f.input(0, 'editing', 'Different instruction')).expect(409);
     expect(f.records.get(f.key)).toEqual(saved);
+  });
+  it('rejects an old retry after intervening changes return to the same note', async () => {
+    const f = await fixture();
+    await f.save().expect(200);
+    await f.save(f.input(1, 'editing', 'Temporary instruction')).expect(200);
+    await f.save(f.input(2, 'editing', 'Remove dust')).expect(200);
+    const saved = structuredClone(f.records.get(f.key));
+    await f.save(f.input(1)).expect(409);
+    expect(f.records.get(f.key)).toEqual(saved);
+  });
+  it('rejects duplicate favorite identities before projecting a checklist', async () => {
+    const f = await fixture();
+    f.records
+      .get(f.invitationId)!
+      .proofingSubmission!.favoriteIds.push(f.photoId);
+    await f.read().expect(503);
+    await f.save().expect(503);
+    expect(f.records.has(f.key)).toBe(false);
   });
   it('requires ordered progress and an explanation for going backwards', async () => {
     const f = await fixture();
@@ -348,6 +373,22 @@ describe('round-bound photographer retouching checklist', () => {
     expect(f.records.get(f.key)!.retouchingTask!.history[0]!.note).toBe(
       'External change',
     );
+  });
+  it('rejects corruption appearing under another key during the second grant', async () => {
+    const f = await fixture();
+    await f.save().expect(200);
+    const saved = structuredClone(f.records.get(f.key)!);
+    const list = f.store.list;
+    let reads = 0;
+    f.store.list = async (owner, kind) => {
+      if (kind === 'job' && ++reads === 2) {
+        const wrong = { ...structuredClone(saved), id: randomUUID() };
+        f.records.set(wrong.id, wrong);
+      }
+      return list(owner, kind);
+    };
+    await f.save(f.input(1, 'ready')).expect(503);
+    expect(f.records.get(f.key)).toEqual(saved);
   });
   it('removes work records with event cleanup and omits them from library import jobs', async () => {
     const f = await fixture();

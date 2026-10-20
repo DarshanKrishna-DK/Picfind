@@ -41,7 +41,10 @@ Event deletion already removes event-bound jobs.
 
 Use the existing account lock and recheck the grant, photo and task before a
 write. These are process-local protections, not a distributed transaction.
-The existing owner job-list query is retained; large multi-studio workloads
+GET reads the owner job list once after rechecking the invitation and collection.
+PATCH reads it before and after asynchronous work to detect newly conflicting
+task keys and changed submission archives. The existing owner job-list query is
+retained; large multi-studio workloads
 still need indexed scoped queries before a capacity claim.
 
 ## Interface and verification
