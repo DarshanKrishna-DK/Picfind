@@ -54,6 +54,7 @@ import { mapFaceError } from './face-errors.js';
 import { createEventTools } from './event-tools.js';
 import { createPhotoNotes } from './photo-notes.js';
 import { createProofingCollections } from './proofing-collections.js';
+import { createCollectionInvitations } from './collection-invitations.js';
 import { createEventMembershipRouter } from './event-membership-router.js';
 import { memberEvents, requireEventAccess } from './event-membership-access.js';
 import { PHOTO_PLANS } from '../../../packages/shared/src/plans.js';
@@ -119,6 +120,7 @@ export interface LibraryRecord {
     | 'usage'
     | 'selection'
     | 'proofing-collection'
+    | 'collection-invitation'
     | 'event-membership'
     | 'upload-cleanup';
   passcodeHash?: string;
@@ -127,6 +129,10 @@ export interface LibraryRecord {
   selectedIds?: string[];
   collectionVersion?: number;
   collectionUpdatedAt?: string;
+  invitationCollectionId?: string;
+  invitationRecipientId?: string;
+  invitationEmail?: string;
+  invitationRevokedAt?: string;
   privatePhotoNote?: string;
   privatePhotoNoteVersion?: number;
   privatePhotoNoteUpdatedAt?: string;
@@ -615,6 +621,7 @@ export function createLibraryRouter(
   router.use(createEventTools(auth, store, owner, saveEvent));
   router.use(createPhotoNotes(store, owner));
   router.use(createProofingCollections(store, owner));
+  router.use(createCollectionInvitations(auth, store, owner, sendPhoto));
   router.use(
     createEventMembershipRouter(auth, store, owner, options.billing, limits),
   );
@@ -1115,6 +1122,7 @@ export function createLibraryRouter(
     photo: LibraryRecord,
     req: Request,
     res: express.Response,
+    authorize?: () => Promise<void>,
   ) {
     const deliveryAttempt = randomUUID();
     assertPhotoAvailable(photo);
@@ -1128,6 +1136,7 @@ export function createLibraryRouter(
           'This photo has an invalid collection.',
         );
     }
+    await authorize?.();
     if (req.method === 'HEAD') {
       res.type('image/jpeg');
       if (photo.bytes !== undefined)
@@ -1178,6 +1187,7 @@ export function createLibraryRouter(
         'Photo storage returned an unexpected file size. Please retry later.',
       );
     }
+    await authorize?.();
     res.type('image/jpeg');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (req.query.download === '1')

@@ -235,6 +235,180 @@ async function fixture(page: Page) {
   return { eventId, events, photos, selection, selections, state, jpeg };
 }
 
+test('collection invitations persist, survive client reload and stop access after revocation', async ({
+  page,
+}) => {
+  const { eventId, photos, jpeg, state } = await fixture(page);
+  const collectionId = '66666666-6666-4666-8666-666666666666';
+  const invitationId = '77777777-7777-4777-8777-777777777777';
+  const root = `/api/events/${eventId}/proofing-collections`;
+  const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+  let invitation: {
+    id: string;
+    email: string;
+    createdAt: string;
+    expiresAt: string;
+    revokedAt: string | null;
+  } | null = null;
+  let signedIn = true;
+  let recipient = false;
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      json: {
+        user: signedIn
+          ? {
+              id: recipient ? 'client' : 'owner',
+              name: 'Account',
+              email: recipient ? 'client@example.test' : 'owner@example.test',
+              emailVerified: true,
+            }
+          : null,
+      },
+    }),
+  );
+  await page.route(`**${root}`, (route) =>
+    route.fulfill({
+      json: {
+        limit: 50,
+        collections: [
+          {
+            id: collectionId,
+            title: 'Album round',
+            version: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            photoIds: [photos[0]!.id],
+            photos: [photos[0]],
+            unavailableCount: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**${root}/${collectionId}/invitations**`, (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON()).toEqual({
+        email: 'client@example.test',
+        days: 3,
+      });
+      invitation = {
+        id: invitationId,
+        email: 'client@example.test',
+        createdAt: new Date().toISOString(),
+        expiresAt,
+        revokedAt: null,
+      };
+      return route.fulfill({ status: 201, json: { invitation } });
+    }
+    if (route.request().method() === 'DELETE') {
+      invitation!.revokedAt = new Date().toISOString();
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({
+      json: { invitations: invitation ? [invitation] : [] },
+    });
+  });
+  await page.route(`**/api/proofing-invitations/${invitationId}**`, (route) => {
+    if (!recipient || invitation?.revokedAt)
+      return route.fulfill({
+        status: 404,
+        json: { error: { message: 'Invitation unavailable.' } },
+      });
+    if (new URL(route.request().url()).pathname.includes('/photos/'))
+      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+    return route.fulfill({
+      json: {
+        title: 'Album round',
+        eventTitle: 'Garden wedding',
+        expiresAt,
+        photos: [photos[0]],
+      },
+    });
+  });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Album round' })
+    .click();
+  const manager = page.getByRole('region', {
+    name: 'Collection invitations',
+    exact: true,
+  });
+  await manager.getByLabel('Client account email').fill('client@example.test');
+  await manager.getByLabel('Access duration in days').fill('3');
+  await manager
+    .getByRole('button', { name: 'Create invitation', exact: true })
+    .click();
+  await expect(
+    manager.getByLabel('Invitation link for client@example.test'),
+  ).toHaveValue(new RegExp(`/proofing/${invitationId}$`));
+  await page.reload();
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Album round' })
+    .click();
+  await expect(
+    manager.getByLabel('Invitation link for client@example.test'),
+  ).toBeVisible();
+
+  signedIn = false;
+  await page.goto(`/proofing/${invitationId}`);
+  await expect(
+    page.getByRole('link', { name: 'Sign in to view collection' }),
+  ).toHaveAttribute(
+    'href',
+    `/sign-in?returnTo=${encodeURIComponent(`/proofing/${invitationId}`)}`,
+  );
+  signedIn = true;
+  recipient = true;
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Album round' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: photos[0]!.filename }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: photos[1]!.filename }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Album round' }),
+  ).toBeVisible();
+  invitation!.revokedAt = new Date().toISOString();
+  await page
+    .getByRole('button', { name: 'Refresh collection', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'This collection is unavailable.' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: photos[0]!.filename }),
+  ).toHaveCount(0);
+
+  recipient = false;
+  invitation!.revokedAt = null;
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByRole('tab', { name: 'Collections', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Client invitations for Album round' })
+    .click();
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await manager
+    .getByRole('button', { name: 'Revoke access for client@example.test' })
+    .click();
+  expect(invitation!.revokedAt).toBeNull();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await manager
+    .getByRole('button', { name: 'Revoke access for client@example.test' })
+    .click();
+  await expect(manager.getByText(/^Revoked · Expires/)).toBeVisible();
+  await expect(
+    manager.getByLabel('Invitation link for client@example.test'),
+  ).toHaveCount(0);
+  expect(state.unexpectedWrites).toEqual([]);
+});
+
 test('named collections persist, recover conflicts, remove unavailable photos and delete only the set', async ({
   page,
 }) => {

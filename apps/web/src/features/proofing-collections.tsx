@@ -7,6 +7,7 @@ import {
   type ProofingCollection,
 } from '../../../../packages/shared/src/proofing-collection';
 import './proofing-collections.css';
+import { CollectionInvitations } from './collection-invitations';
 
 export function ProofingCollections({
   eventId,
@@ -75,7 +76,8 @@ export function ProofingCollections({
       <h2>Named proofing collections</h2>
       <p>
         Keep private photo sets for album planning and retouching rounds.
-        Collections do not change guest requests or grant gallery access.
+        Collections do not change guest requests. Use client invitations to
+        grant access to a specific account.
       </p>
       <div className="actions">
         <button
@@ -172,6 +174,11 @@ export function ProofingCollections({
                     Delete {collection.title}
                   </button>
                 </div>
+                <CollectionInvitations
+                  eventId={eventId}
+                  collectionId={collection.id}
+                  title={collection.title}
+                />
               </li>
             ))}
           </ul>

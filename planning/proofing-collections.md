@@ -27,5 +27,6 @@ candidate photos per page with next/previous navigation and a selected-only filt
 Switching editors asks before discarding a dirty draft. Save/reload disables
 collection switching until the request completes. Malformed stored versions fail
 with an explicit metadata-repair error rather than returning an undefined version.
-Client invitations, per-client decisions and submitted/locked revisions remain
-separate future workflows. These private sets do not grant guest access.
+Account-bound client access is described in [Collection invitations](collection-invitations.md).
+Collections remain private until an owner explicitly invites an account.
+Per-client decisions and submitted/locked revisions remain separate future workflows.
