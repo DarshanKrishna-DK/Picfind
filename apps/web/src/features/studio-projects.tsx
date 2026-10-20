@@ -511,6 +511,12 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
                 >
                   Client questionnaires
                 </Link>
+                <Link
+                  className="button secondary"
+                  to={`/app/projects/${selected.project.id}/proposals`}
+                >
+                  Package proposals
+                </Link>
               </p>
               <h3>Recent stage history</h3>
               <p>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ApiError } from './auth.js';
 import { withAccountLocks } from './locks.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
+import { proposalIdentity } from './proposal-cleanup.js';
 
 export function questionnaireResponseId(formId: string, recipientId: string) {
   const hex = createHash('sha256')
@@ -47,10 +48,16 @@ async function forms(store: LibraryStore, ownerId: string, projectId?: string) {
   return (await store.list(ownerId, 'job')).filter(
     (row) =>
       row.ownerId === ownerId &&
-      row.purpose === 'studio-questionnaire' &&
-      (!projectId || row.studioQuestionnaire?.projectId === projectId),
+      ((row.purpose === 'studio-questionnaire' &&
+        (!projectId || row.studioQuestionnaire?.projectId === projectId)) ||
+        (row.purpose === 'studio-proposal' &&
+          (!projectId || row.studioProposal?.projectId === projectId))),
   );
 }
+const participantIdentity = (row: LibraryRecord) =>
+  row.purpose === 'studio-proposal'
+    ? proposalIdentity(row)
+    : questionnaireIdentity(row);
 export async function withQuestionnaireCleanupLocks<T>(
   store: LibraryStore,
   ownerId: string,
@@ -59,9 +66,9 @@ export async function withQuestionnaireCleanupLocks<T>(
 ) {
   const before = await forms(store, ownerId, projectId),
     recipients = [
-      ...new Set(before.map((row) => questionnaireIdentity(row).recipientId)),
+      ...new Set(before.map((row) => participantIdentity(row).recipientId)),
     ];
-  if (recipients.length > 200) throw invalid();
+  if (recipients.length > 400) throw invalid();
   // Discovery chooses locks, not a frozen deletion list. The operation rereads
   // all current forms in the authorized account/project scope under these locks.
   const lockedAccounts = new Set([ownerId, ...recipients]);
@@ -70,7 +77,7 @@ export async function withQuestionnaireCleanupLocks<T>(
     async () => {
       const current = await forms(store, ownerId, projectId);
       for (const row of current)
-        if (!lockedAccounts.has(questionnaireIdentity(row).recipientId))
+        if (!lockedAccounts.has(participantIdentity(row).recipientId))
           throw changed();
       return operation(lockedAccounts);
     },

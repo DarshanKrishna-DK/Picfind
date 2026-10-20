@@ -22,6 +22,7 @@ import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioServices } from './features/studio-services';
 import { StudioProjects } from './features/studio-projects';
 import { ProjectQuestionnaires } from './features/project-questionnaires';
+import { ProjectProposals } from './features/project-proposals';
 import { StudioWork } from './features/studio-work';
 import { StudioSchedule } from './features/studio-schedule';
 import { DuplicateReview } from './features/duplicate-review';
@@ -59,6 +60,7 @@ export function Product() {
         <Route path="invite/:eventId/response" element={<GuestRsvpPage />} />
         <Route path="enquire/:id" element={<PublicEnquiry />} />
         <Route path="highlights/:eventId" element={<HighlightsPage />} />
+        <Route path="proposals/:id" element={<ProjectProposals client />} />
         <Route
           path="questionnaires/:id"
           element={<ProjectQuestionnaires client />}
@@ -88,6 +90,10 @@ export function Product() {
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
         <Route path="projects" element={<StudioProjects />} />
+        <Route
+          path="projects/:projectId/proposals"
+          element={<ProjectProposals />}
+        />
         <Route
           path="projects/:projectId/questionnaires"
           element={<ProjectQuestionnaires />}

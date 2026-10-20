@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ApiError } from './auth.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { removeQuestionnaireResponse } from './questionnaire-cleanup.js';
+import { removeProposalResponse } from './proposal-cleanup.js';
 
 // Scope remains authoritative even when a child's non-identity content needs repair.
 export async function removeProjectStudioWork(
@@ -9,7 +10,7 @@ export async function removeProjectStudioWork(
   actorId: string,
   projectId: string,
   assertRemoval: () => Promise<void>,
-  lockedAccounts: ReadonlySet<string> = new Set([actorId]),
+  lockedAccounts: ReadonlySet<string>,
 ) {
   const belongs = (row: LibraryRecord) =>
     row.ownerId === actorId &&
@@ -20,7 +21,9 @@ export async function removeProjectStudioWork(
       (row.purpose === 'studio-appointment' &&
         row.studioAppointment?.projectId === projectId) ||
       (row.purpose === 'studio-questionnaire' &&
-        row.studioQuestionnaire?.projectId === projectId));
+        row.studioQuestionnaire?.projectId === projectId) ||
+      (row.purpose === 'studio-proposal' &&
+        row.studioProposal?.projectId === projectId));
   const rows = (await store.list(actorId, 'job')).filter(belongs);
   for (const row of rows) {
     if (!z.uuid().safeParse(row.id).success)
@@ -50,6 +53,8 @@ export async function removeProjectStudioWork(
         lockedAccounts,
         assertRemoval,
       );
+    if (fresh.purpose === 'studio-proposal')
+      await removeProposalResponse(store, fresh, lockedAccounts, assertRemoval);
     try {
       await store.remove(row.id);
     } catch (failure) {
