@@ -221,6 +221,16 @@ describe('production capacity without paid provider calls', () => {
     expect(f.store.upload).not.toHaveBeenCalled();
     expect(f.reserveStorage).not.toHaveBeenCalled();
   });
+  it('acknowledges a committed last-slot upload without another storage reservation', async () => {
+    const f = await productionFixture(0, 1);
+    const first = await f.upload();
+    expect(first.status).toBe(201);
+    const again = await f.upload();
+    expect(again.status).toBe(201);
+    expect(again.body.photo.id).toBe(first.body.photo.id);
+    expect(f.store.upload).toHaveBeenCalledOnce();
+    expect(f.reserveStorage).toHaveBeenCalledOnce();
+  });
 
   it('accepts a paid-account twenty-first photo through the server storage reservation', async () => {
     const f = await productionFixture(20);

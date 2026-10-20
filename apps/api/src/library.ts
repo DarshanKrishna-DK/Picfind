@@ -31,7 +31,12 @@ import {
 import { uncertainFaceIndex } from './face-cleanup-state.js';
 import { sealDriveValue, openDriveValue } from './drive-connection.js';
 import express, { Router, type Request } from 'express';
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import type {
@@ -69,6 +74,7 @@ import {
 } from './cloud-sources.js';
 import { processingUsage } from './processing-budget.js';
 import { matchingReadiness } from './matching-readiness.js';
+import { uploadMetadata } from './upload-metadata.js';
 import type { BillingService } from './billing/service.js';
 import {
   assertPhotoAvailable,
@@ -113,6 +119,7 @@ export interface LibraryRecord {
   width?: number;
   height?: number;
   digest?: string;
+  uploadInputDigest?: string;
   state?: 'running' | 'complete' | 'partial' | 'failed';
   imported?: number;
   errors?: string[];
@@ -746,7 +753,10 @@ export function createLibraryRouter(
         (photo) =>
           !photo.scanId && !photo.deletionStartedAt && photoAvailable(photo),
       )
-      .map((photo) => ({ ...photo, filename: photo.filename ?? 'photo.jpg' }));
+      .map(({ uploadInputDigest, ...photo }) => {
+        void uploadInputDigest;
+        return { ...photo, filename: photo.filename ?? 'photo.jpg' };
+      });
     const imports = jobs.filter(
       (job) => !job.purpose || job.purpose === 'import',
     );
@@ -935,21 +945,6 @@ export function createLibraryRouter(
       ? photos.filter((photo) => photo.scanId === scanId).length
       : 0;
     const scanLimit = limits.discoverPhotos;
-    if (
-      (limits.production && photos.length >= limits.libraryPhotos) ||
-      (!scanId && libraryCount >= limits.libraryPhotos)
-    )
-      throw new ApiError(
-        409,
-        'PHOTO_LIMIT',
-        `The ${limits.libraryPhotos}-photo storage safety limit has been reached. Delete unused photos or scans before continuing.`,
-      );
-    if (scanId && scanCount >= scanLimit)
-      throw new ApiError(
-        409,
-        'PHOTO_LIMIT',
-        `This search can index at most ${scanLimit} photos.`,
-      );
     let destinationEvent: LibraryRecord | undefined;
     let membershipGrant = 'owner';
     if (eventId) {
@@ -966,17 +961,6 @@ export function createLibraryRouter(
         );
       assertEventImportOpen(event);
       destinationEvent = event;
-      if (
-        photos.filter(
-          (photo) =>
-            photo.eventId === eventId && !photo.scanId && photoAvailable(photo),
-        ).length >= limits.eventPhotos
-      )
-        throw new ApiError(
-          409,
-          'EVENT_PHOTO_LIMIT',
-          `This event can hold ${limits.eventPhotos} photos for face processing. Use another event for additional photos.`,
-        );
       if (event.deletionStartedAt)
         throw new ApiError(
           409,
@@ -990,15 +974,83 @@ export function createLibraryRouter(
           'Restore this event before uploading.',
         );
     }
+    if (!input.length || input.length > MAX_INPUT_BYTES)
+      throw new ApiError(
+        413,
+        'FILE_TOO_LARGE',
+        'Choose a photo smaller than 8 MB.',
+      );
+    const inputDigest = createHash('sha256').update(input).digest('hex');
+    function sameDestination(photo: LibraryRecord) {
+      return (
+        photo.ownerId === user &&
+        photo.eventId === eventId &&
+        photo.scanId === scanId &&
+        !photo.deletionStartedAt &&
+        !photo.deletionCompletedAt &&
+        photoAvailable(photo)
+      );
+    }
+    async function reuse(
+      candidate: LibraryRecord,
+      field: 'digest' | 'uploadInputDigest',
+      value: string,
+    ) {
+      const current = await store().get(candidate.id);
+      if (eventId) {
+        const access = await requireEventAccess(store(), eventId, actor, true);
+        if (access.event.ownerId !== user)
+          throw new ApiError(404, 'NOT_FOUND', 'This event is not available.');
+      }
+      if (
+        current.id !== candidate.id ||
+        !sameDestination(current) ||
+        current[field] !== value
+      )
+        throw new ApiError(
+          409,
+          'UPLOAD_CHANGED',
+          'This uploaded photo changed. Refresh the destination before trying again.',
+        );
+      return current;
+    }
+    const replay = photos.find(
+      (photo) =>
+        sameDestination(photo) && photo.uploadInputDigest === inputDigest,
+    );
+    if (replay) return reuse(replay, 'uploadInputDigest', inputDigest);
+    if (
+      (limits.production && photos.length >= limits.libraryPhotos) ||
+      (!scanId && libraryCount >= limits.libraryPhotos)
+    )
+      throw new ApiError(
+        409,
+        'PHOTO_LIMIT',
+        `The ${limits.libraryPhotos}-photo storage safety limit has been reached. Delete unused photos or scans before continuing.`,
+      );
+    if (scanId && scanCount >= scanLimit)
+      throw new ApiError(
+        409,
+        'PHOTO_LIMIT',
+        `This search can index at most ${scanLimit} photos.`,
+      );
+    if (
+      eventId &&
+      photos.filter(
+        (photo) =>
+          photo.eventId === eventId && !photo.scanId && photoAvailable(photo),
+      ).length >= limits.eventPhotos
+    )
+      throw new ApiError(
+        409,
+        'EVENT_PHOTO_LIMIT',
+        `This event can hold ${limits.eventPhotos} photos for face processing. Use another event for additional photos.`,
+      );
     const output = await processPhotoBytes(input);
     const existing = photos.find(
-      (photo) =>
-        photoAvailable(photo) &&
-        photo.digest === output.digest &&
-        photo.eventId === eventId &&
-        photo.scanId === scanId,
+      (photo) => sameDestination(photo) && photo.digest === output.digest,
     );
-    if (existing) return existing;
+    if (existing) return reuse(existing, 'digest', output.digest);
     const billingScope = productBillingScope(
       options.billing,
       destinationEvent ? 'organizer' : 'personal',
@@ -1023,6 +1075,7 @@ export function createLibraryRouter(
       width: output.info.width,
       height: output.info.height,
       digest: output.digest,
+      uploadInputDigest: inputDigest,
       indexState: 'none',
       uploadedBy: actor,
       ...(eventId ? { eventId } : {}),
@@ -1127,7 +1180,7 @@ export function createLibraryRouter(
           user,
         ),
       );
-      res.status(201).json({ photo });
+      res.status(201).json({ photo: uploadMetadata(photo) });
     },
   );
   router.delete('/photos/:id', async (req, res) => {

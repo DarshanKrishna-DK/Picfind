@@ -204,6 +204,29 @@ describe('event moderator authority', () => {
     );
     expect(f.store.removeFile).toHaveBeenCalledOnce();
   });
+  it('keeps owner notes and face metadata out of moderator duplicate acknowledgements', async () => {
+    const f = await fixture();
+    await f.invite().expect(201);
+    const send = () =>
+      request(f.app)
+        .post(`/api/photos?eventId=${f.event.id}`)
+        .set('Cookie', 'picfind_session=moderator')
+        .set('Origin', origin)
+        .set('Content-Type', 'application/octet-stream')
+        .send(f.image);
+    const first = await send().expect(201);
+    const photo = f.rows.get(first.body.photo.id)!;
+    photo.privatePhotoNote = 'Owner-only instructions';
+    photo.faceIds = ['private-face-reference'];
+    const again = await send().expect(201);
+    expect(again.body.photo.id).toBe(photo.id);
+    expect(JSON.stringify(again.body)).not.toMatch(
+      /Owner-only|private-face|uploadInputDigest|digest/,
+    );
+    await f.billing.revokeEventMember('owner', f.event.id, moderator.id);
+    await send().expect(404);
+    expect(f.store.upload).toHaveBeenCalledOnce();
+  });
   it('reinvitation changes the grant and stale discovery records cannot authorize access', async () => {
     const f = await fixture();
     const first = await f.invite().expect(201);
