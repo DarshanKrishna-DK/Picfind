@@ -70,6 +70,7 @@ async function fixture(page: Page) {
     writes: [] as { path: string; body: Record<string, unknown> }[],
     unexpectedWrites: [] as string[],
   };
+  const selections = [selection];
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -127,7 +128,7 @@ async function fixture(page: Page) {
           hasPasscode: false,
           brandingName: '',
           accentColor: '#173f37',
-          selections: [selection],
+          selections,
         },
       });
     if (
@@ -193,7 +194,7 @@ async function fixture(page: Page) {
     }
     return route.fulfill({ json: {} });
   });
-  return { eventId, events, selection, state, jpeg };
+  return { eventId, events, selection, selections, state, jpeg };
 }
 
 test('event folders, search and visibility filters survive reload', async ({
@@ -395,5 +396,123 @@ test('a revoked owner session blocks filename export', async ({ page }) => {
   await expect(
     card.getByRole('button', { name: 'Export filenames TXT' }),
   ).toBeEnabled();
+  expect(downloads).toBe(0);
+});
+
+test('compare requests, filter shared favorites and export current availability', async ({
+  page,
+}) => {
+  const { eventId, selection, selections, state } = await fixture(page);
+  selections.push({
+    ...selection,
+    id: '66666666-6666-4666-8666-666666666666',
+    name: 'Ravi',
+    note: 'Guest note excluded from comparison',
+    reviewNote: 'Private note excluded from comparison',
+    photoIds: [selection.photos[1]!.id],
+    photos: [selection.photos[1]!],
+  });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByText('Compare client selections', { exact: true }).click();
+  const comparison = page.locator('.selection-comparison');
+  await chooseMenu(page, 'First selection request', /^1\. Asha/);
+  await chooseMenu(page, 'Second selection request', /^2\. Ravi/);
+  await expect(comparison).toContainText(
+    '2 available photos, 1 shared favorites, 1 unavailable photos omitted.',
+  );
+  const list = comparison.getByRole('list', { name: 'Compared photos' });
+  await expect(list.getByRole('listitem')).toHaveCount(2);
+  await chooseMenu(page, 'Comparison photos', 'Shared favorites');
+  await expect(list.getByRole('listitem')).toHaveCount(1);
+  await expect(list).toContainText('Garden.jpg');
+  await chooseMenu(page, 'Comparison photos', 'Only in first request');
+  await expect(list).toContainText('Ceremony.jpg');
+  await chooseMenu(page, 'Comparison photos', 'All selected photos');
+  // The photo disappears after rendering. Export must use the new projection.
+  selection.photos = selection.photos.slice(1);
+  const pending = page.waitForEvent('download');
+  await comparison
+    .getByRole('button', { name: 'Export comparison CSV' })
+    .click();
+  const download = await pending;
+  const content = await readFile((await download.path())!, 'utf8');
+  expect(content).toContain('Garden.jpg');
+  expect(content).not.toContain('Ceremony.jpg');
+  expect(content).not.toMatch(/Asha|Ravi|Private note|Guest note/);
+  await expect(comparison).toContainText(
+    '1 filenames exported from current availability.',
+  );
+  await chooseMenu(page, 'Second selection request', /^1\. Asha/);
+  await expect(comparison).toContainText(
+    'Choose two different selection requests.',
+  );
+  await expect(comparison.getByRole('list')).toHaveCount(0);
+  expect(state.writes).toEqual([]);
+  expect(state.unexpectedWrites).toEqual([]);
+});
+
+test('comparison export fails when owner access is revoked', async ({
+  page,
+}) => {
+  const { eventId, selection, selections } = await fixture(page);
+  selections.push({ ...selection, id: 'second', name: 'Ravi' });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByText('Compare client selections', { exact: true }).click();
+  await chooseMenu(page, 'First selection request', /^1\. Asha/);
+  await chooseMenu(page, 'Second selection request', /^2\. Ravi/);
+  await page.route(`**/api/events/${eventId}/insights`, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error: { message: 'Owner access is required.' } },
+    }),
+  );
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  const comparison = page.locator('.selection-comparison');
+  await comparison
+    .getByRole('button', { name: 'Export comparison CSV' })
+    .click();
+  await expect(comparison.getByRole('alert')).toContainText('Owner access');
+  expect(downloads).toBe(0);
+});
+
+test('leaving an event cancels a pending comparison export', async ({
+  page,
+}) => {
+  const { eventId, selection, selections } = await fixture(page);
+  selections.push({ ...selection, id: 'second', name: 'Ravi' });
+  await page.goto(`/app/events/${eventId}`);
+  await page.getByText('Compare client selections', { exact: true }).click();
+  await chooseMenu(page, 'First selection request', /^1\. Asha/);
+  await chooseMenu(page, 'Second selection request', /^2\. Ravi/);
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+  const started = deferred();
+  const release = deferred();
+  await page.route(`**/api/events/${eventId}/insights`, async (route) => {
+    started.resolve();
+    await release.promise;
+    await route.fulfill({ json: { selections } });
+  });
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  const cancelled = page.waitForEvent('requestfailed', {
+    predicate: (request) =>
+      new URL(request.url()).pathname === `/api/events/${eventId}/insights`,
+  });
+  try {
+    await page.getByRole('button', { name: 'Export comparison CSV' }).click();
+    await started.promise;
+    await page.getByRole('link', { name: 'All events', exact: true }).click();
+    await expect(page).toHaveURL('/app/events');
+    expect((await cancelled).failure()).not.toBeNull();
+  } finally {
+    release.resolve();
+  }
   expect(downloads).toBe(0);
 });

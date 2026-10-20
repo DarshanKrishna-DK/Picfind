@@ -1,10 +1,14 @@
 # PicFind delivery roadmap
 
-100 is a ceiling, not a quota. These are candidate slices, not promised PRs,
-implemented features or event-credit claims. Combine overlapping items, remove
-items already satisfied by current source, and prioritize customer evidence.
+The delivery target is at least 70 substantive, reviewed and merged PRs, within
+the previously agreed ceiling of 100. These are candidate slices, not implemented
+features or event-credit claims. Combine overlapping items, remove items already
+satisfied by current source, and prioritize customer evidence.
 Each implementation PR includes its necessary contract, persistence, authorization,
 interface and tests rather than separating those layers to increase the count.
+Each PR must remain below 5,000 added plus deleted lines. Track merged-and-reviewed
+PRs separately from the leaderboard's "Pushed after review" count. Follow-up commits
+must make real improvements; do not introduce defects or empty commits for credit.
 
 ## Product and authorization design
 

@@ -233,3 +233,38 @@
 .member-list button {
   flex-shrink: 0;
 }
+
+.selection-comparison {
+  margin-block: 24px;
+  padding: 18px;
+  border: 1px solid #c7d9d2;
+  border-radius: 14px;
+}
+.selection-comparison summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.comparison-photos {
+  padding: 0;
+  list-style: none;
+}
+.comparison-photos li,
+.comparison-photos a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.comparison-photos li {
+  flex-wrap: wrap;
+  margin-block: 16px;
+}
+.comparison-photos a {
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+}
+.comparison-photos img {
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 8px;
+}
