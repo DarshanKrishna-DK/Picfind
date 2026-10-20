@@ -207,6 +207,7 @@ function PairingWorkspace({
       </p>
       <div className="toolbar">
         <button
+          type="button"
           className="button secondary"
           disabled={busy || !photos}
           onClick={() => files.current?.click()}
@@ -214,6 +215,7 @@ function PairingWorkspace({
           Choose RAW files
         </button>
         <button
+          type="button"
           className="button secondary"
           disabled={busy || !photos}
           onClick={() => {
@@ -224,6 +226,7 @@ function PairingWorkspace({
           Choose RAW folder
         </button>
         <button
+          type="button"
           className="button secondary"
           disabled={busy}
           onClick={() => mapping.current?.click()}
@@ -231,6 +234,7 @@ function PairingWorkspace({
           Restore mapping JSON
         </button>
         <button
+          type="button"
           className="button secondary"
           disabled={busy}
           onClick={() => void refresh()}
@@ -292,6 +296,7 @@ function PairingWorkspace({
           </p>
           <div className="toolbar">
             <button
+              type="button"
               className="button secondary"
               disabled={busy || !photos}
               onClick={() => {
@@ -307,6 +312,7 @@ function PairingWorkspace({
               Apply unambiguous suggestions
             </button>
             <button
+              type="button"
               className="button secondary"
               disabled={busy}
               onClick={downloadMapping}
@@ -314,6 +320,7 @@ function PairingWorkspace({
               Download mapping JSON
             </button>
             <button
+              type="button"
               className="button"
               disabled={busy || !photos}
               onClick={() => void refresh(true)}
@@ -321,6 +328,7 @@ function PairingWorkspace({
               Export RAW to JPEG CSV
             </button>
             <button
+              type="button"
               className="button secondary"
               disabled={busy}
               onClick={() => {
@@ -473,6 +481,7 @@ function PairRow({
       </label>
       {row.status === 'renamed' && row.photo && (
         <button
+          type="button"
           className="button secondary"
           onClick={() =>
             onChange({ photoId: row.photo!.id, filename: row.photo!.filename })

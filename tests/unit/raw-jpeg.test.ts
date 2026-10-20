@@ -201,4 +201,25 @@ describe('local RAW filename pairing without reading or uploading bytes', () => 
     ).toThrow('at least one');
     expect(() => eventJpegs([photos[0]!, photos[0]!])).toThrow('inconsistent');
   });
+  it.each(['\u00a0', '\u2003', '\ufeff', '\t', '\r', '\n'])(
+    'neutralizes a formula after leading whitespace %j in an event filename',
+    (prefix) => {
+      const filename = `${prefix}=SUM(A1).jpg`;
+      const entry: RawPair = {
+        ...pair('original.cr3'),
+        choice: { photoId: 'one', filename },
+      };
+      const output = exportRawPairs([entry], [{ id: 'one', filename }]);
+      expect(output.content).toContain(`"'${filename}"`);
+    },
+  );
+  it('keeps quotes and delimiters inside a single escaped CSV cell', () => {
+    const filename = '";=SUM(A1),.jpg';
+    const entry: RawPair = {
+      ...pair('original.cr3'),
+      choice: { photoId: 'one', filename },
+    };
+    const output = exportRawPairs([entry], [{ id: 'one', filename }]);
+    expect(output.content).toContain('""";=SUM(A1),.jpg"');
+  });
 });

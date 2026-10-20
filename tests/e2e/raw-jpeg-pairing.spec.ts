@@ -38,15 +38,28 @@ async function fixture(page: Page) {
     responseRole: 'owner',
     galleryReads: 0,
     writes: [] as string[],
+    holdMapping: false,
+    releaseMapping: null as (() => void) | null,
   };
+  await page.exposeFunction('waitForSyntheticMappingRead', async () => {
+    if (state.holdMapping)
+      await new Promise<void>((resolve) => {
+        state.releaseMapping = resolve;
+      });
+  });
   await page.addInitScript(() => {
     const readText = File.prototype.text;
     File.prototype.arrayBuffer = async () => {
       throw new Error('RAW image content must not be read.');
     };
-    File.prototype.text = function () {
+    File.prototype.text = async function () {
       if (this.type !== 'application/json')
         throw new Error('Only mapping JSON may be read.');
+      await (
+        window as unknown as {
+          waitForSyntheticMappingRead: () => Promise<void>;
+        }
+      ).waitForSyntheticMappingRead();
       return readText.call(this);
     };
   });
@@ -331,4 +344,43 @@ test('RAW replacement can be cancelled and the same file selected again', async 
   await expect(
     panel.getByRole('combobox', { name: 'JPEG for IMG_02.ARW', exact: true }),
   ).toHaveCount(0);
+});
+
+test('RAW renamed confirmation stays disabled while a mapping restore is pending', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  const panel = await open(page);
+  await panel
+    .getByLabel('Local RAW files', { exact: true })
+    .setInputFiles([raw('IMG_02.ARW')]);
+  await panel
+    .getByRole('button', { name: 'Apply unambiguous suggestions' })
+    .click();
+  const saved = await download(page, 'Download mapping JSON');
+  f.photos[2]!.filename = 'Edited_IMG_02.jpeg';
+  await panel.getByRole('button', { name: 'Refresh event JPEGs' }).click();
+  const confirm = panel.getByRole('button', {
+    name: 'Confirm renamed JPEG for IMG_02.ARW',
+  });
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveAttribute('type', 'button');
+  f.state.holdMapping = true;
+  page.once('dialog', (dialog) => dialog.accept());
+  await panel.getByLabel('Restore RAW mapping file').setInputFiles({
+    name: 'mapping.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(saved),
+  });
+  await expect.poll(() => f.state.releaseMapping !== null).toBe(true);
+  await expect(confirm).toBeDisabled();
+  await expect(
+    panel.getByRole('combobox', { name: 'JPEG for IMG_02.ARW', exact: true }),
+  ).toBeDisabled();
+  f.state.releaseMapping!();
+  await expect(confirm).toBeEnabled();
+  await confirm.click();
+  await expect(
+    panel.getByText('Status: ready.', { exact: false }),
+  ).toBeVisible();
 });
