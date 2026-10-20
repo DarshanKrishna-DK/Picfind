@@ -50,12 +50,10 @@ export async function portfolioFixture() {
     biography: 'Photographs with room to breathe.',
     location: 'Bengaluru',
     website: 'https://example.com/photographer',
-    photos: photos
-      .slice(0, 2)
-      .map((photo, index) => ({
-        id: photo.id,
-        caption: `Portrait ${index + 1}`,
-      })),
+    photos: photos.slice(0, 2).map((photo, index) => ({
+      id: photo.id,
+      caption: `Portrait ${index + 1}`,
+    })),
   };
   const save = (changes: object = {}, owner = f.ownerId) =>
     f.put(
