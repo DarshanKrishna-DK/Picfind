@@ -369,16 +369,71 @@ describe('recoverable private enquiry project handoff', () => {
     row.studioEnquiry!.message = '\u0000'.repeat(700);
     row.studioEnquiry!.note = '\u0000'.repeat(1000);
     const preview = await f.current();
-    await f
+    const rejected = await f
       .start({
         version: preview.enquiry.version,
         sourceToken: preview.sourceToken,
         project: { ...f.command.project, summary: '\u0000'.repeat(500) },
       })
       .expect(400);
+    expect(rejected.body.error.code).toBe('HANDOFF_TOO_LARGE');
     expect(f.records.get(f.enquiryId)!.enquiryHandoff).toBeUndefined();
     expect(f.records.has(f.command.client.id)).toBe(false);
     expect(f.records.has(f.command.project.id)).toBe(false);
+  });
+  it('stores normalized contact fields rather than oversized raw whitespace', async () => {
+    const f = await fixture();
+    const fields = {
+      ...f.command.client.fields,
+      name: ' '.repeat(6000) + f.command.client.fields.name + ' ',
+      email: '  CLIENT@EXAMPLE.TEST  ',
+    };
+    await f.start({ client: { ...f.command.client, fields } }).expect(200);
+    const saved = f.records.get(f.command.client.id)!.studioClient!;
+    expect(saved.name).toBe(f.command.client.fields.name);
+    expect(saved.email).toBe('client@example.test');
+    expect(
+      Buffer.byteLength(JSON.stringify(f.records.get(f.enquiryId)), 'utf8'),
+    ).toBeLessThan(14000);
+  });
+  it('rejects arbitrary recovery IDs and preserves exact planned timestamps through JSON persistence', async () => {
+    const f = await fixture(),
+      put = f.store.put.bind(f.store);
+    let failed = false;
+    vi.spyOn(f.store, 'put').mockImplementation(async (row, create) => {
+      if (!failed && row.id === f.command.project.id) {
+        failed = true;
+        throw new ApiError(
+          503,
+          'SYNTHETIC_FAILURE',
+          'Synthetic project failure.',
+        );
+      }
+      return put(row, create);
+    });
+    await f.start().expect(503);
+    const row = JSON.parse(JSON.stringify(f.records.get(f.enquiryId)!));
+    expect(row.enquiryHandoff.client.createdAt).toBe(
+      row.enquiryHandoff.startedAt,
+    );
+    expect(row.enquiryHandoff.project.createdAt).toBe(
+      row.enquiryHandoff.startedAt,
+    );
+    f.records.set(f.enquiryId, row);
+    const preview = await f.current(),
+      injectedId = randomUUID();
+    const before = JSON.stringify([...f.records]);
+    await f
+      .put(f.root, {
+        action: 'resume',
+        operationId: preview.handoff!.operationId,
+        recoveryToken: preview.recoveryToken,
+        createMissing: [injectedId],
+      })
+      .expect(409);
+    expect(JSON.stringify([...f.records])).toBe(before);
+    expect(f.records.has(injectedId)).toBe(false);
+    expect((await f.resume()).status).toBe(200);
   });
   it('erases pending handoffs and any created private records with the account', async () => {
     const f = await fixture(),

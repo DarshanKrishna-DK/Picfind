@@ -87,3 +87,11 @@ workflows passed with final layout assertions and screenshots inspected.
 Formatting passes across every changed file. Existing nonfatal bundle-size
 and build annotation warnings remain. This is local verification, not a
 production activation or distributed transaction claim.
+
+Shipwright review evidence: all 19 handoff API cases pass. Added direct cases
+show that padded raw contact fields are normalized before storage, arbitrary
+recovery UUIDs produce no writes, and planned timestamps survive JSON storage
+and recovery unchanged. The combined-budget case now asserts the specific
+`HANDOFF_TOO_LARGE` error, proving it reaches the final record-size guard.
+The reviewed production guards already covered these concerns; no speculative
+loosening of timestamp identity or recovery authorization was needed.
