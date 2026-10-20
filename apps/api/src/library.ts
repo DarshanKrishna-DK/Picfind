@@ -173,6 +173,7 @@ export interface LibraryRecord {
   selectedIds?: string[];
   collectionVersion?: number;
   collectionUpdatedAt?: string;
+  collectionImportDigest?: string;
   submissionPolicy?: import('../../../packages/shared/src/proofing-policy.js').ProofingSubmissionPolicy;
   invitationCollectionId?: string;
   invitationRecipientId?: string;

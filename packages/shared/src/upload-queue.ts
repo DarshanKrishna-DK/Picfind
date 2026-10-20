@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { folderMappingsSchema, relativePhotoPath } from './folder-import';
 
 export const UPLOAD_QUEUE_LIMIT = 100;
 export const UPLOAD_FILE_LIMIT = 8 * 1024 * 1024;
@@ -11,6 +12,7 @@ const item = z
     size: z.number().int().min(1).max(UPLOAD_FILE_LIMIT),
     type: z.enum(UPLOAD_TYPES),
     digest: z.string().regex(/^[0-9a-f]{64}$/),
+    relativePaths: z.array(relativePhotoPath).min(1).max(100).optional(),
     status: z.enum(['pending', 'uploading', 'complete', 'failed', 'cancelled']),
     photoId: z.string().min(1).max(128).optional(),
     error: z.string().min(1).max(240).optional(),
@@ -36,6 +38,7 @@ export const uploadQueueSchema = z
     updatedAt: z.iso.datetime(),
     mode: z.enum(['paused', 'running', 'cancelled', 'complete']),
     items: z.array(item).min(1).max(UPLOAD_QUEUE_LIMIT),
+    folders: folderMappingsSchema.optional(),
   })
   .strict()
   .refine(
@@ -51,13 +54,35 @@ export const uploadQueueSchema = z
       (queue.mode !== 'cancelled' ||
         queue.items.every((row) =>
           ['complete', 'cancelled'].includes(row.status),
-        )),
+        )) &&
+      (!queue.folders ||
+        (queue.items.every((row) => row.relativePaths?.length) &&
+          queue.items.flatMap((row) => row.relativePaths ?? []).length <=
+            UPLOAD_QUEUE_LIMIT &&
+          new Set(queue.items.flatMap((row) => row.relativePaths ?? []))
+            .size ===
+            queue.items.flatMap((row) => row.relativePaths ?? []).length &&
+          queue.items
+            .flatMap((row) => row.relativePaths ?? [])
+            .every((path) =>
+              queue.folders!.some(
+                (folder) =>
+                  path.startsWith(`${folder.path}/`) &&
+                  path.slice(folder.path.length + 1).indexOf('/') === -1,
+              ),
+            ) &&
+          (queue.eventId !== null ||
+            queue.folders.every((folder) => !folder.createCollection)))),
   );
 export type UploadQueue = z.infer<typeof uploadQueueSchema>;
 export type UploadQueueItem = UploadQueue['items'][number];
 
-export function uploadQueueKey(accountId: string, eventId: string | null) {
-  return `picfind.upload-queue.v1:${encodeURIComponent(JSON.stringify([accountId, eventId]))}`;
+export function uploadQueueKey(
+  accountId: string,
+  eventId: string | null,
+  folder = false,
+) {
+  return `picfind.${folder ? 'folder-' : ''}upload-queue.v1:${encodeURIComponent(JSON.stringify([accountId, eventId]))}`;
 }
 export function parseUploadQueue(
   text: string | null,
