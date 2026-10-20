@@ -1,0 +1,89 @@
+.event-coverage {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.event-coverage > p {
+  margin: 0;
+}
+.coverage-saved-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.coverage-saved-summary span {
+  border: 1px solid rgba(71, 124, 121, 0.3);
+  border-radius: 1rem;
+  padding: 0.3rem 0.7rem;
+}
+.coverage-status-list,
+.coverage-categories,
+.coverage-assignments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.coverage-status-list li {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(71, 124, 121, 0.25);
+  border-radius: 0.6rem;
+  overflow-wrap: anywhere;
+}
+.coverage-editor {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+  border: 1px solid rgba(71, 124, 121, 0.3);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+.coverage-columns {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(0, 3fr);
+  gap: 1rem;
+  align-items: start;
+}
+.coverage-fields {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.coverage-categories .button {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.coverage-categories [aria-pressed='true'] {
+  outline: 2px solid #477c79;
+}
+.coverage-assignments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border-bottom: 1px solid rgba(71, 124, 121, 0.2);
+  padding-bottom: 0.6rem;
+}
+.coverage-assignments li > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.coverage-assignments .button {
+  flex: 0 0 auto;
+}
+@media (max-width: 700px) {
+  .coverage-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .coverage-assignments li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
