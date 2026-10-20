@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appointmentFields,
   appointmentOccurrences,
+  appointmentWrite,
   appointmentsOverlap,
   localMinute,
 } from '../../packages/shared/src/studio-appointments';
@@ -47,6 +48,39 @@ describe('timezone-aware studio reservations', () => {
     expect(
       appointmentOccurrences('2026-10-20T09:00', 'UTC')[0]?.offsetMinutes,
     ).toBe(0);
+  });
+  it.each([
+    ['2000-01-01T00:00', 'Pacific/Kiritimati', '1999-12-31T10:00:00.000Z'],
+    ['2100-12-31T23:00', 'Pacific/Pago_Pago', '2101-01-01T10:00:00.000Z'],
+    ['2011-12-29T12:00', 'Pacific/Apia', '2011-12-29T22:00:00.000Z'],
+    ['2011-12-31T12:00', 'Pacific/Apia', '2011-12-30T22:00:00.000Z'],
+  ])('resolves supported local boundary %s in %s', (local, zone, instant) => {
+    expect(
+      appointmentOccurrences(local, zone).map((entry) => entry.instant),
+    ).toEqual([instant]);
+  });
+  it('accepts either explicit half-hour occurrence as a complete write', () => {
+    const occurrences = appointmentOccurrences(
+      '2026-04-05T01:45',
+      'Australia/Lord_Howe',
+    );
+    for (const occurrence of occurrences) {
+      expect(
+        appointmentWrite.safeParse({
+          projectId: randomUUID(),
+          title: 'Repeated half hour',
+          note: '',
+          startLocal: '2026-04-05T01:45',
+          endLocal: '2026-04-05T02:45',
+          timeZone: 'Australia/Lord_Howe',
+          startAt: occurrence.instant,
+          endAt: '2026-04-04T16:15:00.000Z',
+          status: 'scheduled',
+          version: 0,
+        }).success,
+      ).toBe(true);
+    }
+    expect(occurrences).toHaveLength(2);
   });
   it.each([
     '2026-02-29T12:00',

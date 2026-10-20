@@ -8,7 +8,9 @@ calendar reservation.
 
 Keep at most thirty retained appointments per project and three hundred per
 account. Supported local dates run from 2000 through 2100, and an interval can
-last at most seven days. Record timestamps are nondecreasing server record times;
+last at most seven days. This is a local-calendar bound: a valid timezone offset
+may place the corresponding UTC instant in late 1999 or early 2101.
+Record timestamps are nondecreasing server record times;
 version is the ordering authority, not a claim of an independently verified clock.
 
 An owner cannot save overlapping scheduled appointments. Use half-open intervals
@@ -19,6 +21,10 @@ the slot, including when the linked project becomes unavailable. That exception
 permits only cancellation with unchanged appointment details. Restore checks
 overlap and current project access again. Version checks, exact command retry and
 the existing account lock apply; multi-writer activation still needs database CAS.
+The cancel action uses saved details, not an unsaved editor draft. Both stored
+and incoming fields use the same trimming rules before the cancellation-only
+comparison. Invalid retained appointment metadata blocks overlap decisions:
+silently ignoring it could admit a second reservation into an occupied slot.
 
 Store UTC instants and the original IANA timezone. The editor accepts local date
 and time in that zone. Nonexistent daylight-saving times are rejected. Ambiguous

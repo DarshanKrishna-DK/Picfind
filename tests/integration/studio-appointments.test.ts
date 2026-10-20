@@ -270,6 +270,27 @@ describe('private studio appointment reservations', () => {
     await f.remove(id, 1).expect(409);
     expect(f.records.get(id)!.studioAppointment!.note).toBe('Changed note');
   });
+  it('allows normalized cancellation during pending project removal but rejects detail changes', async () => {
+    const f = fixture(),
+      id = randomUUID();
+    await f.save(id).expect(200);
+    f.archive();
+    f.records.get(f.projectId)!.projectRemovalStartedAt =
+      new Date().toISOString();
+    await f
+      .save(id, { status: 'cancelled', note: 'Changed during removal' }, 1)
+      .expect(409);
+    expect(f.records.get(id)!.studioAppointment!.status).toBe('scheduled');
+    await f
+      .save(id, { status: 'cancelled', note: `  ${f.fields.note}  ` }, 1)
+      .expect(200);
+    expect(f.records.get(id)!.studioAppointment).toMatchObject({
+      status: 'cancelled',
+      note: f.fields.note,
+      version: 2,
+    });
+    await f.save(id, {}, 2).expect(409);
+  });
   it.each(['missing', 'foreign', 'archived', 'removing'])(
     'rejects a %s parent for new reservations',
     async (kind) => {
