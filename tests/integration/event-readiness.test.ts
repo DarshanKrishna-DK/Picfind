@@ -227,6 +227,35 @@ describe('owner event preparation snapshots', () => {
     };
     await f.read().expect(404);
   });
+  it('never treats a spoofed expected-account header as session authorization', async () => {
+    const f = fixture();
+    await request(f.app)
+      .get(`/api/events/${f.eventId}/readiness`)
+      .set('X-PicFind-Readiness-Actor', 'owner')
+      .expect(401);
+    await f.read('other').set('X-PicFind-Readiness-Actor', 'owner').expect(403);
+    await f.read('other').set('X-PicFind-Readiness-Actor', 'other').expect(404);
+    f.event.members = [
+      {
+        userId: 'moderator',
+        role: 'moderator',
+        grantId: randomUUID(),
+        addedAt: f.event.createdAt,
+      },
+    ];
+    await f
+      .read('moderator')
+      .set('X-PicFind-Readiness-Actor', 'owner')
+      .expect(403);
+    await f
+      .read('moderator')
+      .set('X-PicFind-Readiness-Actor', 'moderator')
+      .expect(404);
+    // Rejected requests do not get as far as scanning private photo/job metadata.
+    expect(f.store.list).not.toHaveBeenCalled();
+    await f.read().set('X-PicFind-Readiness-Actor', 'owner').expect(200);
+    expect(f.store.list).toHaveBeenCalledTimes(2);
+  });
   it('scopes over-broad store results to event, owner, purpose and non-scan photos', async () => {
     const f = fixture();
     f.photo();

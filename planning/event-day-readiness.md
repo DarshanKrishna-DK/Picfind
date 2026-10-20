@@ -10,7 +10,8 @@ available owned event photos, relevant import roots and saved processing jobs.
 It must not expose faces, private notes, filenames, source URLs, passcode hashes,
 client records, raw provider errors or internal request IDs. No provider calls,
 indexing, imports, publication or quota mutations occur during a readiness read.
-The request binds the expected account and rechecks event ownership after the
+The session determines the actor. The expected-account header is only a mismatch
+guard and never grants authorization. The request rechecks event ownership after the
 asynchronous reads. Moderators and guests cannot read this owner view.
 
 Counts distinguish photos currently available from expired/deleting photos.
