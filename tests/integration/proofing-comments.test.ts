@@ -302,6 +302,28 @@ describe('private client-photographer photo discussion', () => {
     await f.read(f.root).expect(404);
   });
 
+  it('keeps pending-deletion records in the quota without exposing or resurrecting them', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.post(input).expect(201);
+    const template = f.records.get(input.id)!;
+    template.deletionStartedAt = new Date().toISOString();
+    for (let i = 0; i < 99; i++) {
+      const row = { ...template, id: randomUUID() };
+      f.records.set(row.id, row);
+    }
+    const result = (await f.read(f.root).expect(200)).body;
+    expect(result).toMatchObject({
+      remaining: 0,
+      canPost: false,
+      unavailableCount: 100,
+      comments: [],
+    });
+    await f.post(input).expect(409);
+    await f.post(f.input()).expect(409);
+    await f.remove(input.id).expect(404);
+  });
+
   it('rechecks access after counting messages before saving', async () => {
     const f = await fixture();
     const list = f.store.list;

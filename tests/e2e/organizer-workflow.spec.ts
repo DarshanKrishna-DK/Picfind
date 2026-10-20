@@ -531,6 +531,10 @@ test('private photo discussion persists, retries safely, supports photographer r
   const clientRoot = `/api/proofing-invitations/${invitationId}`;
   let actor: 'client' | 'owner' = 'client';
   let revoked = false;
+  let denyDiscussionRead = false;
+  let holdCommentSave = true;
+  let releaseCommentSave: (() => void) | undefined;
+  let discussionPhotos = [photos[0]!];
   let failAfterSave = true;
   let lastId: string | undefined;
   const comments: ProofingComment[] = [];
@@ -607,13 +611,20 @@ test('private photo discussion persists, retries safely, supports photographer r
     const owner = path.startsWith(ownerRoot);
     if (
       (!owner && (revoked || actor !== 'client')) ||
-      (owner && actor !== 'owner')
+      (owner && actor !== 'owner') ||
+      (denyDiscussionRead && route.request().method() === 'GET')
     )
       return route.fulfill({
         status: 404,
         json: { error: { message: 'Discussion unavailable.' } },
       });
     if (route.request().method() === 'POST') {
+      if (holdCommentSave) {
+        holdCommentSave = false;
+        await new Promise<void>((resolve) => {
+          releaseCommentSave = resolve;
+        });
+      }
       const input = route.request().postDataJSON() as {
         id: string;
         photoId: string;
@@ -652,7 +663,7 @@ test('private photo discussion persists, retries safely, supports photographer r
         canPost: !revoked,
         remaining: 100 - comments.length,
         unavailableCount: 0,
-        photos: [{ id: photos[0]!.id, filename: photos[0]!.filename }],
+        photos: discussionPhotos.map(({ id, filename }) => ({ id, filename })),
         comments: comments.map((row) => ({
           ...row,
           canRemove: !row.removedAt && (owner || row.author === 'client'),
@@ -678,6 +689,15 @@ test('private photo discussion persists, retries safely, supports photographer r
   await clientDiscussion
     .getByRole('button', { name: 'Save message', exact: true })
     .click();
+  await expect.poll(() => Boolean(releaseCommentSave)).toBe(true);
+  await expect(
+    clientDiscussion.getByRole('button', {
+      name: 'Refresh discussion',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(draft).toBeDisabled();
+  releaseCommentSave!();
   await expect(clientDiscussion.getByRole('alert')).toContainText(
     'Response interrupted',
   );
@@ -701,6 +721,42 @@ test('private photo discussion persists, retries safely, supports photographer r
   await expect(
     clientDiscussion.getByRole('list', { name: 'Photo messages' }),
   ).toContainText('Please remove <b>the sign</b>.');
+
+  denyDiscussionRead = true;
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(clientDiscussion.getByRole('alert')).toContainText(
+    'Discussion unavailable',
+  );
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toHaveCount(0);
+  denyDiscussionRead = false;
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(
+    clientDiscussion.getByRole('list', { name: 'Photo messages' }),
+  ).toContainText('Please remove <b>the sign</b>.');
+  await draft.fill('This draft belongs only to the first photo.');
+  discussionPhotos = [photos[1]!];
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await expect(draft).toHaveCount(0);
+  page.once('dialog', (dialog) => void dialog.accept());
+  await clientDiscussion
+    .getByLabel('Discussion photo')
+    .selectOption(photos[1]!.id);
+  await expect(draft).toHaveValue('');
+  discussionPhotos = [photos[0]!];
+  await clientDiscussion
+    .getByRole('button', { name: 'Refresh discussion', exact: true })
+    .click();
+  await clientDiscussion
+    .getByLabel('Discussion photo')
+    .selectOption(photos[0]!.id);
 
   actor = 'owner';
   await page.goto(`/app/events/${eventId}`);

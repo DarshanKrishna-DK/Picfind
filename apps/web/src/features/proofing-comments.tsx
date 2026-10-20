@@ -199,8 +199,8 @@ function Discussion({ root, accountId }: { root: string; accountId: string }) {
             </label>
             {query.data.unavailableCount > 0 && (
               <p>
-                {query.data.unavailableCount} messages refer to photos no longer
-                available in this collection.
+                {query.data.unavailableCount} earlier messages or removal
+                markers are currently unavailable.
               </p>
             )}
             {!photo ? (
@@ -272,7 +272,10 @@ function Discussion({ root, accountId }: { root: string; accountId: string }) {
                         maxLength={PROOFING_COMMENT_LENGTH}
                         required
                         disabled={busy || query.isFetching}
-                        onChange={(event) => setDraft(event.target.value)}
+                        onChange={(event) => {
+                          setPhotoId(photo.id);
+                          setDraft(event.target.value);
+                        }}
                       />
                     </label>
                     <p>

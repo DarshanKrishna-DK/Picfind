@@ -63,8 +63,7 @@ function belongs(row: LibraryRecord, grant: Grant) {
     row.purpose === 'proofing-comment' &&
     row.ownerId === grant.event.ownerId &&
     row.eventId === grant.event.id &&
-    row.commentInvitationId === grant.invitation.id &&
-    !row.deletionStartedAt
+    row.commentInvitationId === grant.invitation.id
   );
 }
 
@@ -123,7 +122,9 @@ export function createProofingComments(dependencies: {
     const grant = await authorize(req, actor, owner);
     const current = photos.filter((photo) => available(photo, grant));
     const ids = new Set(current.map((photo) => photo.id));
-    const visible = saved.filter((row) => ids.has(row.commentPhotoId ?? ''));
+    const visible = saved.filter(
+      (row) => !row.deletionStartedAt && ids.has(row.commentPhotoId ?? ''),
+    );
     return {
       canPost: active(grant) && saved.length < PROOFING_COMMENT_LIMIT,
       remaining: Math.max(0, PROOFING_COMMENT_LIMIT - saved.length),
@@ -213,6 +214,7 @@ export function createProofingComments(dependencies: {
               !belongs(existing, grant) ||
               existing.commentPhotoId !== input.data.photoId ||
               existing.commentAuthorId !== actor ||
+              existing.deletionStartedAt ||
               existing.commentRemovedAt ||
               existing.commentText !== input.data.text
             ) {
@@ -263,6 +265,7 @@ export function createProofingComments(dependencies: {
         const row = await store().get(uuid(req.params.commentId));
         if (
           !belongs(row, grant) ||
+          row.deletionStartedAt ||
           (!owner && row.commentAuthorId !== actor) ||
           !available(await store().get(row.commentPhotoId ?? ''), grant)
         )
