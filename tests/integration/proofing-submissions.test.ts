@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../apps/api/src/auth';
 import { invitationFixture, origin } from '../fixtures/collection-invitations';
 import type { LibraryRecord } from '../../apps/api/src/library';
+import { submissionArchiveId } from '../../apps/api/src/proofing-archive';
 
 async function fixture() {
   const f = invitationFixture();
@@ -67,6 +68,114 @@ async function fixture() {
 }
 
 describe('final proofing submissions', () => {
+  it('reuses a valid legacy archive when completing an interrupted reopen', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.submit(input).expect(200);
+    const legacy: LibraryRecord = {
+      id: input.id,
+      kind: 'job',
+      purpose: 'proofing-submission',
+      ownerId: 'owner',
+      eventId: f.event.id,
+      createdAt: f.record().proofingSubmission!.submittedAt,
+      submissionInvitationId: f.invitation.id,
+      proofingSubmission: structuredClone(f.record().proofingSubmission!),
+    };
+    f.records.set(legacy.id, legacy);
+    expect((await f.read(f.root).expect(200)).body.history).toEqual([]);
+    await f.reopen(input.id).expect(200);
+    await f.reopen(input.id).expect(200);
+    expect(f.records.get(legacy.id)).toEqual(legacy);
+    expect(f.records.has(submissionArchiveId(f.invitation.id, input.id))).toBe(
+      false,
+    );
+    expect((await f.read(f.root).expect(200)).body.history[0].id).toBe(
+      input.id,
+    );
+    await f.submit({ ...f.input(), id: input.id }).expect(409);
+  });
+  it('does not overwrite an unrelated record occupying the legacy raw UUID', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.submit(input).expect(200);
+    const unrelated = { ...f.collection, id: input.id };
+    f.records.set(input.id, unrelated);
+    await f.reopen(input.id).expect(200);
+    expect(f.records.get(input.id)).toEqual(unrelated);
+    const archiveId = submissionArchiveId(f.invitation.id, input.id);
+    expect(archiveId).toMatch(/^[0-9a-f]{32}$/);
+    expect(f.records.get(archiveId)!.proofingSubmission!.id).toBe(input.id);
+  });
+  it('rejects duplicate legacy and scoped archives without unlocking the current round', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.submit(input).expect(200);
+    const snapshot = structuredClone(f.record());
+    const archive: LibraryRecord = {
+      id: input.id,
+      kind: 'job',
+      purpose: 'proofing-submission',
+      ownerId: 'owner',
+      eventId: f.event.id,
+      createdAt: snapshot.createdAt,
+      submissionInvitationId: f.invitation.id,
+      proofingSubmission: snapshot.proofingSubmission!,
+    };
+    f.records.set(input.id, archive);
+    const scopedId = submissionArchiveId(f.invitation.id, input.id);
+    f.records.set(scopedId, { ...archive, id: scopedId });
+    await f.read(f.root).expect(503);
+    await f.reopen(input.id).expect(409);
+    expect(f.record()).toEqual(snapshot);
+  });
+  it.each(['owner', 'event', 'invitation', 'snapshot', 'deleting'])(
+    'rejects conflicting scoped archive %s provenance',
+    async (field) => {
+      const f = await fixture(),
+        input = f.input();
+      await f.submit(input).expect(200);
+      const current = structuredClone(f.record());
+      const archive: LibraryRecord = {
+        id: submissionArchiveId(f.invitation.id, input.id),
+        kind: 'job',
+        purpose: 'proofing-submission',
+        ownerId: 'owner',
+        eventId: f.event.id,
+        createdAt: current.createdAt,
+        submissionInvitationId: f.invitation.id,
+        proofingSubmission: structuredClone(current.proofingSubmission!),
+      };
+      if (field === 'owner') archive.ownerId = 'different-owner';
+      if (field === 'event') archive.eventId = randomUUID();
+      if (field === 'invitation') archive.submissionInvitationId = randomUUID();
+      if (field === 'snapshot')
+        archive.proofingSubmission!.note = 'Different snapshot';
+      if (field === 'deleting')
+        archive.deletionStartedAt = new Date().toISOString();
+      f.records.set(archive.id, archive);
+      await f.reopen(input.id).expect(409);
+      expect(f.record()).toEqual(current);
+      expect(f.records.get(archive.id)).toEqual(archive);
+    },
+  );
+  it('rejects a scoped archive key derived from a different invitation', async () => {
+    const f = await fixture(),
+      input = f.input();
+    await f.submit(input).expect(200);
+    const wrongId = submissionArchiveId(randomUUID(), input.id);
+    f.records.set(wrongId, {
+      id: wrongId,
+      kind: 'job',
+      purpose: 'proofing-submission',
+      ownerId: 'owner',
+      eventId: f.event.id,
+      createdAt: f.record().createdAt,
+      submissionInvitationId: f.invitation.id,
+      proofingSubmission: f.record().proofingSubmission!,
+    });
+    await f.read(f.root).expect(503);
+  });
   it('enforces the final favorite range and projects saved counts without counting maybe decisions', async () => {
     const f = await fixture();
     f.collection.submissionPolicy = { minimum: 1, maximum: 1, closesAt: null };
@@ -340,7 +449,8 @@ describe('final proofing submissions', () => {
     const first = f.input();
     await f.submit(first).expect(200);
     await f.reopen(first.id).expect(200);
-    const archived = structuredClone(f.records.get(first.id));
+    const archiveId = submissionArchiveId(f.invitation.id, first.id);
+    const archived = structuredClone(f.records.get(archiveId));
     expect(archived).toMatchObject({
       purpose: 'proofing-submission',
       submissionInvitationId: f.invitation.id,
@@ -356,7 +466,7 @@ describe('final proofing submissions', () => {
     expect(result.current.photos[0].photoId).toBe(f.photos[1]!.id);
     expect(result.history[0].photos[0].photoId).toBe(f.photos[0]!.id);
     expect(result.reopenReason).toBe('Please review the album cover.');
-    expect(f.records.get(first.id)).toEqual(archived);
+    expect(f.records.get(archiveId)).toEqual(archived);
     await f.reopen(first.id).expect(409);
   });
   it('retries reopening once without another version bump or archive', async () => {
@@ -390,7 +500,9 @@ describe('final proofing submissions', () => {
       };
       await f.reopen(input.id).expect(500);
       expect(f.record()).toEqual(original);
-      expect(f.records.has(input.id)).toBe(failure === 'invitation');
+      expect(
+        f.records.has(submissionArchiveId(f.invitation.id, input.id)),
+      ).toBe(failure === 'invitation');
       const locked = (await f.read(f.root).expect(200)).body;
       expect(locked.current.id).toBe(input.id);
       expect(locked.history).toEqual([]);
@@ -404,7 +516,8 @@ describe('final proofing submissions', () => {
     const f = await fixture(),
       input = f.input();
     await f.submit(input).expect(200);
-    f.records.set(input.id, { ...f.collection, id: input.id });
+    const archiveId = submissionArchiveId(f.invitation.id, input.id);
+    f.records.set(archiveId, { ...f.collection, id: archiveId });
     await f.reopen(input.id).expect(409);
     expect(f.record().proofingSubmission!.id).toBe(input.id);
   });
@@ -475,7 +588,9 @@ describe('final proofing submissions', () => {
     await f.reopen(input.id).expect(503);
     f.record().proofingSubmission!.round = 1;
     await f.reopen(input.id).expect(200);
-    f.records.get(input.id)!.proofingSubmission!.favoriteIds = ['bad'];
+    f.records.get(
+      submissionArchiveId(f.invitation.id, input.id),
+    )!.proofingSubmission!.favoriteIds = ['bad'];
     await f.read(f.root).expect(503);
   });
   it('does not default a malformed stored round to an editable first round', async () => {
@@ -590,7 +705,9 @@ describe('final proofing submissions', () => {
       .set('Origin', origin)
       .set('Cookie', 'picfind_session=owner')
       .expect(204);
-    expect(f.records.has(input.id)).toBe(false);
+    expect(f.records.has(submissionArchiveId(f.invitation.id, input.id))).toBe(
+      false,
+    );
     expect(f.records.has(f.invitation.id)).toBe(false);
   });
 });

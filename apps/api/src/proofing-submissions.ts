@@ -1,9 +1,11 @@
 import { Router, type Request } from 'express';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { ApiError } from './auth.js';
 import type { LibraryRecord } from './library.js';
 import { withAccountLock } from './locks.js';
 import { photoAvailable } from './retention.js';
+import { submissionArchiveId } from './proofing-archive.js';
 import {
   readProofingPolicy,
   requireProofingSubmission,
@@ -241,6 +243,10 @@ export function createProofingSubmissions(
       )
         throw conflict();
       if (await optionalRecord(input.id)) throw conflict();
+      if (
+        await optionalRecord(submissionArchiveId(grant.invitation.id, input.id))
+      )
+        throw conflict();
       const favoriteIds = saved.entries
         .filter((item) => item.status === 'favorite')
         .map((item) => item.photoId);
@@ -322,7 +328,7 @@ export function createProofingSubmissions(
       if (saved.version >= Number.MAX_SAFE_INTEGER - 1)
         return submissionMetadataInvalid();
       const archive: LibraryRecord = {
-        id: current.id,
+        id: submissionArchiveId(grant.invitation.id, current.id),
         kind: 'job',
         purpose: 'proofing-submission',
         ownerId: actor,
@@ -331,7 +337,15 @@ export function createProofingSubmissions(
         submissionInvitationId: grant.invitation.id,
         proofingSubmission: current,
       };
-      const existing = await optionalRecord(current.id);
+      const scoped = await optionalRecord(archive.id);
+      const legacy = await optionalRecord(current.id);
+      const legacyForInvitation =
+        legacy?.purpose === 'proofing-submission' &&
+        legacy.submissionInvitationId === grant.invitation.id
+          ? legacy
+          : null;
+      if (scoped && legacyForInvitation) throw conflict();
+      const existing = scoped ?? legacyForInvitation;
       if (existing) {
         if (
           existing.kind !== 'job' ||
@@ -340,16 +354,17 @@ export function createProofingSubmissions(
           existing.eventId !== archive.eventId ||
           existing.submissionInvitationId !== archive.submissionInvitationId ||
           existing.deletionStartedAt ||
-          JSON.stringify(readSubmission(existing.proofingSubmission)) !==
-            JSON.stringify(current)
+          !isDeepStrictEqual(
+            readSubmission(existing.proofingSubmission),
+            current,
+          )
         )
           throw conflict();
       } else await store().put(archive, true);
       const latest = await ownerGrant(req, actor);
       if (!active(latest.invitation, latest.event)) throw missing();
       if (
-        JSON.stringify(submissionState(latest.invitation).current) !==
-        JSON.stringify(current)
+        !isDeepStrictEqual(submissionState(latest.invitation).current, current)
       )
         throw conflict();
       const row: LibraryRecord = {

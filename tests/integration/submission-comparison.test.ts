@@ -3,6 +3,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { invitationFixture, origin } from '../fixtures/collection-invitations';
 import type { LibraryRecord } from '../../apps/api/src/library';
+import { submissionArchiveId } from '../../apps/api/src/proofing-archive';
 
 async function fixture(reuseCurrentSubmissionId = false) {
   const f = invitationFixture();
@@ -68,6 +69,69 @@ async function fixture(reuseCurrentSubmissionId = false) {
 }
 
 describe('owner comparison of submitted rounds', () => {
+  it.each([false, true])(
+    'archives two invitations that used the same current UUID without merging their history (legacy first: %s)',
+    async (legacyFirst) => {
+      const f = await fixture(true);
+      if (legacyFirst) {
+        const snapshot = structuredClone(
+          f.records.get(f.first)!.proofingSubmission!,
+        );
+        f.records.set(snapshot.id, {
+          id: snapshot.id,
+          ownerId: 'owner',
+          kind: 'job',
+          purpose: 'proofing-submission',
+          eventId: f.event.id,
+          createdAt: snapshot.submittedAt,
+          submissionInvitationId: f.first,
+          proofingSubmission: snapshot,
+        });
+      }
+      const reopen = (invite: string) =>
+        request(f.app)
+          .post(`${f.root}/${invite}/submission`)
+          .set('Origin', origin)
+          .set('Cookie', 'picfind_session=owner')
+          .send({
+            submissionId: f.choice.firstSubmissionId,
+            reason: 'Another round',
+          });
+      await reopen(f.first).expect(200);
+      await reopen(f.second).expect(200);
+      await reopen(f.first).expect(200);
+      await reopen(f.second).expect(200);
+      for (const [invite, count] of [
+        [f.first, 1],
+        [f.second, 2],
+      ] as const) {
+        const state = (
+          await f.read(`${f.root}/${invite}/submission`, 'owner').expect(200)
+        ).body;
+        expect(state.current).toBeNull();
+        expect(state.round).toBe(2);
+        expect(state.history).toHaveLength(1);
+        expect(state.history[0].favoriteCount).toBe(count);
+      }
+      expect(
+        [...f.records.values()].filter(
+          (row) => row.purpose === 'proofing-submission',
+        ),
+      ).toHaveLength(2);
+      expect((await f.compare().expect(200)).body.shared).toBe(1);
+      await request(f.app)
+        .post(`${f.path(f.first)}/submission`)
+        .set('Origin', origin)
+        .set('Cookie', 'picfind_session=client')
+        .send({
+          id: f.choice.firstSubmissionId,
+          decisionVersion: 2,
+          collectionVersion: 1,
+          note: '',
+        })
+        .expect(409);
+    },
+  );
   it('distinguishes identical current submission UUIDs by invitation identity', async () => {
     const f = await fixture(true);
     const result = (await f.compare().expect(200)).body;
@@ -149,8 +213,9 @@ describe('owner comparison of submitted rounds', () => {
     f.store.list = async (actor, kind) => {
       const rows = await list(actor, kind);
       if (kind === 'photo')
-        f.records.get(f.choice.firstSubmissionId)!.proofingSubmission!.note =
-          'Changed externally';
+        f.records.get(
+          submissionArchiveId(f.first, f.choice.firstSubmissionId),
+        )!.proofingSubmission!.note = 'Changed externally';
       return rows;
     };
     expect((await f.compare().expect(409)).body.error.code).toBe(
@@ -312,7 +377,9 @@ describe('owner comparison of submitted rounds', () => {
         { id: f.photos[1]!.id, filename: 'same.jpg', selectedBy: 'second' },
       ]),
     );
-    const archive = f.records.get(f.choice.firstSubmissionId)!;
+    const archive = f.records.get(
+      submissionArchiveId(f.first, f.choice.firstSubmissionId),
+    )!;
     archive.proofingSubmission!.favoriteIds.push(f.photos[0]!.id);
     await f
       .compare({

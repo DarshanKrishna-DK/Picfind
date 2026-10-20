@@ -93,12 +93,15 @@ export function createSubmissionComparison({
               ? firstInvitation
               : await invitation(choice.secondInvitationId);
           const jobs = await store().list(actor, 'job');
+          const archiveIds = new Map<string, string>();
           function selected(row: LibraryRecord, submissionId: string) {
             const state = readSubmissionHistory(row, jobs);
             const item = [state.current, ...state.history].find(
               (candidate) => candidate?.id === submissionId,
             );
             if (!item) throw unavailable();
+            const archiveId = state.archiveIds.get(item.id);
+            if (archiveId) archiveIds.set(`${row.id}:${item.id}`, archiveId);
             return item;
           }
           const first = selected(firstInvitation, choice.firstSubmissionId);
@@ -116,7 +119,9 @@ export function createSubmissionComparison({
             [second, secondInvitation],
           ] as const) {
             if (invite.proofingSubmission?.id === item.id) continue;
-            const archive = await store().get(item.id);
+            const archiveId = archiveIds.get(`${invite.id}:${item.id}`);
+            if (!archiveId) throw changed();
+            const archive = await store().get(archiveId);
             if (
               archive.kind !== 'job' ||
               archive.purpose !== 'proofing-submission' ||
