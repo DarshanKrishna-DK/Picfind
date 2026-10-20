@@ -2,12 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
+import { SubmittedRoundExport } from './submitted-round-export';
 import type {
   ProofingSubmission,
   ProofingSubmissionState,
 } from '../../../../packages/shared/src/proofing-submission';
 
-function Snapshot({ item }: { item: ProofingSubmission }) {
+function Snapshot({
+  item,
+  ownerRoot,
+  disabled,
+  refreshAccess,
+}: {
+  item: ProofingSubmission;
+  ownerRoot: string | undefined;
+  disabled: boolean;
+  refreshAccess: () => Promise<unknown>;
+}) {
   return (
     <article aria-label={`Submitted round ${item.round}`}>
       <h4>
@@ -26,6 +37,15 @@ function Snapshot({ item }: { item: ProofingSubmission }) {
           <li key={photo.photoId}>{photo.filename}</li>
         ))}
       </ul>
+      {ownerRoot && (
+        <SubmittedRoundExport
+          root={ownerRoot}
+          submissionId={item.id}
+          round={item.round}
+          disabled={disabled}
+          refreshAccess={refreshAccess}
+        />
+      )}
     </article>
   );
 }
@@ -235,7 +255,14 @@ function SubmissionForm({
             {query.data.reopenReason && (
               <p>Photographer reopening reason: {query.data.reopenReason}</p>
             )}
-            {query.data.current && <Snapshot item={query.data.current} />}
+            {query.data.current && (
+              <Snapshot
+                item={query.data.current}
+                ownerRoot={owner ? root : undefined}
+                disabled={busy || disabled || query.isFetching}
+                refreshAccess={() => query.refetch()}
+              />
+            )}
             {(owner ? query.data.canReopen : !query.data.current) && (
               <form
                 onSubmit={(event) => {
@@ -273,7 +300,13 @@ function SubmissionForm({
               <div>
                 <h3>Earlier submitted rounds</h3>
                 {query.data.history.map((item) => (
-                  <Snapshot key={item.id} item={item} />
+                  <Snapshot
+                    key={item.id}
+                    item={item}
+                    ownerRoot={owner ? root : undefined}
+                    disabled={busy || disabled || query.isFetching}
+                    refreshAccess={() => query.refetch()}
+                  />
                 ))}
               </div>
             )}
