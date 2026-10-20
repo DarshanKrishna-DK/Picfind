@@ -334,10 +334,7 @@ function CoverageEditor({
               before editing or saving again.
             </p>
           )}
-          <fieldset
-            disabled={busy || locked || !saved.editable}
-            className="coverage-editor"
-          >
+          <fieldset disabled={busy} className="coverage-editor">
             <legend>Coverage draft</legend>
             <p>
               {items.length} of 20 categories. {references} of 100 photo
@@ -346,7 +343,7 @@ function CoverageEditor({
             <button
               className="button"
               type="button"
-              disabled={items.length >= 20}
+              disabled={locked || !saved.editable || items.length >= 20}
               onClick={add}
             >
               Add shot category
@@ -371,7 +368,11 @@ function CoverageEditor({
                 ))}
               </ul>
               {chosen && (
-                <div className="coverage-fields">
+                <fieldset
+                  className="coverage-fields"
+                  disabled={locked || !saved.editable}
+                >
+                  <legend>Selected category</legend>
                   <label>
                     Shot category name
                     <input
@@ -497,7 +498,7 @@ function CoverageEditor({
                       Show more coverage candidates
                     </button>
                   )}
-                </div>
+                </fieldset>
               )}
             </div>
             {!valid && (
@@ -509,7 +510,7 @@ function CoverageEditor({
             <button
               className="button"
               type="button"
-              disabled={!valid || !dirty}
+              disabled={locked || !saved.editable || !valid || !dirty}
               onClick={() => void run(true)}
             >
               Save coverage plan

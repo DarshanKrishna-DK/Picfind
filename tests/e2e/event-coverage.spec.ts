@@ -350,13 +350,26 @@ test('shows archived plans read-only and hides private data on a detected accoun
   await page.getByLabel('Private coverage note').fill('Private family detail');
   await save(page);
   f.event.archived = true;
-  await refresh(page);
+  await open(page, f.eventId);
   await expect(
     page.getByText(
       'Archived or expired event. Restore an active event before editing this plan.',
     ),
   ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Family portraits', exact: true })
+    .click();
+  await expect(page.getByLabel('Private coverage note')).toHaveValue(
+    'Private family detail',
+  );
   await expect(page.getByLabel('Private coverage note')).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Add shot category', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Save coverage plan', exact: true }),
+  ).toBeDisabled();
+  expect(f.state.writes).toBe(1);
   f.state.actor = 'other';
   await page
     .getByRole('button', { name: 'Refresh saved coverage', exact: true })

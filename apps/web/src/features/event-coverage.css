@@ -52,6 +52,9 @@
   display: grid;
   gap: 0.8rem;
   min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 .coverage-categories .button {
   width: 100%;
