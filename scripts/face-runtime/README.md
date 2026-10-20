@@ -158,6 +158,10 @@ The supervisor publishes via an exclusive link, never replacing an existing
 output, and removes its temporary file on ordinary failures. Filesystems must
 support hard links. Abrupt termination or power loss can leave a temporary file,
 so keep the whole output directory private. No face crop or query image is saved.
+Publication conflicts return `OUTPUT_ALREADY_EXISTS`; unsupported or denied
+hard-link publication returns `OUTPUT_PUBLICATION_FAILED` with a directory hint.
+Duplicate detection vectors fail with `DUPLICATE_DETECTION` rather than assigning
+ambiguous face IDs. The evaluation operator must inspect and retry such inputs.
 The `--internal-worker` entry point is an implementation detail, not a service or
 a public API; the supported CLI supplies the process deadline.
 

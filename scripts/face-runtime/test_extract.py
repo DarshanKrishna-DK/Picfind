@@ -189,19 +189,53 @@ class ExtractionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "INVALID_DETECTION"):
                 extract.document(job(), "a" * 64, (640, 480), [row])
 
+    def test_duplicate_detections_fail_without_assigning_order_dependent_face_ids(self):
+        first, second = face(), face()
+        second["embedding"][0] = -1.0
+        for rows in ([first, second], [second, first]):
+            with self.assertRaisesRegex(ValueError, "DUPLICATE_DETECTION"):
+                extract.document(job(), "a" * 64, (640, 480), rows)
+
+    def test_full_face_cap_with_long_float_encodings_fits_publication_limit(self):
+        rows = []
+        for index in range(100):
+            row = face(index)
+            row["detection"] = [float(value) + 0.0001234567890123 for value in row["detection"]]
+            row["embedding"] = [(-1 if i % 2 else 1) * (1.2345678901234567e-200 if i % 3 else 0.12345678901234567) for i in range(128)]
+            rows.append(row)
+        result = extract.document(job(), "a" * 64, (8192, 1900), rows)
+        result["detector_dimensions"] = [1280, 297]
+        wire = json.dumps(result, separators=(",", ":"), allow_nan=False) + "\n"
+        self.assertLess(len(wire.encode()), extract.MAX_OUTPUT)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "faces.json"
+            args = argparse.Namespace(**job(), output=output, timeout=7)
+            completed = subprocess.CompletedProcess([], 0, wire, "")
+            with patch.object(extract.subprocess, "run", return_value=completed):
+                self.assertEqual(extract.run(args)["faces"], 100)
+            self.assertEqual(len(json.loads(output.read_text())["faces"]), 100)
+
     def test_atomic_publication_never_overwrites_and_cleans_temporary_file(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "faces.json"
             extract.publish(output, {"faces": []})
             before = output.read_bytes()
-            with self.assertRaises(FileExistsError):
+            with self.assertRaisesRegex(ValueError, "OUTPUT_ALREADY_EXISTS"):
                 extract.publish(output, {"faces": [1]})
             self.assertEqual(output.read_bytes(), before)
             self.assertEqual(list(Path(directory).iterdir()), [output])
             with patch.object(extract.os, "link", side_effect=OSError("disk failure")):
-                with self.assertRaises(OSError):
+                with self.assertRaisesRegex(ValueError, "OUTPUT_PUBLICATION_FAILED"):
                     extract.publish(Path(directory) / "failed.json", {})
             self.assertEqual(list(Path(directory).iterdir()), [output])
+
+    def test_missing_output_directory_is_rejected_before_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(**job(), output=Path(directory) / "absent" / "faces.json", timeout=7)
+            with patch.object(extract.subprocess, "run") as child:
+                with self.assertRaisesRegex(ValueError, "OUTPUT_DIRECTORY_MISSING"):
+                    extract.run(args)
+                child.assert_not_called()
 
     def test_publication_rejects_nonfinite_or_oversized_payload_before_writing(self):
         with tempfile.TemporaryDirectory() as directory:

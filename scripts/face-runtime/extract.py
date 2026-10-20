@@ -130,6 +130,7 @@ def document(job, image_digest, dimensions, extracted):
     profile = pipeline(job["side"], job["threads"])
     pipeline_id = digest_json(profile)
     faces = []
+    detections_seen = set()
     for row in extracted:
         detection = row["detection"]
         if not isinstance(detection, list) or len(detection) != 15 or not all(
@@ -138,6 +139,10 @@ def document(job, image_digest, dimensions, extracted):
             raise ValueError("INVALID_DETECTION")
         if detection[2] <= 0 or detection[3] <= 0 or not 0 <= detection[14] <= 1:
             raise ValueError("INVALID_DETECTION")
+        coordinates = tuple(detection)
+        if coordinates in detections_seen:
+            raise ValueError("DUPLICATE_DETECTION")
+        detections_seen.add(coordinates)
     ordered = sorted(extracted, key=lambda row: tuple(row["detection"]))
     for index, row in enumerate(ordered):
         detection = row["detection"]
@@ -261,7 +266,12 @@ def publish(output, result):
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
-        os.link(temporary, output)
+        try:
+            os.link(temporary, output)
+        except FileExistsError:
+            raise ValueError("OUTPUT_ALREADY_EXISTS") from None
+        except OSError:
+            raise ValueError("OUTPUT_PUBLICATION_FAILED") from None
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
@@ -270,6 +280,8 @@ def publish(output, result):
 def run(args):
     if args.output.exists():
         raise ValueError("OUTPUT_ALREADY_EXISTS")
+    if not args.output.parent.is_dir():
+        raise ValueError("OUTPUT_DIRECTORY_MISSING")
     job = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items() if key not in {"output", "timeout"}}
     try:
         completed = subprocess.run(
@@ -313,6 +325,8 @@ def main():
         candidate = str(error).split(":")[0]
         code = candidate if re.fullmatch(r"[A-Z_]{1,64}", candidate) else "EXTRACTION_FAILED"
         print(f"Extraction failed: {code}", file=sys.stderr)
+        if code == "OUTPUT_PUBLICATION_FAILED":
+            print("Use a private writable output directory on a filesystem that supports hard links.", file=sys.stderr)
         return 1
 
 
