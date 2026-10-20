@@ -8,6 +8,10 @@ for (const viewport of [
     test(`account ${kind} dialog is deliberate and contained at ${viewport.width}`, async ({
       page,
     }, testInfo) => {
+      // CI WebKit traces spend up to 11 seconds per actionability check.
+      // Preserve normal clicks and every confirmation assertion in this flow.
+      if (kind === 'password' && testInfo.project.name === 'webkit-mobile')
+        test.setTimeout(60_000);
       await page.setViewportSize(viewport);
       let codes = 0;
       let mutations = 0;
