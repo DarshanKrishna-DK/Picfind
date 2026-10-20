@@ -131,6 +131,23 @@ async function fixture(kind: 'event' | 'scan' = 'event') {
 }
 
 describe('saved face index compatibility', () => {
+  it.each(['missing-external-id', 'empty-with-face-ids'])(
+    'does not overwrite inconsistent cached metadata: %s',
+    async (condition) => {
+      const f = await fixture();
+      if (condition === 'missing-external-id') delete f.photo.externalImageId;
+      else f.photo.indexState = 'empty';
+      const before = structuredClone(f.photo);
+      await expect(
+        f.index(f.matcher, f.store, f.photo, f.scope, 'consent'),
+      ).rejects.toMatchObject({ code: 'FACE_INDEX_INCOMPATIBLE' });
+      expect(f.store.put).not.toHaveBeenCalled();
+      expect(f.store.file).not.toHaveBeenCalled();
+      expect(f.matcher.indexPhoto).not.toHaveBeenCalled();
+      expect(f.reserveUsage).not.toHaveBeenCalled();
+      expect(f.rows.get(f.photo.id)).toEqual(before);
+    },
+  );
   it.each(['ready', 'empty', 'queued', 'failed'] as const)(
     'preserves a foreign-provider %s record even with explicit retry approval',
     async (state) => {

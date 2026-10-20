@@ -24,6 +24,11 @@ export function assertIndexProvider(photo: LibraryRecord, provider: string) {
     (typeof photo.modelVersion !== 'string' || !photo.modelVersion.trim())
   )
     throw incompatible();
+  if (
+    (photo.indexState === 'ready' && !photo.externalImageId) ||
+    (photo.indexState === 'empty' && Boolean(photo.faceIds?.length))
+  )
+    throw incompatible();
 }
 
 /** Ready photos must use one format before any reference is sent for search. */

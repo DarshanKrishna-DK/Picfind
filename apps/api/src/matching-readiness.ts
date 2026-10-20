@@ -40,6 +40,7 @@ export function matchingReadiness(
         photo.provider !== 'aws-rekognition' ||
         typeof photo.modelVersion !== 'string' ||
         !photo.modelVersion.trim() ||
+        (photo.indexState === 'empty' && Boolean(photo.faceIds?.length)) ||
         (photo.indexState === 'ready' && !photo.externalImageId)
       ) {
         counts.needsReview++;

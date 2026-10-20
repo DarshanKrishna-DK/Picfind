@@ -37,6 +37,14 @@ describe('event matching readiness metadata', () => {
     const unknown = matchingReadiness(event, [missing], runtime, now);
     expect(unknown.counts.needsReview).toBe(1);
     expect(unknown.status).toBe('needs-attention');
+    const contradictory = matchingReadiness(
+      event,
+      [{ ...prepared, indexState: 'empty' }],
+      runtime,
+      now,
+    );
+    expect(contradictory.counts.needsReview).toBe(1);
+    expect(contradictory.counts.noFaces).toBe(0);
     const mixed = matchingReadiness(
       event,
       [prepared, { ...prepared, id: 'other', modelVersion: '6' }],
