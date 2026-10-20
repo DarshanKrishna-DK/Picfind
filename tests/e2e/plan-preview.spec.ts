@@ -545,10 +545,16 @@ for (const width of [1280, 390]) {
     async ({ page, browserName }) => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
       const f = await fixture(page, 'success', true);
-      await page.getByRole('button', { name: 'Plan to preview', exact: true }).click();
+      await page
+        .getByRole('button', { name: 'Plan to preview', exact: true })
+        .click();
       await expect(page.getByRole('option', { name: /Yearly/ })).toHaveCount(3);
-      await expect(page.getByRole('option', { name: /Personal/ })).toHaveCount(0);
-      await page.getByRole('option', { name: 'Pro - Yearly', exact: true }).click();
+      await expect(page.getByRole('option', { name: /Personal/ })).toHaveCount(
+        0,
+      );
+      await page
+        .getByRole('option', { name: 'Pro - Yearly', exact: true })
+        .click();
       await page.getByRole('button', { name: 'Preview renewal price' }).click();
       await expect(page.getByText(/Pro:.*per year\s+before tax/)).toBeVisible();
       await expect(page.getByText(/Due today:/)).toContainText('0.00');

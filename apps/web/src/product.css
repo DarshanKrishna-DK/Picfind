@@ -1696,10 +1696,10 @@ input[type='checkbox'] {
   .tabs {
     gap: 26px;
   }
-.import-panel {
-  grid-template-columns: 1fr;
-  padding: 24px;
-}
+  .import-panel {
+    grid-template-columns: 1fr;
+    padding: 24px;
+  }
   .dialog-footer {
     flex-wrap: wrap;
     gap: 10px;

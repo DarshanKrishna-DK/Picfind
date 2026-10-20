@@ -369,143 +369,147 @@ export function DiscoverPage() {
         </section>
       )}
       {(!!library.data?.photos.length || scan) && (
-      <form className="form-panel" onSubmit={(event) => void start(event)}>
-        {!!library.data?.photos.length && (
-        <>
-        <div className="source-panel">
-          <label>
-            Imported album
-            <MenuSelect
-              label="Imported album"
-              value={sourceEvent}
-              disabled={busy || Boolean(scan)}
-              onChange={setSourceEvent}
-              options={[
-                { value: 'all', label: 'All imported photos' },
-                { value: 'unassigned', label: 'Personal library' },
-                ...(library.data?.events.map((event) => ({
-                  value: event.id,
-                  label: event.title,
-                })) ?? []),
-              ]}
+        <form className="form-panel" onSubmit={(event) => void start(event)}>
+          {!!library.data?.photos.length && (
+            <>
+              <div className="source-panel">
+                <label>
+                  Imported album
+                  <MenuSelect
+                    label="Imported album"
+                    value={sourceEvent}
+                    disabled={busy || Boolean(scan)}
+                    onChange={setSourceEvent}
+                    options={[
+                      { value: 'all', label: 'All imported photos' },
+                      { value: 'unassigned', label: 'Personal library' },
+                      ...(library.data?.events.map((event) => ({
+                        value: event.id,
+                        label: event.title,
+                      })) ?? []),
+                    ]}
+                  />
+                </label>
+                <p>
+                  {selected.length} of {limit} photos from this album will be
+                  searched.
+                </p>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={busy || Boolean(scan) || !matchingSources.length}
+                  onClick={() =>
+                    setSelected(
+                      matchingSources.slice(0, limit).map((photo) => photo.id),
+                    )
+                  }
+                >
+                  Use this album
+                </button>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={busy || Boolean(scan) || !selected.length}
+                  onClick={() => setSelected([])}
+                >
+                  Clear selection
+                </button>
+                <p className="field-help">
+                  Changing album selects its photos automatically, up to this
+                  collection's limit. Import a different source from Import
+                  photos.
+                </p>
+                <p>
+                  <Link className="text-link" to="/app/import">
+                    Import more photos
+                  </Link>
+                </p>
+              </div>
+              <div className="source-list">
+                {matchingSources.slice(0, 100).map((photo) => (
+                  <label key={photo.id}>
+                    <input
+                      type="checkbox"
+                      disabled={
+                        busy ||
+                        Boolean(scan) ||
+                        (!selected.includes(photo.id) &&
+                          selected.length >= limit)
+                      }
+                      checked={selected.includes(photo.id)}
+                      onChange={(event) =>
+                        setSelected((previous) =>
+                          event.target.checked
+                            ? [...previous, photo.id]
+                            : previous.filter((id) => id !== photo.id),
+                        )
+                      }
+                    />
+                    {photo.filename}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="file-field">
+            <span>Reference selfie</span>
+            <input
+              ref={selfie}
+              id="reference-selfie"
+              className="file-field-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              required
+              disabled={busy}
+              aria-label="Reference selfie"
+              onChange={(event) =>
+                setSelfieName(event.target.files?.[0]?.name ?? '')
+              }
             />
-          </label>
-          <p>
-            {selected.length} of {limit} photos from this album will be
-            searched.
-          </p>
-          <button
-            className="button secondary"
-            type="button"
-            disabled={busy || Boolean(scan) || !matchingSources.length}
-            onClick={() =>
-              setSelected(matchingSources.slice(0, limit).map((photo) => photo.id))
-            }
-          >
-            Use this album
-          </button>
-          <button
-            className="button secondary"
-            type="button"
-            disabled={busy || Boolean(scan) || !selected.length}
-            onClick={() => setSelected([])}
-          >
-            Clear selection
-          </button>
-          <p className="field-help">
-            Changing album selects its photos automatically, up to this
-            collection's limit. Import a different source from Import photos.
-          </p>
-          <p>
-            <Link className="text-link" to="/app/import">
-              Import more photos
-            </Link>
-          </p>
-        </div>
-        <div className="source-list">
-          {matchingSources.slice(0, 100).map((photo) => (
-            <label key={photo.id}>
-              <input
-                type="checkbox"
-                disabled={
-                  busy ||
-                  Boolean(scan) ||
-                  (!selected.includes(photo.id) && selected.length >= limit)
-                }
-                checked={selected.includes(photo.id)}
-                onChange={(event) =>
-                  setSelected((previous) =>
-                    event.target.checked
-                      ? [...previous, photo.id]
-                      : previous.filter((id) => id !== photo.id),
-                  )
-                }
-              />
-              {photo.filename}
-            </label>
-          ))}
-        </div>
-        </>
-        )}
-        <div className="file-field">
-          <span>Reference selfie</span>
-          <input
-            ref={selfie}
-            id="reference-selfie"
-            className="file-field-input"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            required
-            disabled={busy}
-            aria-label="Reference selfie"
-            onChange={(event) =>
-              setSelfieName(event.target.files?.[0]?.name ?? '')
-            }
-          />
-          <div className="file-field-row">
-            <label className="button secondary" htmlFor="reference-selfie">
-              Choose photo
-            </label>
-            <span>{selfieName || 'JPEG, PNG or WebP · one clear face'}</span>
+            <div className="file-field-row">
+              <label className="button secondary" htmlFor="reference-selfie">
+                Choose photo
+              </label>
+              <span>{selfieName || 'JPEG, PNG or WebP · one clear face'}</span>
+            </div>
           </div>
-        </div>
-        <p className="field-help">
-          Use a clear photo containing only your face. Your selfie is used for
-          this search and is not saved.
-        </p>
-        <label className="check-label">
-          <input name="consent" type="checkbox" required disabled={busy} />
-          <span>
-            I understand Amazon Rekognition will process these photos and my
-            selfie, and I have permission to use them for this search.
-          </span>
-        </label>
-        <p className="field-help">
-          Amazon Rekognition processes the collection and reference photo. Face
-          indexes stay scoped to this search until you delete it. Similarity
-          scores are not proof of identity.
-        </p>
-        <button
-          className="button"
-          disabled={
-            busy ||
-            processingActive ||
-            Boolean(scan?.deleting) ||
-            !capabilities.data?.faceMatching
-          }
-        >
-          <ScanFace size={18} />
-          {busy
-            ? 'Working...'
-            : processingActive
-              ? 'Preparing collection...'
-              : scan
-                ? 'Search again'
-                : 'Find my photos'}
-        </button>
-        <ErrorNote error={error} />
-        <p role="status">{status}</p>
-      </form>
+          <p className="field-help">
+            Use a clear photo containing only your face. Your selfie is used for
+            this search and is not saved.
+          </p>
+          <label className="check-label">
+            <input name="consent" type="checkbox" required disabled={busy} />
+            <span>
+              I understand Amazon Rekognition will process these photos and my
+              selfie, and I have permission to use them for this search.
+            </span>
+          </label>
+          <p className="field-help">
+            Amazon Rekognition processes the collection and reference photo.
+            Face indexes stay scoped to this search until you delete it.
+            Similarity scores are not proof of identity.
+          </p>
+          <button
+            className="button"
+            disabled={
+              busy ||
+              processingActive ||
+              Boolean(scan?.deleting) ||
+              !capabilities.data?.faceMatching
+            }
+          >
+            <ScanFace size={18} />
+            {busy
+              ? 'Working...'
+              : processingActive
+                ? 'Preparing collection...'
+                : scan
+                  ? 'Search again'
+                  : 'Find my photos'}
+          </button>
+          <ErrorNote error={error} />
+          <p role="status">{status}</p>
+        </form>
       )}
       {scan?.resultsRetained === false && (
         <section
