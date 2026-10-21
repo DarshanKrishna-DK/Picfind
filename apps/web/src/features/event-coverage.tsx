@@ -11,6 +11,8 @@ import {
   type CoverageSnapshot,
 } from '../../../../packages/shared/src/event-coverage';
 import './event-coverage.css';
+import { CoverageTemplates } from './coverage-templates';
+import { applyCoverageTemplate } from '../../../../packages/shared/src/coverage-templates';
 
 const headers = (accountId: string) => ({
   'X-PicFind-Coverage-Actor': accountId,
@@ -108,6 +110,7 @@ function CoverageEditor({
   const [search, setSearch] = useState('');
   const [shown, setShown] = useState(50);
   const [busy, setBusy] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [locked, setLocked] = useState(false);
   const [denied, setDenied] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -172,6 +175,7 @@ function CoverageEditor({
   async function run(save: boolean) {
     if (
       pending.current ||
+      templateBusy ||
       (save && (locked || denied || !saved.editable || !valid))
     )
       return;
@@ -334,7 +338,7 @@ function CoverageEditor({
               before editing or saving again.
             </p>
           )}
-          <fieldset disabled={busy} className="coverage-editor">
+          <fieldset disabled={busy || templateBusy} className="coverage-editor">
             <legend>Coverage draft</legend>
             <p>
               {items.length} of 20 categories. {references} of 100 photo
@@ -516,12 +520,28 @@ function CoverageEditor({
               Save coverage plan
             </button>
           </fieldset>
+          <CoverageTemplates
+            accountId={initial.accountId}
+            items={items}
+            disabled={busy || locked || !saved.editable}
+            onBusyChange={setTemplateBusy}
+            onApply={(fields, mode) => {
+              const next = applyCoverageTemplate(items, fields, mode, () =>
+                crypto.randomUUID(),
+              );
+              setItems(next);
+              setSelected(next[mode === 'append' ? items.length : 0]?.id ?? '');
+              setSearch('');
+              setShown(50);
+              setMessage('');
+            }}
+          />
         </>
       )}
       <button
         className="button secondary"
         type="button"
-        disabled={busy}
+        disabled={busy || templateBusy}
         onClick={() => void run(false)}
       >
         Refresh saved coverage

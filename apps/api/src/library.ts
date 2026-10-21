@@ -76,6 +76,7 @@ import { createStudioEnquiries } from './studio-enquiries.js';
 import { createStudioServices } from './studio-services.js';
 import { createStudioExpenses } from './studio-expenses.js';
 import { createProjectBudgets } from './project-budgets.js';
+import { createCoverageTemplates } from './coverage-templates.js';
 import { createStudioPortfolio } from './studio-portfolio.js';
 import { createEnquiryHandoff } from './enquiry-handoff.js';
 import { createUploadPreflight } from './upload-preflight.js';
@@ -117,6 +118,8 @@ export interface LibraryRecord {
   serviceCommandDigest?: string;
   studioExpense?: import('../../../packages/shared/src/studio-expenses.js').StudioExpense;
   projectBudget?: import('../../../packages/shared/src/project-budgets.js').SavedBudget;
+  coverageTemplate?: import('../../../packages/shared/src/coverage-templates.js').SavedTemplate;
+  coverageTemplateCommandDigest?: string;
   studioPortfolio?: import('../../../packages/shared/src/studio-portfolio.js').StoredPortfolio;
   enquiryHandoff?: import('../../../packages/shared/src/enquiry-handoff.js').EnquiryHandoff;
   expenseCommandDigest?: string;
@@ -183,6 +186,7 @@ export interface LibraryRecord {
     | 'studio-service'
     | 'studio-expense'
     | 'project-budget'
+    | 'coverage-template'
     | 'studio-portfolio'
     | 'studio-proposal'
     | 'proposal-response'
@@ -751,6 +755,7 @@ export function createLibraryRouter(
   router.use(createStudioServices(store, owner));
   router.use(createStudioExpenses(store, owner));
   router.use(createProjectBudgets(store, owner));
+  router.use(createCoverageTemplates(store, owner));
   router.use(createStudioPortfolio(store, owner, sendPhoto));
   router.use(createEnquiryHandoff(store, owner));
   router.use(createStudioProposals(auth, store, owner));
