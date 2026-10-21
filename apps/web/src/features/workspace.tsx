@@ -37,6 +37,7 @@ const destinations = [
   { to: '/app', title: 'Overview', icon: LayoutDashboard },
   { to: '/app/library', title: 'Photo library', icon: Images },
   { to: '/app/events', title: 'Events', icon: CalendarDays },
+  { to: '/app/event-deadlines', title: 'Event deadlines', icon: CalendarDays },
   { to: '/app/clients', title: 'Clients', icon: Users },
   { to: '/app/enquiries', title: 'Enquiries', icon: Users },
   { to: '/app/services', title: 'Services', icon: BriefcaseBusiness },
