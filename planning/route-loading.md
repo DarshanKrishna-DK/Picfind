@@ -34,6 +34,15 @@ JavaScript bytes or 200,000 gzip bytes. Unit cases cover transitive imports,
 cycles, duplicate files, deferred exclusions, malformed manifests and both
 budget boundaries.
 
+Reproduce the measurement with `npm run build --workspace @picfind/web`.
+Vite writes `apps/web/dist/.vite/manifest.json`; the build then runs
+`scripts/check-web-bundle.mjs`, which prints each included file and its measured
+sizes. In this build, the `index.html` manifest key points to
+`assets/index-DpcKJw3d.js`, not an HTML file. Generated hashes and sizes can change
+with later source edits. Build output is not committed to source control.
+The production preview command resolves `apps/web/../../node_modules` to the
+repository root `node_modules`; the 28-case production run verified this path.
+
 Verification: 72 Chromium/mobile WebKit cases passed across route loading,
 budget draft navigation, questionnaires and proposals. A separate production
 preview run passed 28 cases against the compiled brief/report pages. The first

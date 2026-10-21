@@ -34,6 +34,13 @@ export function initialJavascriptFiles(manifest) {
 }
 export function assertWebBundleBudget(measurement, budget = WEB_BUNDLE_BUDGET) {
   if (
+    !Number.isSafeInteger(budget?.bytes) ||
+    budget.bytes < 0 ||
+    !Number.isSafeInteger(budget?.gzipBytes) ||
+    budget.gzipBytes < 0
+  )
+    throw new Error('The bundle budget is invalid.');
+  if (
     !Number.isSafeInteger(measurement.bytes) ||
     measurement.bytes < 0 ||
     !Number.isSafeInteger(measurement.gzipBytes) ||

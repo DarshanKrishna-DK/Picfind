@@ -3,12 +3,46 @@ const { initialJavascriptFiles, assertWebBundleBudget } = (await import(
   new URL('../../scripts/check-web-bundle.mjs', import.meta.url).href
 )) as {
   initialJavascriptFiles: (manifest: unknown) => string[];
-  assertWebBundleBudget: (measurement: {
-    bytes: number;
-    gzipBytes: number;
-  }) => void;
+  assertWebBundleBudget: (
+    measurement: { bytes: number; gzipBytes: number },
+    budget?: { bytes: number; gzipBytes: number },
+  ) => void;
 };
 describe('initial route JavaScript budget', () => {
+  it('rejects invalid configured limits instead of silently disabling enforcement', () => {
+    for (const invalid of [
+      NaN,
+      Infinity,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(() =>
+        assertWebBundleBudget(
+          { bytes: 1, gzipBytes: 1 },
+          { bytes: invalid, gzipBytes: 2 },
+        ),
+      ).toThrow('budget is invalid');
+      expect(() =>
+        assertWebBundleBudget(
+          { bytes: 1, gzipBytes: 1 },
+          { bytes: 2, gzipBytes: invalid },
+        ),
+      ).toThrow('budget is invalid');
+    }
+    expect(() =>
+      assertWebBundleBudget(
+        { bytes: 0, gzipBytes: 0 },
+        { bytes: 0, gzipBytes: 0 },
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertWebBundleBudget(
+        { bytes: 1, gzipBytes: 0 },
+        { bytes: 0, gzipBytes: 0 },
+      ),
+    ).toThrow('exceeds');
+  });
   it('includes transitive static chunks once and excludes deferred routes', () => {
     expect(
       initialJavascriptFiles({
