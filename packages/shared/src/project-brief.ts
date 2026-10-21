@@ -87,10 +87,16 @@ export const projectBrief = z
       });
   });
 export type ProjectBrief = z.infer<typeof projectBrief>;
+function quotedText(value: string) {
+  return JSON.stringify(value).replace(
+    /[\p{Cc}\p{Cf}\u2028\u2029]/gu,
+    (character) => `\\u{${character.codePointAt(0)!.toString(16)}}`,
+  );
+}
 export function exportProjectBrief(input: unknown, format: 'text' | 'json') {
-  const value = projectBrief.parse(input);
   if (format !== 'text' && format !== 'json')
     throw new Error('Choose a supported brief format.');
+  const value = projectBrief.parse(input);
   const content =
     format === 'json'
       ? JSON.stringify(
@@ -104,32 +110,38 @@ export function exportProjectBrief(input: unknown, format: 'text' | 'json') {
         ) + '\n'
       : [
           'PICFIND PRIVATE PROJECT PRODUCTION BRIEF',
-          `Project: ${value.project.name}`,
+          `Project: ${quotedText(value.project.name)}`,
           `Project ID: ${value.project.id}`,
           `Project created: ${value.project.createdAt}`,
           `Stage: ${value.project.stage}`,
           `Checked: ${value.checkedAt}`,
           `Private notes: ${value.notes === 'include' ? 'included' : 'omitted'}`,
           'Local copy only. Review current records in PicFind before relying on this plan.',
+          'User-authored text is quoted; line breaks and control characters are escaped.',
           ...(value.project.summary !== undefined
-            ? ['', 'PROJECT SUMMARY', value.project.summary]
+            ? ['', 'PROJECT SUMMARY', quotedText(value.project.summary)]
             : []),
           '',
           `LINKED EVENTS (${value.events.length})`,
           ...value.events.map(
-            (row) => `${row.title ?? 'Unavailable linked event'} [${row.id}]`,
+            (row) =>
+              `${quotedText(row.title ?? 'Unavailable linked event')} [${row.id}]`,
           ),
           '',
           `MILESTONES (${value.milestones.length})`,
           ...value.milestones.flatMap((row) => [
-            `${row.dueDate} (${row.timeZone}) | ${row.status} | ${row.title} [${row.id}]`,
-            ...(row.note !== undefined ? [`Note: ${row.note}`] : []),
+            `${row.dueDate} (${row.timeZone}) | ${row.status} | ${quotedText(row.title)} [${row.id}]`,
+            ...(row.note !== undefined
+              ? [`Note: ${quotedText(row.note)}`]
+              : []),
           ]),
           '',
           `APPOINTMENTS (${value.appointments.length})`,
           ...value.appointments.flatMap((row) => [
-            `${row.startAt} to ${row.endAt} | ${row.timeZone} | ${row.status} | ${row.title} [${row.id}]`,
-            ...(row.note !== undefined ? [`Note: ${row.note}`] : []),
+            `${row.startAt} to ${row.endAt} | ${row.timeZone} | ${row.status} | ${quotedText(row.title)} [${row.id}]`,
+            ...(row.note !== undefined
+              ? [`Note: ${quotedText(row.note)}`]
+              : []),
           ]),
           '',
         ].join('\n');

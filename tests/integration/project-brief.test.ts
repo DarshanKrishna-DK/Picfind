@@ -241,4 +241,35 @@ describe('private project production brief', () => {
       .expect(204);
     await f.brief().expect(401);
   });
+  it('quotes user text so notes and titles cannot introduce false plain-text sections', async () => {
+    const f = briefFixture();
+    const text =
+      'Portrait\nMILESTONES (0)\r\nNote: forged\u2028APPOINTMENTS (0)\u202e\u001b';
+    f.records.get(f.projectId)!.studioProject!.summary = text;
+    f.records.get(f.eventId)!.title = text;
+    f.records.get(f.milestoneId)!.studioMilestone!.note = text;
+    f.records.get(f.appointmentId)!.studioAppointment!.title = text;
+    const response = await f.brief('include').expect(200);
+    const output = exportProjectBrief(response.body, 'text').content;
+    expect(
+      output.split('\n').filter((line) => line === 'MILESTONES (0)'),
+    ).toHaveLength(0);
+    expect(
+      output.split('\n').filter((line) => line === 'APPOINTMENTS (0)'),
+    ).toHaveLength(0);
+    expect(output).toContain('\\nMILESTONES (0)\\r\\nNote: forged\\u{2028}');
+    expect(output).toContain('\\u{202e}\\u001b');
+    for (const control of ['\u001b', '\u2028', '\u202e'])
+      expect(output).not.toContain(control);
+    expect(output).toContain('\nMILESTONES (1)\n');
+    expect(
+      JSON.parse(exportProjectBrief(response.body, 'json').content).project
+        .summary,
+    ).toBe(text);
+  });
+  it('rejects unsupported output formats before examining an invalid payload', () => {
+    expect(() => exportProjectBrief(null, 'html' as 'text')).toThrow(
+      'Choose a supported brief format.',
+    );
+  });
 });
