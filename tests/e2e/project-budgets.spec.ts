@@ -3,6 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 import request from 'supertest';
 import { budgetFixture } from '../fixtures/project-budgets';
 import { questionnaireOrigin } from '../fixtures/questionnaires';
+import {
+  advanceProject,
+  blankProject,
+} from '../../packages/shared/src/studio-projects';
 
 async function fixture(page: Page) {
   const f = budgetFixture();
@@ -10,6 +14,7 @@ async function fixture(page: Page) {
     actor: f.ownerId,
     failRead: false,
     loseReply: false,
+    corruptReport: false,
     writes: 0,
   };
   await page.route('**/api/**', async (route) => {
@@ -36,6 +41,13 @@ async function fixture(page: Page) {
     if (incoming.postData()) call = call.send(JSON.parse(incoming.postData()!));
     if (method === 'put' && path === f.budgetRoot) state.writes++;
     const response = await call;
+    if (
+      state.corruptReport &&
+      method === 'get' &&
+      path === f.budgetRoot &&
+      response.status === 200
+    )
+      response.body.currencies[0].overBudget = null;
     if (
       method === 'put' &&
       path === f.budgetRoot &&
@@ -183,6 +195,39 @@ test('requires explicit review of legacy links before costs enter the budget', a
     .check();
   await page.getByRole('button', { name: 'Save entry', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Journal entry saved');
+  const row = f.records.get(f.projectId)!;
+  const createdAt = new Date(
+    Date.parse(f.projectCreatedAt) + 60000,
+  ).toISOString();
+  row.createdAt = createdAt;
+  row.studioProject = advanceProject(
+    null,
+    f.projectId,
+    { ...blankProject(), name: 'Replacement project' },
+    '',
+    f.ownerId,
+    createdAt,
+  );
+  await f.focus();
+  await expect(
+    page.getByRole('checkbox', {
+      name: /I reviewed this historical or unverified link/,
+    }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Save entry', exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole('checkbox', {
+      name: /I reviewed this historical or unverified link/,
+    })
+    .check();
+  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', {
+      name: /I reviewed this historical or unverified link/,
+    }),
+  ).toHaveCount(0);
   await f.open();
   await expect(
     page.getByRole('region', { name: 'Recorded cost comparison' }),
@@ -190,6 +235,57 @@ test('requires explicit review of legacy links before costs enter the budget', a
   await expect(
     page.getByText('1 older project links need review', { exact: false }),
   ).toHaveCount(0);
+});
+test('updates the project filter when the journal URL changes without a page reload', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.save().expect(200);
+  await f
+    .save({ projectId: null, title: 'Unrelated overhead' }, null, randomUUID())
+    .expect(200);
+  await page.goto('/app/expenses');
+  await expect(
+    page.getByRole('button', {
+      name: 'Edit entry: Unrelated overhead',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.evaluate((id) => {
+    window.history.pushState({}, '', `/app/expenses?project=${id}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, f.projectId);
+  await expect(
+    page.getByRole('combobox', { name: 'Project filter', exact: true }),
+  ).toHaveValue(f.projectId);
+  await expect(
+    page.getByRole('button', {
+      name: 'Edit entry: Unrelated overhead',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', {
+      name: 'Edit entry: Train to event',
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+test('hides a malformed cost report instead of displaying a false zero over-budget amount', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.save().expect(200);
+  await f.writeBudget().expect(200);
+  await f.open();
+  f.state.corruptReport = true;
+  await f.focus();
+  await expect(
+    page.getByRole('region', { name: 'Recorded cost comparison' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Save budget', exact: true }),
+  ).toBeDisabled();
 });
 test('rejects invalid decimal input and clears a limit without removing journal costs', async ({
   page,

@@ -333,8 +333,12 @@ function BudgetEditor({
                     <>
                       <dt>Remaining</dt>
                       <dd>{money(row.remaining, row.currency)}</dd>
+                    </>
+                  )}
+                  {row.overBudget !== null && (
+                    <>
                       <dt>Over budget</dt>
-                      <dd>{money(row.overBudget!, row.currency)}</dd>
+                      <dd>{money(row.overBudget, row.currency)}</dd>
                     </>
                   )}
                 </dl>

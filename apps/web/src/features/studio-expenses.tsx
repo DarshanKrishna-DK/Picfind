@@ -56,6 +56,10 @@ const fieldsOf = (row: StudioExpense | null): ExpenseFields =>
       }
     : blank();
 export function StudioExpenses() {
+  const [search] = useSearchParams();
+  const initialProject = z.uuid().safeParse(search.get('project')).success
+    ? search.get('project')!
+    : 'all';
   const account = useQuery({
     queryKey: ['session'],
     queryFn: session,
@@ -69,10 +73,21 @@ export function StudioExpenses() {
         error={account.error ?? new Error('Sign in to manage expenses.')}
       />
     );
-  return <Journal key={account.data.id} accountId={account.data.id} />;
+  return (
+    <Journal
+      key={`${account.data.id}:${initialProject}`}
+      accountId={account.data.id}
+      initialProject={initialProject}
+    />
+  );
 }
-function Journal({ accountId }: { accountId: string }) {
-  const [search] = useSearchParams();
+function Journal({
+  accountId,
+  initialProject,
+}: {
+  accountId: string;
+  initialProject: string;
+}) {
   const [confirmProjectLink, setConfirmProjectLink] = useState(false);
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
@@ -80,9 +95,7 @@ function Journal({ accountId }: { accountId: string }) {
       category: 'all',
       from: '',
       to: '',
-      project: z.uuid().safeParse(search.get('project')).success
-        ? search.get('project')!
-        : 'all',
+      project: initialProject,
       search: '',
     }),
     [offset, setOffset] = useState(0),
@@ -220,12 +233,15 @@ function Journal({ accountId }: { accountId: string }) {
     setError(null);
   }
   const amountMinor = decimalToMinor(amount);
+  const linkedProject = query.data?.projects.find(
+    (row) => row.id === draft.projectId,
+  );
   const linkNeedsReview =
     !!baseline &&
     draft.projectId !== null &&
     baseline.projectId === draft.projectId &&
-    query.data?.projects.find((row) => row.id === draft.projectId)
-      ?.createdAt !== baseline.projectCreatedAt;
+    linkedProject !== undefined &&
+    linkedProject.createdAt !== baseline.projectCreatedAt;
   const command = expenseWrite.safeParse({
     ...draft,
     amountMinor,

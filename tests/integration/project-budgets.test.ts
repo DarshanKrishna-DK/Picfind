@@ -28,6 +28,55 @@ function recreate(f: ReturnType<typeof fixture>) {
   return createdAt;
 }
 describe('private project cost budgets', () => {
+  it('rejects inconsistent cost reports instead of turning missing amounts into zero', async () => {
+    const f = fixture();
+    await f.save().expect(200);
+    const report = (await f.writeBudget().expect(200)).body;
+    for (const change of [
+      { overBudget: null },
+      { remaining: null },
+      { net: 0 },
+      { expenses: -1 },
+      { budget: null },
+    ]) {
+      expect(
+        budgetReport.safeParse({
+          ...report,
+          currencies: [{ ...report.currencies[0], ...change }],
+        }).success,
+      ).toBe(false);
+    }
+    expect(budgetReport.safeParse({ ...report, currencies: [] }).success).toBe(
+      false,
+    );
+    expect(
+      budgetReport.safeParse({
+        ...report,
+        currencies: [report.currencies[0], report.currencies[0]],
+      }).success,
+    ).toBe(false);
+  });
+  it('rejects an unlinked expense with a stale project creation identity in reads and exports', async () => {
+    const f = fixture();
+    await f.save().expect(200);
+    f.records.get(f.expenseId)!.studioExpense!.projectId = null;
+    await f.read(f.root).expect(503);
+    await f.read(`${f.root}/export`).expect(503);
+    await f.read(f.budgetRoot).expect(503);
+  });
+  it('keeps the terminal safe revision readable and rejects increment overflow before writing', async () => {
+    const f = fixture();
+    await f.writeBudget().expect(200);
+    f.records.get(f.budgetId)!.projectBudget!.version =
+      Number.MAX_SAFE_INTEGER - 1;
+    expect((await f.read(f.budgetRoot).expect(200)).body.version).toBe(
+      Number.MAX_SAFE_INTEGER - 1,
+    );
+    await f.writeBudget({ version: Number.MAX_SAFE_INTEGER - 1 }).expect(400);
+    expect(f.records.get(f.budgetId)!.projectBudget!.version).toBe(
+      Number.MAX_SAFE_INTEGER - 1,
+    );
+  });
   it('persists exact limits and reports separate currencies, refunds, zero budgets and unbudgeted costs', async () => {
     const f = fixture();
     await f.save({ amountMinor: 12345 }).expect(200);

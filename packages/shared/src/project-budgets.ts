@@ -95,16 +95,50 @@ export const budgetReport = z
         z
           .object({
             currency: z.enum(serviceCurrencies),
-            budget: amount.nullable(),
-            expenses: amount,
-            refunds: amount,
+            budget: z.number().int().min(0).max(1_000_000_000).nullable(),
+            expenses: z.number().int().min(0).max(1_000_000_000_000),
+            refunds: z.number().int().min(0).max(1_000_000_000_000),
             net: amount,
             remaining: amount.nullable(),
             overBudget: amount.nullable(),
           })
-          .strict(),
+          .strict()
+          .refine(
+            (row) =>
+              row.net === row.expenses - row.refunds &&
+              (row.budget === null
+                ? row.remaining === null && row.overBudget === null
+                : row.remaining === row.budget - row.net &&
+                  row.overBudget === Math.max(0, row.net - row.budget)),
+          ),
       )
       .max(4),
   })
-  .strict();
+  .strict()
+  .refine(
+    (report) =>
+      new Set(report.currencies.map((row) => row.currency)).size ===
+        report.currencies.length &&
+      report.verifiedEntries +
+        report.unverifiedLinks +
+        report.historicalLinks <=
+        1000 &&
+      report.fields.limits.every((limit) =>
+        report.currencies.some(
+          (row) =>
+            row.currency === limit.currency && row.budget === limit.amountMinor,
+        ),
+      ) &&
+      report.currencies.every(
+        (row) =>
+          row.budget ===
+          (report.fields.limits.find((limit) => limit.currency === row.currency)
+            ?.amountMinor ?? null),
+      ) &&
+      (report.version === 0
+        ? report.updatedAt === null &&
+          report.fields.limits.length === 0 &&
+          report.fields.note === ''
+        : report.updatedAt !== null),
+  );
 export type BudgetReport = z.infer<typeof budgetReport>;
