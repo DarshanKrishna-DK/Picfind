@@ -6,11 +6,11 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-21 at 06:30 IST, Picfind had 46 pushed after review, 58 merged and
-reviewed, and 59 opened (rank 5). This is a
+on 2026-10-21 at 07:06 IST, Picfind had 47 pushed after review, 59 merged and
+reviewed, and 60 opened (rank 5). This is a
 timestamped observation, not a live counter or a promise of event credit.
 The public page's linked `leaderboard.json` endpoint confirmed this observation
-after PR #59 merged. Its `generated_at` was 2026-10-21T01:00:49.724374+00:00.
+after PR #60 merged. Its `generated_at` was 2026-10-21T01:36:11.928002+00:00.
 The table records completed merges only. The PR carrying a ledger update is
 excluded until GitHub confirms its merge; it is recorded in a later update.
 
@@ -90,7 +90,9 @@ excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | [59](https://github.com/DarshanKrishna-DK/Picfind/pull/59) | Explicit event sponsor publication with private drafts and selected gallery/wall placements | Reviewed, near-budget storage and key-order normalization verified after review, all observations answered, re-reviewed with no actionable findings, all final CI passed, merged |
 
-GitHub currently proves fifty-eight merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51, #52, #53, #54, #55, #56 and #59 were
+| [60](https://github.com/DarshanKrishna-DK/Picfind/pull/60) | Per-currency project budgets with verified expense links | Reviewed, report consistency and URL-filter draft preservation fixed after review, all observations answered, re-reviewed with no actionable findings, all final CI passed, merged |
+
+GitHub currently proves fifty-nine merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51, #52, #53, #54, #55, #56, #59 and #60 were
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 
