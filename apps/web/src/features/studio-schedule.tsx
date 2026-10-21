@@ -324,10 +324,13 @@ function ScheduleEditor({ initial }: { initial: AppointmentSchedule }) {
   return (
     <section className="glass-panel studio-schedule">
       <h1>Private schedule</h1>
+      <Link to="/app/availability" className="button secondary">
+        Manage unavailable time
+      </Link>
       <p>
         Reserve time for your own projects. Scheduled appointments cannot
-        overlap. These records do not send client invitations or reserve an
-        external calendar.
+        overlap each other or active unavailable-time blocks. These records do
+        not send client invitations or reserve an external calendar.
       </p>
       <p>
         {schedule.appointments.length} of {schedule.totalCount} appointments

@@ -84,12 +84,18 @@ const rawFields = z
     status: z.enum(['scheduled', 'cancelled']),
   })
   .strict();
-function validInterval(value: z.infer<typeof rawFields>) {
+export function validScheduleInterval(
+  value: Pick<
+    z.infer<typeof rawFields>,
+    'startAt' | 'endAt' | 'startLocal' | 'endLocal' | 'timeZone'
+  >,
+  maxDays = 7,
+) {
   const start = Date.parse(value.startAt),
     end = Date.parse(value.endAt);
   return (
     end > start &&
-    end - start <= 7 * 86_400_000 &&
+    end - start <= maxDays * 86_400_000 &&
     appointmentOccurrences(value.startLocal, value.timeZone).some(
       (entry) => entry.instant === value.startAt,
     ) &&
@@ -98,6 +104,8 @@ function validInterval(value: z.infer<typeof rawFields>) {
     )
   );
 }
+const validInterval = (value: z.infer<typeof rawFields>) =>
+  validScheduleInterval(value);
 export const appointmentFields = rawFields.refine(
   validInterval,
   'Choose valid timezone occurrences and an end after the start, no more than seven days later.',
