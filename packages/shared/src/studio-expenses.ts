@@ -46,6 +46,7 @@ export const expenseWrite = z
   .object({
     ...fields,
     generation: z.uuid().nullable(),
+    confirmProjectLink: z.boolean().optional(),
     version: z
       .number()
       .int()
@@ -61,12 +62,14 @@ export const savedExpense = z
     ...fields,
     id: z.uuid(),
     generation: z.uuid(),
+    projectCreatedAt: z.iso.datetime().nullable().optional(),
     version,
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })
   .strict()
   .refine(budget(6000))
+  .refine((value) => value.projectId !== null || !value.projectCreatedAt)
   .refine(
     (value) => Date.parse(value.createdAt) <= Date.parse(value.updatedAt),
   );
@@ -144,7 +147,13 @@ export const expenseJournal = z
     totals: z.array(total).max(4),
     projects: z
       .array(
-        z.object({ id: z.uuid(), name: z.string().min(1).max(100) }).strict(),
+        z
+          .object({
+            id: z.uuid(),
+            name: z.string().min(1).max(100),
+            createdAt: z.iso.datetime(),
+          })
+          .strict(),
       )
       .max(500),
   })
@@ -206,6 +215,7 @@ export function expenseCsv(entries: ExpenseView[]) {
         'Reference',
         'Note',
         'Version',
+        'Project creation identity',
       ],
       ...values.map(({ entry, projectName, projectUnavailable }) => [
         entry.id,
@@ -222,6 +232,7 @@ export function expenseCsv(entries: ExpenseView[]) {
         entry.reference,
         entry.note,
         entry.version,
+        entry.projectCreatedAt ?? '',
       ]),
     ]
       .map((row) => row.map(cell).join(','))

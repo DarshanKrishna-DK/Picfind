@@ -18,6 +18,8 @@ export async function removeProjectStudioWork(
     !row.eventId &&
     ((row.purpose === 'studio-milestone' &&
       row.studioMilestone?.projectId === projectId) ||
+      (row.purpose === 'project-budget' &&
+        row.projectBudget?.projectId === projectId) ||
       (row.purpose === 'studio-appointment' &&
         row.studioAppointment?.projectId === projectId) ||
       (row.purpose === 'studio-questionnaire' &&
