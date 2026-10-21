@@ -523,6 +523,12 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
                 >
                   Cost budget
                 </Link>
+                <Link
+                  className="button secondary"
+                  to={`/app/projects/${selected.project.id}/brief`}
+                >
+                  Production brief
+                </Link>
               </p>
               <h3>Recent stage history</h3>
               <p>

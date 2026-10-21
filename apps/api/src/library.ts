@@ -78,6 +78,7 @@ import { createStudioExpenses } from './studio-expenses.js';
 import { createProjectBudgets } from './project-budgets.js';
 import { createCoverageTemplates } from './coverage-templates.js';
 import { createEventDeadlines } from './event-deadlines.js';
+import { createProjectBrief } from './project-brief.js';
 import { createStudioPortfolio } from './studio-portfolio.js';
 import { createEnquiryHandoff } from './enquiry-handoff.js';
 import { createUploadPreflight } from './upload-preflight.js';
@@ -758,6 +759,7 @@ export function createLibraryRouter(
   router.use(createProjectBudgets(store, owner));
   router.use(createCoverageTemplates(store, owner));
   router.use(createEventDeadlines(store, owner));
+  router.use(createProjectBrief(store, owner));
   router.use(createStudioPortfolio(store, owner, sendPhoto));
   router.use(createEnquiryHandoff(store, owner));
   router.use(createStudioProposals(auth, store, owner));
