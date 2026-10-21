@@ -24,6 +24,8 @@ async function fixture(page: Page) {
     holdRead: false,
     held: false,
     release: null as (() => void) | null,
+    reorder: false,
+    reorderedResponses: 0,
   };
   await page.route('**/api/**', async (route) => {
     const incoming = route.request(),
@@ -57,6 +59,24 @@ async function fixture(page: Page) {
         call = call.set(header, incoming.headers()[header]!);
     if (incoming.postData()) call = call.send(incoming.postDataJSON());
     const response = await call;
+    if (
+      state.reorder &&
+      path.startsWith(f.templateRoot) &&
+      response.status === 200
+    ) {
+      const reverseKeys = (value: unknown): unknown =>
+        Array.isArray(value)
+          ? value.map(reverseKeys)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(
+                Object.entries(value)
+                  .reverse()
+                  .map(([key, entry]) => [key, reverseKeys(entry)]),
+              )
+            : value;
+      state.reorderedResponses++;
+      return route.fulfill({ status: 200, json: reverseKeys(response.body) });
+    }
     if (
       method === 'put' &&
       path.startsWith(f.templateRoot) &&
@@ -392,6 +412,24 @@ test('preserves the coverage draft during failed refresh and hides templates aft
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Refresh templates', exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole('button', { name: 'Refresh templates', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Refresh templates', exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('combobox', { name: 'Reviewed template', exact: true }),
+  ).toHaveValue(f.templateId);
+  await expect(
+    page.getByRole('button', {
+      name: 'Replace draft with template',
+      exact: true,
+    }),
+  ).toBeDisabled();
   f.state.failRead = false;
   await page
     .getByRole('button', { name: 'Refresh templates', exact: true })
@@ -407,4 +445,47 @@ test('preserves the coverage draft during failed refresh and hides templates aft
   await expect(
     page.getByText('Include both generations', { exact: true }),
   ).toHaveCount(0);
+});
+test('normalizes changed response key order across mutation, directory refresh and final apply reads', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.seed();
+  await f.saveTemplate().expect(200);
+  await f.open();
+  await f.select();
+  f.state.reorder = true;
+  await f.focus();
+  await expect.poll(() => f.state.reorderedResponses).toBeGreaterThan(0);
+  await expect(
+    page.getByRole('button', {
+      name: 'Update selected template from draft',
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await page
+    .getByRole('button', {
+      name: 'Update selected template from draft',
+      exact: true,
+    })
+    .click();
+  await expect(templates(page).getByRole('status')).toContainText(
+    'Reusable template saved',
+  );
+  await f.focus();
+  await expect.poll(() => f.state.reorderedResponses).toBeGreaterThan(2);
+  await expect(
+    page.getByRole('button', {
+      name: 'Replace draft with template',
+      exact: true,
+    }),
+  ).toBeEnabled();
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page
+    .getByRole('button', { name: 'Replace draft with template', exact: true })
+    .click();
+  await expect(templates(page).getByRole('status')).toContainText(
+    'Template applied to the local draft',
+  );
+  expect(f.state.reorderedResponses).toBeGreaterThan(3);
 });
