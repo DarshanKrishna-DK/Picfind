@@ -26,7 +26,11 @@ const changed = () =>
     'APPOINTMENT_CHANGED',
     'This appointment changed. Reload the schedule before saving again.',
   );
-function read(row: LibraryRecord, actorId: string, id = row.id) {
+export function readAppointmentRecord(
+  row: LibraryRecord,
+  actorId: string,
+  id = row.id,
+) {
   if (
     row.id !== id ||
     row.ownerId !== actorId ||
@@ -51,6 +55,7 @@ function read(row: LibraryRecord, actorId: string, id = row.id) {
     );
   return { row, appointment: parsed.data };
 }
+const read = readAppointmentRecord;
 export function createStudioAppointments(
   getStore: () => LibraryStore,
   owner: (req: Request) => Promise<string>,

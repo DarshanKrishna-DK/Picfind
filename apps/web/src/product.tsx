@@ -22,6 +22,7 @@ import { StudioEnquiries, PublicEnquiry } from './features/studio-enquiries';
 import { StudioServices } from './features/studio-services';
 import { StudioExpenses } from './features/studio-expenses';
 import { ProjectBudgets } from './features/project-budgets';
+import { ProjectProductionBrief } from './features/project-brief';
 import { EventDeadlines } from './features/event-deadlines';
 import { EnquiryProjectHandoff } from './features/enquiry-handoff';
 import {
@@ -107,6 +108,10 @@ export function Product() {
         />
         <Route path="projects" element={<StudioProjects />} />
         <Route path="projects/:projectId/budget" element={<ProjectBudgets />} />
+        <Route
+          path="projects/:projectId/brief"
+          element={<ProjectProductionBrief />}
+        />
         <Route
           path="projects/:projectId/proposals"
           element={<ProjectProposals />}

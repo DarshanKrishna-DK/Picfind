@@ -25,7 +25,11 @@ const changed = () =>
     'MILESTONE_CHANGED',
     'This milestone changed. Load the latest work queue before saving again.',
   );
-function read(row: LibraryRecord, actorId: string, id = row.id) {
+export function readMilestoneRecord(
+  row: LibraryRecord,
+  actorId: string,
+  id = row.id,
+) {
   if (
     row.id !== id ||
     row.ownerId !== actorId ||
@@ -50,6 +54,7 @@ function read(row: LibraryRecord, actorId: string, id = row.id) {
     );
   return { row, milestone: parsed.data };
 }
+const read = readMilestoneRecord;
 async function maybe(store: LibraryStore, id: string) {
   try {
     return await store.get(id);
