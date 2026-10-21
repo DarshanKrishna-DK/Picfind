@@ -123,9 +123,9 @@ export const savedEnquiry = enquiryFields
   .refine(
     (row) =>
       Date.parse(row.createdAt) <= Date.parse(row.updatedAt) &&
-      row.history[0]!.stage === 'new' &&
-      row.history[0]!.at === row.createdAt &&
-      row.history.at(-1)!.stage === row.stage &&
+      row.history[0]?.stage === 'new' &&
+      row.history[0]?.at === row.createdAt &&
+      row.history.at(-1)?.stage === row.stage &&
       row.history.every(
         (entry, i) =>
           Date.parse(entry.at) <= Date.parse(row.updatedAt) &&

@@ -49,6 +49,31 @@ function uuid(value: unknown) {
   if (!parsed.success) throw unavailable();
   return parsed.data;
 }
+export function readStudioEnquiry(
+  row: LibraryRecord,
+  ownerId: string,
+  id = row.id,
+): Enquiry {
+  if (
+    row.id !== id ||
+    row.kind !== 'job' ||
+    row.ownerId !== ownerId ||
+    row.purpose !== 'studio-enquiry' ||
+    row.eventId ||
+    row.deletionStartedAt !== undefined ||
+    row.deletionCompletedAt !== undefined
+  )
+    throw unavailable();
+  const value = savedEnquiry.safeParse(row.studioEnquiry);
+  if (
+    !value.success ||
+    value.data.id !== id ||
+    value.data.createdAt !== row.createdAt ||
+    value.data.formId !== enquiryFormId(ownerId)
+  )
+    throw invalid();
+  return value.data;
+}
 export function createStudioEnquiries(
   getStore: () => LibraryStore,
   owner: (req: Request) => Promise<string>,
@@ -125,16 +150,7 @@ export function createStudioEnquiries(
     ownerId: string,
     id = row.id,
   ): Enquiry {
-    scope(row, id, ownerId, 'studio-enquiry');
-    const value = savedEnquiry.safeParse(row.studioEnquiry);
-    if (
-      !value.success ||
-      value.data.id !== id ||
-      value.data.createdAt !== row.createdAt ||
-      value.data.formId !== enquiryFormId(ownerId)
-    )
-      throw invalid();
-    return value.data;
+    return readStudioEnquiry(row, ownerId, id);
   }
   async function owned(id: string, ownerId: string) {
     const row = await get(id);

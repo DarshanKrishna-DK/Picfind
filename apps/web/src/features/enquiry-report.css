@@ -1,0 +1,62 @@
+.enquiry-report {
+  max-width: 75rem;
+}
+.report-controls {
+  border: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.report-controls legend,
+.report-controls p,
+.report-controls .report-disclosure {
+  grid-column: 1 / -1;
+}
+.report-controls .report-disclosure {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem;
+}
+.report-disclosure input[type='checkbox'] {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+}
+.report-counts {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  align-items: start;
+}
+.enquiry-report table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+.enquiry-report caption {
+  text-align: left;
+  font-weight: 700;
+  padding: 0.75rem 0;
+}
+.enquiry-report th,
+.enquiry-report td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.report-rows {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.report-rows table {
+  min-width: 42rem;
+}
+@media (max-width: 600px) {
+  .report-controls,
+  .report-counts {
+    grid-template-columns: 1fr;
+  }
+}

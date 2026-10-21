@@ -13,6 +13,7 @@ import {
   type CalendarAlarm,
 } from '../../../../packages/shared/src/event-deadlines';
 import './event-deadlines.css';
+import { exportNavigationGuard } from '../export-navigation';
 
 const labels = {
   soon: 'Within 7 days',
@@ -83,16 +84,17 @@ function Planner({ accountId }: { accountId: string }) {
   async function download() {
     if (busy || query.isFetching || query.error || pending.current) return;
     const controller = new AbortController();
+    const assertActive = exportNavigationGuard(controller);
     pending.current = controller;
     setBusy(true);
     setError(null);
     setMessage('');
     try {
       const current = await read(controller.signal);
-      controller.signal.throwIfAborted();
+      assertActive();
       cache.setQueryData(key, current);
       const output = exportDeadlineCalendar(current, filters, alarm);
-      controller.signal.throwIfAborted();
+      assertActive();
       saveFile(
         new Blob([output.content], { type: 'text/calendar;charset=utf-8' }),
         'picfind-event-access-deadlines.ics',

@@ -10,6 +10,7 @@ import {
   type BriefNoteMode,
 } from '../../../../packages/shared/src/project-brief';
 import './project-brief.css';
+import { exportNavigationGuard } from '../export-navigation';
 
 export function ProjectProductionBrief() {
   const { projectId = '' } = useParams();
@@ -78,13 +79,14 @@ function Brief({
   async function download(format: 'text' | 'json') {
     if (busy || pending.current || query.isFetching || query.error) return;
     const controller = new AbortController();
+    const assertActive = exportNavigationGuard(controller);
     pending.current = controller;
     setBusy(true);
     setError(null);
     setMessage('');
     try {
       const fresh = await read(controller.signal);
-      controller.signal.throwIfAborted();
+      assertActive();
       cache.setQueryData(key, fresh);
       const output = exportProjectBrief(fresh, format);
       saveFile(
