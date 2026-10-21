@@ -393,3 +393,59 @@ smoke used two generated blank JPEGs plus an invalid JPEG: two committed and one
 failed. After repairing that generated fixture, the next process stored one and
 reused two, leaving three indexed photos with zero faces. This verifies runtime
 and recovery behavior, not recognition accuracy.
+
+## Authenticated backups and restore drills
+
+`backup.py` snapshots an existing local encrypted index and verifies recovery in
+an isolated temporary directory. It requires the existing 32-byte index key and
+pinned Python cryptography environment. It needs no API key, GPU, model download
+or AWS connection. Keep the key separately protected: losing it makes the backup
+unrecoverable, and anyone with both the key and bundle can decrypt face artifacts.
+
+Use a private, non-synced local directory with owner-only access. These commands
+use generated-fixture paths only:
+
+```powershell
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/backup.py snapshot --input artifacts/private-evaluation/index.sqlite --key-file artifacts/private-evaluation/index.key --output artifacts/private-evaluation/index-backup.zip
+artifacts/face-eval-venv/Scripts/python.exe scripts/face-runtime/backup.py restore-drill --input artifacts/private-evaluation/index-backup.zip --key-file artifacts/private-evaluation/index.key --output artifacts/private-evaluation/restore-report.json
+```
+
+Every output must be new. Publication uses an exclusive hard link on the same
+filesystem and never replaces an existing file. Symbolic links, junctions, UNC
+paths and mapped network drives are rejected. POSIX files use mode `0600`;
+Windows directory ACLs remain the operator's responsibility. This is a trusted
+operator utility, not protection against another process running as that owner.
+
+The snapshot uses SQLite's consistent backup API, including committed WAL data,
+without checkpointing or mutating the source. The uncompressed ZIP has exactly
+two entries: the encrypted index and an HMAC-SHA256 authenticated manifest.
+The signature key is domain-separated from the existing encryption key.
+The manifest binds the database size, SHA-256, timestamp and verified aggregate
+counts. Scope IDs and index metadata remain plaintext inside the database;
+encryption covers face artifacts, not the complete ZIP.
+
+The drill bounds the archive directory before parsing it, authenticates the
+manifest, streams and hashes the temporary database, and validates SQLite
+integrity, schema, scope limits, encrypted live artifacts and tombstones.
+It authenticates one artifact at a time instead of loading all vectors.
+It deletes the temporary database before publishing a success report.
+The report contains aggregate counts and timestamps, without scope/photo IDs,
+paths, consent references or vectors. Failure exits `1` with a sanitized code;
+success exits `0`. Ordinary failures clean temporary files. A terminated process
+may leave private temporary files that require operator cleanup.
+
+`--max-bytes` defaults to 256 MiB and accepts 4 KiB through 2 GiB. Snapshot
+preflight requires space for twice this budget plus 16 MiB and archive overhead;
+the drill requires the signed database size plus 16 MiB. These are additional
+disk allocations beyond the source, key and existing bundle. Decrypted artifact
+memory is bounded by the existing per-artifact limit, with at most 1,000 scopes,
+5,000 photo identities and 20,000 live faces per scope. `--deadline` defaults
+to 120 seconds and accepts 1 through 600 seconds. Checks occur between stream
+chunks, records, SQLite backup batches and query progress callbacks. This is
+not an operating-system hard I/O or memory limit.
+
+A successful drill does not prove that old consent is still valid. A backup
+cannot reveal revocations or deletions made after its snapshot. The command
+therefore never publishes an active restored database, enables local matching
+or changes AWS Rekognition. Production recovery still requires current consent
+and retention reconciliation, key custody and an approved recovery procedure.
