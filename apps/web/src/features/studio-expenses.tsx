@@ -75,7 +75,7 @@ export function StudioExpenses() {
     );
   return (
     <Journal
-      key={`${account.data.id}:${initialProject}`}
+      key={account.data.id}
       accountId={account.data.id}
       initialProject={initialProject}
     />
@@ -89,6 +89,7 @@ function Journal({
   initialProject: string;
 }) {
   const [confirmProjectLink, setConfirmProjectLink] = useState(false);
+  const [appliedScope, setAppliedScope] = useState(initialProject);
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
       direction: 'all',
@@ -171,6 +172,18 @@ function Journal({
     editing &&
     (JSON.stringify(draft) !== JSON.stringify(fieldsOf(baseline)) ||
       amount !== minorToDecimal(baseline?.amountMinor ?? null));
+  const requestedScopePending = initialProject !== appliedScope;
+  useEffect(() => {
+    if (requestedScopePending && !dirty && !busy) {
+      setAppliedScope(initialProject);
+      setFilters((currentFilters) => ({
+        ...currentFilters,
+        project: initialProject,
+      }));
+      setOffset(0);
+      closeEditor();
+    }
+  }, [requestedScopePending, initialProject, dirty, busy]);
   const leave = () =>
     !dirty || window.confirm('Discard this unsaved expense draft?');
   function load(row: StudioExpense | null) {
@@ -359,6 +372,31 @@ function Journal({
       </p>
       <ErrorNote error={error || query.error || selectedError} />
       <p role="status">{message}</p>
+      {requestedScopePending && (
+        <div role="status">
+          <p>
+            The requested project filter is waiting. Your current expense draft
+            is preserved.
+          </p>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={() => {
+              if (!leave()) return;
+              setAppliedScope(initialProject);
+              setFilters((currentFilters) => ({
+                ...currentFilters,
+                project: initialProject,
+              }));
+              setOffset(0);
+              closeEditor();
+            }}
+          >
+            Load requested project filter
+          </button>
+        </div>
+      )}
       <div className="expense-actions">
         <button
           className="button"

@@ -287,6 +287,54 @@ test('hides a malformed cost report instead of displaying a false zero over-budg
     page.getByRole('button', { name: 'Save budget', exact: true }),
   ).toBeDisabled();
 });
+test('preserves an unsaved expense when the project URL changes and requires confirmation to discard it', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.save().expect(200);
+  await page.goto('/app/expenses');
+  await page
+    .getByRole('button', { name: 'Edit entry: Train to event', exact: true })
+    .click();
+  await page
+    .getByLabel('Entry title', { exact: true })
+    .fill('Unfinished travel correction');
+  await page.evaluate((id) => {
+    window.history.pushState({}, '', `/app/expenses?project=${id}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, f.projectId);
+  await expect(
+    page.getByText(
+      'The requested project filter is waiting. Your current expense draft is preserved.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel('Entry title', { exact: true })).toHaveValue(
+    'Unfinished travel correction',
+  );
+  await expect(
+    page.getByRole('combobox', { name: 'Project filter', exact: true }),
+  ).toHaveValue('all');
+  page.removeAllListeners('dialog');
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await page
+    .getByRole('button', { name: 'Load requested project filter', exact: true })
+    .click();
+  await expect(page.getByLabel('Entry title', { exact: true })).toHaveValue(
+    'Unfinished travel correction',
+  );
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page
+    .getByRole('button', { name: 'Load requested project filter', exact: true })
+    .click();
+  await expect(page.getByLabel('Entry title', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: 'Project filter', exact: true }),
+  ).toHaveValue(f.projectId);
+  expect(f.records.get(f.expenseId)!.studioExpense!.title).toBe(
+    'Train to event',
+  );
+});
 test('rejects invalid decimal input and clears a limit without removing journal costs', async ({
   page,
 }) => {
