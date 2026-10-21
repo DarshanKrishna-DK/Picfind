@@ -517,6 +517,12 @@ function ProjectEditor({ initial }: { initial: ProjectDirectory }) {
                 >
                   Package proposals
                 </Link>
+                <Link
+                  className="button secondary"
+                  to={`/app/projects/${selected.project.id}/budget`}
+                >
+                  Cost budget
+                </Link>
               </p>
               <h3>Recent stage history</h3>
               <p>

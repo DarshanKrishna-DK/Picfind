@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { useSearchParams } from 'react-router';
 import { api, HttpError, saveFile, session } from '../api';
 import { ErrorNote, Loading, PageTitle } from '../components/ui';
 import {
@@ -55,6 +56,10 @@ const fieldsOf = (row: StudioExpense | null): ExpenseFields =>
       }
     : blank();
 export function StudioExpenses() {
+  const [search] = useSearchParams();
+  const initialProject = z.uuid().safeParse(search.get('project')).success
+    ? search.get('project')!
+    : 'all';
   const account = useQuery({
     queryKey: ['session'],
     queryFn: session,
@@ -68,16 +73,30 @@ export function StudioExpenses() {
         error={account.error ?? new Error('Sign in to manage expenses.')}
       />
     );
-  return <Journal key={account.data.id} accountId={account.data.id} />;
+  return (
+    <Journal
+      key={account.data.id}
+      accountId={account.data.id}
+      initialProject={initialProject}
+    />
+  );
 }
-function Journal({ accountId }: { accountId: string }) {
+function Journal({
+  accountId,
+  initialProject,
+}: {
+  accountId: string;
+  initialProject: string;
+}) {
+  const [confirmProjectLink, setConfirmProjectLink] = useState(false);
+  const [appliedScope, setAppliedScope] = useState(initialProject);
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
       direction: 'all',
       category: 'all',
       from: '',
       to: '',
-      project: 'all',
+      project: initialProject,
       search: '',
     }),
     [offset, setOffset] = useState(0),
@@ -153,9 +172,22 @@ function Journal({ accountId }: { accountId: string }) {
     editing &&
     (JSON.stringify(draft) !== JSON.stringify(fieldsOf(baseline)) ||
       amount !== minorToDecimal(baseline?.amountMinor ?? null));
+  const requestedScopePending = initialProject !== appliedScope;
+  useEffect(() => {
+    if (requestedScopePending && !dirty && !busy) {
+      setAppliedScope(initialProject);
+      setFilters((currentFilters) => ({
+        ...currentFilters,
+        project: initialProject,
+      }));
+      setOffset(0);
+      closeEditor();
+    }
+  }, [requestedScopePending, initialProject, dirty, busy]);
   const leave = () =>
     !dirty || window.confirm('Discard this unsaved expense draft?');
   function load(row: StudioExpense | null) {
+    setConfirmProjectLink(false);
     setBaseline(row);
     setDraft(fieldsOf(row));
     setAmount(minorToDecimal(row?.amountMinor ?? null));
@@ -214,15 +246,32 @@ function Journal({ accountId }: { accountId: string }) {
     setError(null);
   }
   const amountMinor = decimalToMinor(amount);
+  const linkedProject = query.data?.projects.find(
+    (row) => row.id === draft.projectId,
+  );
+  const linkNeedsReview =
+    !!baseline &&
+    draft.projectId !== null &&
+    baseline.projectId === draft.projectId &&
+    linkedProject !== undefined &&
+    linkedProject.createdAt !== baseline.projectCreatedAt;
   const command = expenseWrite.safeParse({
     ...draft,
     amountMinor,
     version: baseline?.version ?? 0,
     generation: baseline?.generation ?? null,
+    ...(confirmProjectLink ? { confirmProjectLink: true } : {}),
   });
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!command.success || stale || fetching || query.isFetching || busy)
+    if (
+      !command.success ||
+      stale ||
+      fetching ||
+      query.isFetching ||
+      busy ||
+      (linkNeedsReview && !confirmProjectLink)
+    )
       return;
     void run(
       async (signal) => {
@@ -323,6 +372,31 @@ function Journal({ accountId }: { accountId: string }) {
       </p>
       <ErrorNote error={error || query.error || selectedError} />
       <p role="status">{message}</p>
+      {requestedScopePending && (
+        <div role="status">
+          <p>
+            The requested project filter is waiting. Your current expense draft
+            is preserved.
+          </p>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={() => {
+              if (!leave()) return;
+              setAppliedScope(initialProject);
+              setFilters((currentFilters) => ({
+                ...currentFilters,
+                project: initialProject,
+              }));
+              setOffset(0);
+              closeEditor();
+            }}
+          >
+            Load requested project filter
+          </button>
+        </div>
+      )}
       <div className="expense-actions">
         <button
           className="button"
@@ -633,12 +707,13 @@ function Journal({ accountId }: { accountId: string }) {
                     Linked project
                     <select
                       value={draft.projectId ?? ''}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setConfirmProjectLink(false);
                         setDraft({
                           ...draft,
                           projectId: event.target.value || null,
-                        })
-                      }
+                        });
+                      }}
                     >
                       <option value="">Studio overhead</option>
                       {draft.projectId &&
@@ -666,6 +741,19 @@ function Journal({ accountId }: { accountId: string }) {
                       }
                     />
                   </label>
+                  {linkNeedsReview && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={confirmProjectLink}
+                        onChange={(event) =>
+                          setConfirmProjectLink(event.target.checked)
+                        }
+                      />
+                      I reviewed this historical or unverified link and confirm
+                      this expense belongs to the currently selected project.
+                    </label>
+                  )}
                   <label>
                     Private note
                     <textarea
@@ -685,6 +773,7 @@ function Journal({ accountId }: { accountId: string }) {
                       fetching ||
                       query.isFetching ||
                       stale ||
+                      (linkNeedsReview && !confirmProjectLink) ||
                       !command.success
                     }
                   >

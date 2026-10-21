@@ -40,6 +40,31 @@ const invalid = () =>
     'EXPENSE_METADATA_INVALID',
     'Expense metadata needs repair before continuing.',
   );
+export function parseExpenseRecord(
+  row: LibraryRecord,
+  accountId: string,
+  id = row.id,
+) {
+  if (
+    row.id !== id ||
+    row.ownerId !== accountId ||
+    row.kind !== 'job' ||
+    row.purpose !== 'studio-expense' ||
+    row.eventId ||
+    row.deletionStartedAt !== undefined ||
+    row.deletionCompletedAt !== undefined
+  )
+    throw unavailable();
+  const value = savedExpense.safeParse(row.studioExpense);
+  if (
+    !value.success ||
+    value.data.id !== id ||
+    value.data.createdAt !== row.createdAt ||
+    !/^[a-f0-9]{64}$/.test(row.expenseCommandDigest ?? '')
+  )
+    throw invalid();
+  return value.data;
+}
 export function createStudioExpenses(
   getStore: () => LibraryStore,
   owner: (req: Request) => Promise<string>,
@@ -69,25 +94,7 @@ export function createStudioExpenses(
     }
   }
   function parse(row: LibraryRecord, accountId: string, id = row.id) {
-    if (
-      row.id !== id ||
-      row.ownerId !== accountId ||
-      row.kind !== 'job' ||
-      row.purpose !== 'studio-expense' ||
-      row.eventId ||
-      row.deletionStartedAt !== undefined ||
-      row.deletionCompletedAt !== undefined
-    )
-      throw unavailable();
-    const value = savedExpense.safeParse(row.studioExpense);
-    if (
-      !value.success ||
-      value.data.id !== id ||
-      value.data.createdAt !== row.createdAt ||
-      !/^[a-f0-9]{64}$/.test(row.expenseCommandDigest ?? '')
-    )
-      throw invalid();
-    return value.data;
+    return parseExpenseRecord(row, accountId, id);
   }
   async function get(id: string, accountId: string) {
     const row = await maybe(id);
@@ -104,7 +111,7 @@ export function createStudioExpenses(
     )
       throw invalid();
     const values = rows.map((row) => parse(row, accountId));
-    const projects: Array<{ id: string; name: string }> = [];
+    const projects: Array<{ id: string; name: string; createdAt: string }> = [];
     for (const row of jobs) {
       if (
         row.ownerId !== accountId ||
@@ -114,7 +121,11 @@ export function createStudioExpenses(
         continue;
       try {
         const value = ownedProjectRecord(row, accountId);
-        projects.push({ id: value.project.id, name: value.project.name });
+        projects.push({
+          id: value.project.id,
+          name: value.project.name,
+          createdAt: value.project.createdAt,
+        });
       } catch (failure) {
         if (!(failure instanceof ApiError)) throw failure;
       }
@@ -177,10 +188,14 @@ export function createStudioExpenses(
   }
   function view(
     entry: StudioExpense,
-    projects: Array<{ id: string; name: string }>,
+    projects: Array<{ id: string; name: string; createdAt: string }>,
   ) {
     const projectName =
-      projects.find((row) => row.id === entry.projectId)?.name ?? null;
+      projects.find(
+        (row) =>
+          row.id === entry.projectId &&
+          row.createdAt === entry.projectCreatedAt,
+      )?.name ?? null;
     return {
       entry,
       projectName,
@@ -257,7 +272,7 @@ export function createStudioExpenses(
         'INVALID_EXPENSE',
         'Enter a title, valid date, positive amount and current numeric revision.',
       );
-    const { generation, version, ...fields } = input.data,
+    const { generation, version, confirmProjectLink, ...fields } = input.data,
       digest = createHash('sha256')
         .update(JSON.stringify(input.data))
         .digest('hex');
@@ -289,11 +304,23 @@ export function createStudioExpenses(
           'Export and remove old journal records before adding another.',
         );
       const project = await projectReference(accountId, fields.projectId);
+      if (
+        project &&
+        current?.value.projectId === project.id &&
+        current.value.projectCreatedAt !== project.createdAt &&
+        !confirmProjectLink
+      )
+        throw new ApiError(
+          409,
+          'EXPENSE_LINK_REVIEW_REQUIRED',
+          'Review and explicitly confirm this expense belongs to the current project before saving.',
+        );
       const now = new Date(
         Math.max(Date.now(), current ? Date.parse(current.value.updatedAt) : 0),
       ).toISOString();
       const next = savedExpense.parse({
         ...fields,
+        projectCreatedAt: project?.createdAt ?? null,
         id,
         generation: current?.value.generation ?? randomUUID(),
         version: version + 1,
