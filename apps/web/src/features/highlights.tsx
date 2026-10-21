@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api, HttpError, session, type Photo } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { PhotoGrid } from '../components/photo-grid';
+import { SponsorCredits } from './event-sponsors';
+import type { PublishedSponsors } from '../../../../packages/shared/src/event-sponsors';
 import {
   HIGHLIGHT_PHOTO_LIMIT,
   type HighlightDraft,
@@ -277,10 +279,12 @@ export function HighlightsPage() {
   const query = useQuery({
     queryKey: ['public-highlights', eventId, account.data?.id],
     queryFn: ({ signal }) =>
-      api<{ title: string; coverId: string | null; photos: Photo[] }>(
-        `/public/highlights/${eventId}`,
-        { signal },
-      ),
+      api<{
+        title: string;
+        coverId: string | null;
+        photos: Photo[];
+        sponsors?: PublishedSponsors;
+      }>(`/public/highlights/${eventId}`, { signal }),
     enabled: Boolean(account.data),
     gcTime: 0,
     staleTime: 0,
@@ -336,6 +340,10 @@ export function HighlightsPage() {
                   photoUrl={(photoId) =>
                     `/api/public/highlights/${encodeURIComponent(eventId!)}/photos/${encodeURIComponent(photoId)}`
                   }
+                />
+                <SponsorCredits
+                  sponsors={query.data.sponsors}
+                  placement="gallery"
                 />
               </>
             )

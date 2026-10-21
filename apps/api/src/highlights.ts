@@ -6,6 +6,7 @@ import type { LibraryRecord, LibraryStore } from './library.js';
 import { photoAvailable } from './retention.js';
 import { withAccountLock } from './locks.js';
 import { publishedAttribution } from '../../../packages/shared/src/photo-attribution.js';
+import { publishedSponsors } from './event-sponsors.js';
 import {
   emptyHighlights,
   highlightFields,
@@ -262,13 +263,18 @@ export function createHighlights(
     await actorOf(req);
     const eventId = id(req.params.id);
     const initial = await published(eventId);
+    const sponsorSnapshot = await publishedSponsors(getStore(), initial.event);
     const photos = await photosOf(initial.event, initial.highlights.photoIds);
+    const sponsors = await publishedSponsors(getStore(), initial.event);
+    if (JSON.stringify(sponsors) !== JSON.stringify(sponsorSnapshot))
+      throw missing();
     const latest = await published(eventId, initial.event.ownerId);
     if (latest.highlights.version !== initial.highlights.version)
       throw missing();
     res.json({
       title: latest.highlights.title,
       coverId: photos[0]?.id ?? null,
+      ...(sponsors ? { sponsors } : {}),
       photos: photos.map((photo) => {
         const credit = publishedAttribution(photo.attribution);
         return {
