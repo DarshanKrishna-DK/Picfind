@@ -1,0 +1,34 @@
+.upload-preflight {
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.upload-preflight h4 {
+  margin: 0;
+}
+.upload-preflight dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem 1rem;
+  align-items: baseline;
+}
+.upload-preflight dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.upload-preflight .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+@media (max-width: 480px) {
+  .upload-preflight {
+    padding: 0.85rem;
+  }
+}

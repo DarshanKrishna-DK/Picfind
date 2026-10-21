@@ -77,6 +77,7 @@ import { createStudioServices } from './studio-services.js';
 import { createStudioExpenses } from './studio-expenses.js';
 import { createStudioPortfolio } from './studio-portfolio.js';
 import { createEnquiryHandoff } from './enquiry-handoff.js';
+import { createUploadPreflight } from './upload-preflight.js';
 import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
@@ -773,6 +774,7 @@ export function createLibraryRouter(
   router.get('/usage', async (req, res) => {
     res.json(await processingUsage(store(), await owner(req)));
   });
+  router.use(createUploadPreflight(store, owner, limits, requireAccounting));
   router.use(
     createCloudSources(
       auth,

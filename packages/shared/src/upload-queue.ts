@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { folderMappingsSchema, relativePhotoPath } from './folder-import';
+import { folderMappingsSchema, relativePhotoPath } from './folder-import.js';
 
 export const UPLOAD_QUEUE_LIMIT = 100;
 export const UPLOAD_FILE_LIMIT = 8 * 1024 * 1024;
