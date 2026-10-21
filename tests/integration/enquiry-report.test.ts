@@ -3,6 +3,7 @@ import request from 'supertest';
 import { describe, it, expect, vi } from 'vitest';
 import { enquiryReportFixture } from '../fixtures/enquiry-report';
 import { ApiError } from '../../apps/api/src/auth';
+import { readStudioEnquiry } from '../../apps/api/src/studio-enquiries';
 import {
   ENQUIRY_REPORT_ACTOR,
   enquiryReport,
@@ -242,5 +243,61 @@ describe('complete private enquiry reports', () => {
       })
       .expect(204);
     await f.report().expect(401);
+  });
+  it('returns a controlled metadata error for an empty stored session type', async () => {
+    const f = await enquiryReportFixture();
+    f.records.get(f.ids[0]!)!.studioEnquiry!.sessionType = '';
+    const r = await f.report().expect(503);
+    expect(r.body.error.code).toBe('ENQUIRY_METADATA_INVALID');
+  });
+  it('preserves every existing scope condition in the extracted record reader', async () => {
+    const f = await enquiryReportFixture(),
+      row = f.records.get(f.ids[0]!)!;
+    for (const changed of [
+      { ...row, id: randomUUID() },
+      { ...row, ownerId: f.strangerId },
+      { ...row, kind: 'event' as const },
+      { ...row, purpose: 'studio-client' as const },
+      { ...row, eventId: randomUUID() },
+      { ...row, deletionStartedAt: '' },
+      { ...row, deletionCompletedAt: '' },
+    ]) {
+      try {
+        readStudioEnquiry(changed, f.ownerId, row.id);
+        throw new Error('Invalid scope accepted');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ApiError);
+        expect((error as ApiError).status).toBe(404);
+      }
+    }
+  });
+  it('accepts reordered stored object keys and excludes the actual saved private note from both formats', async () => {
+    const f = await enquiryReportFixture(),
+      get = f.store.get.bind(f.store);
+    const actualNote = 'Distinct private report exclusion evidence';
+    f.records.get(f.ids[0]!)!.studioEnquiry!.note = actualNote;
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      const row = await get(id);
+      return {
+        ...Object.fromEntries(Object.entries(row).reverse()),
+        studioEnquiry: row.studioEnquiry
+          ? Object.fromEntries(Object.entries(row.studioEnquiry).reverse())
+          : row.studioEnquiry,
+      } as typeof row;
+    });
+    const r = await f.report({ contacts: 'include' }).expect(200);
+    expect(JSON.stringify(r.body)).not.toContain(actualNote);
+    expect(enquiryReportCsv(r.body)).not.toContain(actualNote);
+    expect(Object.keys(r.body.rows[0]).sort()).toEqual(
+      [
+        'contact',
+        'createdAt',
+        'date',
+        'id',
+        'sessionType',
+        'stage',
+        'updatedAt',
+      ].sort(),
+    );
   });
 });

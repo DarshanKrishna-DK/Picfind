@@ -260,7 +260,7 @@ test('locks filters and cancels a pending export when leaving the report', async
   await expect.poll(() => f.state.completed).toBeGreaterThan(completed);
   expect(downloads).toBe(0);
 });
-test('rejects a completed export after the URL changes even before an unmount effect can run', async ({
+test('rejects a completed export after a URL change without requiring React unmount cleanup', async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -293,4 +293,46 @@ test('rejects a completed export after the URL changes even before an unmount ef
   ).toBeEnabled();
   expect(downloads).toBe(0);
   expect((await f.download()).split('\r\n')).toHaveLength(6);
+});
+test('holds the displayed nondefault filters during export while allowing an in-page anchor change', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.open();
+  await page
+    .getByRole('combobox', { name: 'Report stage', exact: true })
+    .selectOption('qualified');
+  await page
+    .getByLabel('Session type contains', { exact: true })
+    .fill('portrait');
+  await expect(results(page)).toContainText(
+    '1 matching enquiries of 4 retained.',
+  );
+  f.state.hold = true;
+  const pending = f.download();
+  await expect.poll(() => f.state.held).toBe(true);
+  await expect(
+    page.getByRole('combobox', { name: 'Report stage', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel('Session type contains', { exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel('Received from (UTC)', { exact: true }),
+  ).toBeDisabled();
+  await page.evaluate(() =>
+    window.history.pushState({}, '', window.location.pathname + '#counts'),
+  );
+  f.state.hold = false;
+  f.state.release!();
+  const csv = await pending;
+  expect(csv).toContain(f.ids[1]!);
+  expect(csv.split('\r\n')).toHaveLength(3);
+  expect(csv).not.toContain(f.ids[0]!);
+  await expect(results(page)).toContainText(
+    '1 matching enquiries of 4 retained.',
+  );
+  await expect(page.getByRole('status')).toContainText(
+    '1 matching enquiries exported.',
+  );
 });
