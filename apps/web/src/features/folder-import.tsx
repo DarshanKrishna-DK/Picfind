@@ -21,6 +21,7 @@ import {
   type UploadQueueView,
 } from './upload-queue-controller';
 import './folder-import.css';
+import { UploadPreflight } from './upload-preflight';
 
 export function FolderImport({ eventId }: { eventId?: string }) {
   const account = useQuery({
@@ -588,6 +589,10 @@ function FolderPanel({
       )}
       {queue && (
         <>
+          <UploadPreflight
+            queue={queue}
+            disabled={busy || view.externalBusy || !available}
+          />
           <p>
             {completed} of {queue.items.length} uploads acknowledged. Queue:{' '}
             {queue.mode}.

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, HttpError, session } from '../api';
 import { ErrorNote, Loading, errorMessage } from '../components/ui';
+import { UploadPreflight } from './upload-preflight';
 import {
   UPLOAD_QUEUE_LIMIT,
   uploadQueueKey,
@@ -26,6 +27,7 @@ export function SavedUploadQueue({
     queryKey: ['session'],
     queryFn: session,
     retry: false,
+    refetchOnWindowFocus: 'always',
   });
   if (account.isPending) return <Loading />;
   if (!account.data || account.error)
@@ -169,7 +171,10 @@ function QueuePanel({
     const pause = () => instance.pause();
     window.addEventListener('storage', storage);
     window.addEventListener('pagehide', pause);
-    void refresh();
+    // A remounted panel must not contend with its disposed startup instance.
+    void Promise.resolve().then(() => {
+      if (mounted.current && controller.current === instance) return refresh();
+    });
     return () => {
       mounted.current = false;
       instance.dispose();
@@ -339,6 +344,10 @@ function QueuePanel({
       </div>
       {queue && (
         <>
+          <UploadPreflight
+            queue={queue}
+            disabled={busy || view.externalBusy || !available}
+          />
           <p>
             {completed} of {queue.items.length} uploads acknowledged. Queue:{' '}
             {queue.mode}.
