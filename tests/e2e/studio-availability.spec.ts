@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import request from 'supertest';
 import { availabilityFixture } from '../fixtures/studio-availability';
+import { randomUUID } from 'node:crypto';
 import { questionnaireOrigin } from '../fixtures/questionnaires';
 async function fixture(page: Page) {
   const f = availabilityFixture(),
@@ -13,6 +14,7 @@ async function fixture(page: Page) {
       writes: 0,
       completed: 0,
       loseReply: false,
+      payloads: [] as Record<string, unknown>[],
     };
   await page.route('**/api/**', async (route) => {
     const incoming = route.request(),
@@ -27,6 +29,7 @@ async function fixture(page: Page) {
       });
     if (isWrite) {
       state.writes++;
+      state.payloads.push(incoming.postDataJSON() as Record<string, unknown>);
       if (state.hold)
         await new Promise<void>((resolve) => {
           state.held = true;
@@ -117,6 +120,48 @@ test('recovers a lost save response using the same block identity and command', 
   expect(saved).toEqual([first]);
   expect(saved[0]!.studioAvailability!.version).toBe(1);
   expect(f.state.writes).toBe(2);
+  expect(f.state.payloads[0]).not.toHaveProperty('id');
+  expect(f.state.payloads[1]).toEqual(f.state.payloads[0]);
+});
+test('keeps selected-block recovery available after a damaged peer rejects saving', async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await f.create().expect(200);
+  await f.open();
+  await page
+    .getByRole('button', { name: 'Travel to venue', exact: true })
+    .click();
+  const id = randomUUID();
+  f.records.set(id, {
+    ...f.records.get(f.id)!,
+    id,
+    deletionStartedAt: '',
+    studioAvailability: { ...f.records.get(f.id)!.studioAvailability!, id },
+  });
+  await page
+    .getByLabel('Block title', { exact: true })
+    .fill('Draft requiring a scan');
+  await save(page).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'saved schedule needs repair',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Deactivate saved block', exact: true }),
+  ).toBeEnabled();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page
+    .getByRole('button', { name: 'Deactivate saved block', exact: true })
+    .click();
+  await expect(page.getByRole('status')).toContainText('deactivated');
+  expect(f.records.get(f.id)?.studioAvailability?.active).toBe(false);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page
+    .getByRole('button', { name: 'Remove saved block', exact: true })
+    .click();
+  await expect(page.getByRole('status')).toContainText('removed');
+  expect(f.records.has(f.id)).toBe(false);
+  expect(f.records.has(id)).toBe(true);
 });
 test('opens from Schedule, persists privately and permits deactivation and removal', async ({
   page,

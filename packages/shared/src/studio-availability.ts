@@ -65,7 +65,8 @@ export const availabilityResponse = z
 export const availabilityDirectory = z
   .object({
     accountId: z.string().min(1),
-    limit: z.literal(AVAILABILITY_LIMIT),
+    creationLimit: z.literal(AVAILABILITY_LIMIT),
+    recoveryLimit: z.literal(AVAILABILITY_RECOVERY_LIMIT),
     blocks: z.array(savedAvailability).max(AVAILABILITY_RECOVERY_LIMIT),
   })
   .strict()

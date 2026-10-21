@@ -9,6 +9,7 @@ import { appointmentsOverlap } from '../../../packages/shared/src/studio-appoint
 import {
   AVAILABILITY_ACTOR,
   AVAILABILITY_LIMIT,
+  AVAILABILITY_RECOVERY_LIMIT,
   availabilityWrite,
   availabilityIdentity,
   savedAvailability,
@@ -76,7 +77,12 @@ export function createStudioAvailability(
             a.id.localeCompare(b.id),
         );
     });
-    res.json({ accountId, limit: AVAILABILITY_LIMIT, blocks });
+    res.json({
+      accountId,
+      creationLimit: AVAILABILITY_LIMIT,
+      recoveryLimit: AVAILABILITY_RECOVERY_LIMIT,
+      blocks,
+    });
   });
   router.get('/studio/availability/:id', async (req, res) => {
     const accountId = await actor(req),

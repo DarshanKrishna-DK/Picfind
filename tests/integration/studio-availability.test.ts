@@ -10,6 +10,116 @@ import {
 import { appointmentOccurrences } from '../../packages/shared/src/studio-appointments';
 
 describe('private unavailable time', () => {
+  it('reports peer scope damage as a scan error while preserving selected-block recovery', async () => {
+    const f = availabilityFixture();
+    await f.create().expect(200);
+    const id = randomUUID();
+    f.records.set(id, {
+      ...f.records.get(f.id)!,
+      id,
+      deletionStartedAt: '',
+      studioAvailability: { ...f.records.get(f.id)!.studioAvailability!, id },
+    });
+    expect((await f.read(f.availabilityRoot).expect(503)).body.error.code).toBe(
+      'SCHEDULE_METADATA_INVALID',
+    );
+    expect(
+      (await f.create({ version: 1, title: 'Edited' }).expect(503)).body.error
+        .code,
+    ).toBe('SCHEDULE_METADATA_INVALID');
+    await f.create({ version: 1, active: false }).expect(200);
+    await f
+      .remove(f.availabilityPath, { version: 2, generation: f.generation })
+      .expect(204);
+  });
+  it('rejects malformed stored timestamps before computing the next revision', async () => {
+    for (const updatedAt of [
+      'broken',
+      '2026-02-30T10:00:00.000Z',
+      '2101-01-01',
+    ]) {
+      const f = availabilityFixture();
+      await f.create().expect(200);
+      f.records.get(f.id)!.studioAvailability!.updatedAt = updatedAt;
+      expect((await f.create({ version: 1 }).expect(503)).body.error.code).toBe(
+        'SCHEDULE_METADATA_INVALID',
+      );
+      await f
+        .remove(f.availabilityPath, { version: 1, generation: f.generation })
+        .expect(503);
+    }
+  });
+  it('accepts reordered record keys while rejecting actual concurrent changes', async () => {
+    const f = availabilityFixture();
+    await f.create().expect(200);
+    const get = f.store.get;
+    f.store.get = async (id) => {
+      const row = await get(id);
+      if (row.studioAvailability)
+        row.studioAvailability = Object.fromEntries(
+          Object.entries(row.studioAvailability).reverse(),
+        ) as typeof row.studioAvailability;
+      return Object.fromEntries(Object.entries(row).reverse()) as typeof row;
+    };
+    await f.read(f.availabilityRoot).expect(200);
+    await f
+      .appoint({
+        startLocal: '2026-11-01T11:00',
+        endLocal: '2026-11-01T12:00',
+        startAt: '2026-11-01T11:00:00.000Z',
+        endAt: '2026-11-01T12:00:00.000Z',
+      })
+      .expect(200);
+  });
+  it('deactivates the exact saved repeated-hour interval despite damaged peers', async () => {
+    const f = availabilityFixture(),
+      fields = {
+        timeZone: 'America/New_York',
+        startLocal: '2026-11-01T01:30',
+        endLocal: '2026-11-01T01:30',
+        startAt: '2026-11-01T05:30:00.000Z',
+        endAt: '2026-11-01T06:30:00.000Z',
+      };
+    await f.create(fields).expect(200);
+    const id = randomUUID();
+    f.records.set(id, {
+      id,
+      ownerId: f.ownerId,
+      kind: 'job',
+      purpose: 'studio-availability',
+      createdAt: new Date().toISOString(),
+    });
+    const response = await f
+      .create({ ...fields, version: 1, active: false })
+      .expect(200);
+    expect(response.body.block).toMatchObject({
+      ...fields,
+      active: false,
+      version: 2,
+    });
+  });
+  it('allows bounded over-quota recovery without allowing additional creation', async () => {
+    const f = availabilityFixture();
+    await f.create({ active: false }).expect(200);
+    const first = f.records.get(f.id)!;
+    for (let i = 1; i < 101; i++) {
+      const id = randomUUID();
+      f.records.set(id, {
+        ...first,
+        id,
+        studioAvailability: { ...first.studioAvailability!, id },
+      });
+    }
+    const directory = availabilityDirectory.parse(
+      (await f.read(f.availabilityRoot).expect(200)).body,
+    );
+    expect(directory).toMatchObject({ creationLimit: 100, recoveryLimit: 500 });
+    expect(directory.blocks).toHaveLength(101);
+    await f.put(`${f.availabilityRoot}/${randomUUID()}`, f.command).expect(409);
+    await f
+      .remove(f.availabilityPath, { generation: f.generation, version: 1 })
+      .expect(204);
+  });
   it('persists private blocks, exact retries, updates and generation-aware deletion', async () => {
     const f = availabilityFixture(),
       first = (await f.create().expect(200)).body.block;

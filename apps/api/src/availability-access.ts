@@ -63,10 +63,16 @@ export async function scheduleRows(store: LibraryStore, accountId: string) {
 export function availabilityRows(rows: LibraryRecord[], accountId: string) {
   const selected = rows.filter((row) => row.purpose === 'studio-availability');
   if (selected.length > AVAILABILITY_RECOVERY_LIMIT) throw scheduleInvalid();
-  return selected.map((row) => ({
-    row,
-    block: readAvailability(row, accountId),
-  }));
+  return selected.map((row) => {
+    try {
+      return { row, block: readAvailability(row, accountId) };
+    } catch (failure) {
+      // A damaged peer is a failed schedule scan, not a missing selected block.
+      if (failure instanceof ApiError && failure.status === 404)
+        throw scheduleInvalid();
+      throw failure;
+    }
+  });
 }
 export async function verifyScheduleRows(
   store: LibraryStore,

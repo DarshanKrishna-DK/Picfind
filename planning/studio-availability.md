@@ -43,6 +43,10 @@ creation limit and 12,000-byte complete-record ceiling. Conflict reads verify
 listed block and appointment records in batches of eight. Deactivation-only
 writes and deletion validate their selected record without requiring an
 unrelated damaged schedule to be repaired first.
+The directory names these limits separately as `creationLimit` and
+`recoveryLimit`. A malformed peer encountered during a schedule scan returns
+`SCHEDULE_METADATA_INVALID` rather than a selected-record 404, preserving the
+editor recovery actions for a valid selected block.
 
 Validation: 47 availability/appointment API and unit cases passed. All 18
 availability desktop/mobile cases and 24 existing schedule cases passed.
@@ -51,6 +55,12 @@ DST ambiguity, account changes and navigation during a pending save. Populated
 textarea and select locators were corrected to use accessible roles. Desktop
 and mobile layouts were inspected. Lint and typecheck passed; the full
 application test/build check is recorded separately in the PR.
+
+The full check passed 155 files and 2,541 tests plus both production builds.
+After review, all 37 availability/appointment API cases and 20 availability
+desktop/mobile cases passed, along with typecheck and targeted lint. Added
+evidence covers damaged peer markers, invalid saved timestamps, key ordering,
+over-quota recovery, repeated-hour deactivation and the exact retry payload.
 
 The first browser attempt failed from local memory pressure. The unused,
 untracked legacy npm download cache was verified and cleared within this
