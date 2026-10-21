@@ -13,6 +13,7 @@ import { api, HttpError } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { MenuSelect } from '../components/menu-select';
 import { BillingUsage } from './billing-usage';
+import './billing.css';
 import { SavedPlanStatus } from './plan-status';
 import type {
   BillingUsageSummary,

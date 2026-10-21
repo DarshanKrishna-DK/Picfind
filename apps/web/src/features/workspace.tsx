@@ -3,7 +3,6 @@ import {
   Link,
   NavLink,
   Navigate,
-  Outlet,
   useLocation,
   useNavigate,
 } from 'react-router';
@@ -28,6 +27,7 @@ import {
 import { api, session, HttpError } from '../api';
 import { useLibrary } from '../hooks';
 import { ErrorNote, Loading, Brand } from '../components/ui';
+import { RouteContent } from '../components/route-content';
 import {
   billingUsage,
   type BillingUsageSummary,
@@ -304,7 +304,7 @@ export function Workspace() {
         </header>
         <main id="main" className="workspace-content">
           <ErrorNote error={error} />
-          <Outlet />
+          <RouteContent />
         </main>
         <footer className="studio-footer">
           <span>PicFind Studio / Your moments, organized.</span>
