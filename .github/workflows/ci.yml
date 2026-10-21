@@ -64,7 +64,7 @@ jobs:
   browsers:
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +84,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run test:e2e -- --project=${{ matrix.project }}
+      - name: Verify built route chunks and private exports
+        run: npm run test:e2e:production -- --project=${{ matrix.project }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -91,4 +93,6 @@ jobs:
           path: |
             artifacts/reports/playwright/
             artifacts/reports/test-results/
+            artifacts/reports/production-playwright/
+            artifacts/reports/production-test-results/
           retention-days: 7

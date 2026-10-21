@@ -1,5 +1,6 @@
 import { useEffect, useState, type MouseEvent } from 'react';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
+import { RouteContent } from '../components/route-content';
 import { ArrowUpRight, Menu, X } from 'lucide-react';
 import { Brand } from '../components/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -85,7 +86,7 @@ export function PublicLayout() {
         </nav>
       </header>
       <main id="main">
-        <Outlet />
+        <RouteContent />
       </main>
       <footer className="public-footer">
         <div>

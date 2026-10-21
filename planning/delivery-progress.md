@@ -6,11 +6,11 @@ and merges on 2026-10-20. Passing checks and a review remain required.
 
 The [Shipwright leaderboard](https://shipwright-agent.onrender.com/leaderboard)
 ranks merged PRs with a follow-up push after review. At the last verified refresh
-on 2026-10-21 at 07:33 IST, Picfind had 48 pushed after review, 61 merged and
-reviewed, and 62 opened (rank 5). This is a
+on 2026-10-21 at 07:51 IST, Picfind had 49 pushed after review, 62 merged and
+reviewed, and 63 opened (rank 5). This is a
 timestamped observation, not a live counter or a promise of event credit.
 The public page's linked `leaderboard.json` endpoint confirmed this observation
-after PR #62 merged. Its `generated_at` was 2026-10-21T02:03:04.229407+00:00.
+after PR #63 merged. Its `generated_at` was 2026-10-21T02:21:36.888395+00:00.
 The table records completed merges only. The PR carrying a ledger update is
 excluded until GitHub confirms its merge; it is recorded in a later update.
 
@@ -96,7 +96,9 @@ excluded until GitHub confirms its merge; it is recorded in a later update.
 
 | [62](https://github.com/DarshanKrishna-DK/Picfind/pull/62) | Event access planner and fresh calendar copies with optional local alarms | Reviewed with no actionable findings, owner-delegated approval applied, quality and all browser CI passed, merged |
 
-GitHub currently proves sixty-one merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51, #52, #53, #54, #55, #56, #59, #60 and #61 were
+| [63](https://github.com/DarshanKrishna-DK/Picfind/pull/63) | Private production briefs with explicit note disclosure and fresh exports | Reviewed, plain-text quoting and control-character escaping fixed after review, all observations answered, re-reviewed with no actionable findings, all final CI passed, merged |
+
+GitHub currently proves sixty-two merges in this delivery batch. PRs #6, #9, #10, #11, #12, #13, #14, #15, #16, #17, #18, #19, #20, #21, #22, #23, #24, #26, #27, #29, #30, #31, #32, #33, #34, #35, #36, #37, #38, #39, #40, #41, #42, #43, #45, #46, #48, #49, #50, #51, #52, #53, #54, #55, #56, #59, #60, #61 and #63 were
 credited in the follow-up-push column at the observation above. New work must
 preserve that distinction. No production deployment is implied by these merges.
 

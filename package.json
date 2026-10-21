@@ -22,6 +22,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:production": "npm run build --workspace @picfind/web && playwright test --config playwright.production.config.ts",
     "setup": "node scripts/setup-library.mjs",
     "setup:billing": "node scripts/setup-billing.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
