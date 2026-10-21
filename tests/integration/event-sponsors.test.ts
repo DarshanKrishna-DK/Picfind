@@ -7,9 +7,73 @@ import { sponsorFixture } from '../fixtures/event-sponsors';
 import {
   SPONSOR_ACTOR,
   SPONSOR_PERMISSION,
+  sponsorFields,
 } from '../../packages/shared/src/event-sponsors';
 
 describe('explicit event sponsor placements', () => {
+  it('stores near-budget private and public snapshots together within the Appwrite payload limit', async () => {
+    const f = await sponsorFixture();
+    const fields = {
+      gallery: true,
+      wall: true,
+      placements: Array.from({ length: 6 }, () => ({
+        id: randomUUID(),
+        name: '"'.repeat(80),
+        caption: '',
+        website: `https://example.test/${'x'.repeat(270)}`,
+      })),
+    };
+    for (let length = 1; length <= 120; length++) {
+      const candidate = {
+        ...fields,
+        placements: fields.placements.map((row) => ({
+          ...row,
+          caption: '"'.repeat(length),
+        })),
+      };
+      if (!sponsorFields.safeParse(candidate).success) break;
+      fields.placements = candidate.placements;
+    }
+    expect(Buffer.byteLength(JSON.stringify(fields))).toBeGreaterThan(4100);
+    await f.publish({ fields }).expect(200);
+    const draft = { ...fields, gallery: false };
+    await f.save({ version: 1, fields: draft }).expect(200);
+    const row = f.stored();
+    expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThan(12000);
+    expect(JSON.stringify(row).length).toBeLessThan(16000);
+    expect(row.eventSponsors!.draft).toEqual(draft);
+    expect((await f.publicRead().expect(200)).body.sponsors).toEqual(fields);
+  });
+
+  it('normalizes reordered persisted keys before comparing public publication snapshots', async () => {
+    const f = await sponsorFixture();
+    await f.publish().expect(200);
+    const get = f.store.get;
+    let reads = 0;
+    vi.spyOn(f.store, 'get').mockImplementation(async (id) => {
+      const row = await get(id);
+      if (id === f.id && ++reads === 2) {
+        const fields = row.eventSponsors!.published!.fields;
+        row.eventSponsors!.published!.fields = {
+          placements: fields.placements.map(
+            ({ id, name, caption, website }) => ({
+              website,
+              caption,
+              name,
+              id,
+            }),
+          ),
+          wall: fields.wall,
+          gallery: fields.gallery,
+        };
+      }
+      return row;
+    });
+    expect((await f.publicRead().expect(200)).body.sponsors).toEqual(
+      f.sponsorFields,
+    );
+  });
+
   it('requires numeric bounded versions and rejects control characters before writes', async () => {
     const f = await sponsorFixture();
     for (const version of ['0', false, -1, Number.MAX_SAFE_INTEGER])
