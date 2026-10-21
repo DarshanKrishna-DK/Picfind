@@ -1,0 +1,34 @@
+.coverage-templates {
+  border-top: 1px solid var(--border);
+  padding-top: 1.2rem;
+  margin-top: 1.2rem;
+}
+.coverage-templates fieldset {
+  border: 0;
+  min-width: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+.coverage-templates label {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.coverage-templates input,
+.coverage-templates select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.coverage-templates li {
+  overflow-wrap: anywhere;
+  margin-bottom: 0.5rem;
+}
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.template-actions button {
+  flex: 1 1 210px;
+}
