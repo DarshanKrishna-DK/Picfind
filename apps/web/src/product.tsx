@@ -23,6 +23,7 @@ import { StudioServices } from './features/studio-services';
 import { StudioExpenses } from './features/studio-expenses';
 import { ProjectBudgets } from './features/project-budgets';
 import { ProjectProductionBrief } from './features/project-brief';
+import { StudioEnquiryReport } from './features/enquiry-report';
 import { EventDeadlines } from './features/event-deadlines';
 import { EnquiryProjectHandoff } from './features/enquiry-handoff';
 import {
@@ -102,6 +103,7 @@ export function Product() {
         <Route path="portfolio" element={<StudioPortfolio />} />
         <Route path="credits" element={<PhotographerCredits />} />
         <Route path="enquiries" element={<StudioEnquiries />} />
+        <Route path="enquiry-report" element={<StudioEnquiryReport />} />
         <Route
           path="enquiries/:id/handoff"
           element={<EnquiryProjectHandoff />}

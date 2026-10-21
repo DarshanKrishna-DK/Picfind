@@ -116,6 +116,9 @@ function EnquiryDesk({ accountId }: { accountId: string }) {
         confirmed bookings or payments.
       </p>
       <FormSettings accountId={accountId} onDenied={setAccessError} />
+      <Link className="button secondary" to="/app/enquiry-report">
+        Enquiry report
+      </Link>
       <section className="source-panel" aria-label="Enquiry inbox">
         <h2>Private enquiry inbox</h2>
         <p>
