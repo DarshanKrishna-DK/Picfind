@@ -1,0 +1,65 @@
+.sponsor-editor,
+.sponsor-credits {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sponsor-editor fieldset,
+.sponsor-cards article {
+  min-width: 0;
+  border: 1px solid var(--line, #d9dcd8);
+  border-radius: 0.7rem;
+  padding: 1rem;
+}
+.sponsor-editor label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-block: 0.65rem;
+}
+.sponsor-draft-list label {
+  display: grid;
+}
+.sponsor-editor > fieldset label,
+.sponsor-editor .sponsor-permission {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.sponsor-editor input[type='checkbox'] {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.2rem;
+}
+.sponsor-editor input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+}
+.sponsor-editor .toolbar,
+.sponsor-draft-list,
+.sponsor-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+.sponsor-draft-list > fieldset,
+.sponsor-cards article {
+  flex: 1 1 260px;
+}
+.sponsor-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.sponsor-cards h3 {
+  margin-block: 0.5rem;
+}
+.highlight-wall .sponsor-credits {
+  padding: 1rem;
+}
+.highlight-wall .sponsor-credits h2,
+.highlight-wall .sponsor-credits h3 {
+  color: inherit;
+}
+.highlight-wall .sponsor-credits a {
+  color: #c1e3c9;
+}

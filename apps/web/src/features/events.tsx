@@ -29,6 +29,7 @@ import type { OrganizerEventPolicy } from '../../../../packages/shared/src/event
 import { ProofingCollections } from './proofing-collections';
 import { RawJpegPairing } from './raw-jpeg-pairing';
 import { HighlightsEditor } from './highlights';
+import { EventSponsors } from './event-sponsors';
 import { QrPrintPack } from './qr-print-pack';
 import { EventDayReadiness } from './event-readiness';
 import { EventCoverage } from './event-coverage';
@@ -427,6 +428,7 @@ export function EventDetail() {
           'collections',
           'editing',
           'highlights',
+          'sponsors',
           'sharing',
           'members',
           'settings',
@@ -485,6 +487,9 @@ export function EventDetail() {
       )}
       {tab === 'highlights' && (
         <HighlightsEditor key={event.id} eventId={event.id} photos={photos} />
+      )}
+      {tab === 'sponsors' && (
+        <EventSponsors key={event.id} eventId={event.id} />
       )}
       {tab === 'sharing' && (
         <div className="settings-panel">

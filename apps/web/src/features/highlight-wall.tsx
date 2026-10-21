@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api, session, type Photo } from '../api';
 import { ErrorNote, Loading } from '../components/ui';
 import { PublishedPhotoCredit } from './photo-attribution';
+import { SponsorCredits } from './event-sponsors';
+import type { PublishedSponsors } from '../../../../packages/shared/src/event-sponsors';
 import './highlight-wall.css';
 
 const FRESHNESS_MS = 45_000;
@@ -22,10 +24,11 @@ function WallView({ eventId }: { eventId: string }) {
       if (signal.aborted) abort();
       const timer = window.setTimeout(abort, 10_000);
       try {
-        return await api<{ title: string; photos: Photo[] }>(
-          `/public/highlights/${eventId}`,
-          { signal: controller.signal },
-        );
+        return await api<{
+          title: string;
+          photos: Photo[];
+          sponsors?: PublishedSponsors;
+        }>(`/public/highlights/${eventId}`, { signal: controller.signal });
       } finally {
         window.clearTimeout(timer);
         signal.removeEventListener('abort', abort);
@@ -213,6 +216,9 @@ function WallView({ eventId }: { eventId: string }) {
           </div>
         )}
       </div>
+      {ready && (
+        <SponsorCredits sponsors={query.data?.sponsors} placement="wall" />
+      )}
       <footer>
         <p aria-live="polite">
           {photo

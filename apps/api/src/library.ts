@@ -78,6 +78,7 @@ import { createStudioExpenses } from './studio-expenses.js';
 import { createStudioPortfolio } from './studio-portfolio.js';
 import { createEnquiryHandoff } from './enquiry-handoff.js';
 import { createUploadPreflight } from './upload-preflight.js';
+import { createEventSponsors } from './event-sponsors.js';
 import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
@@ -106,6 +107,7 @@ import {
 } from './retention.js';
 
 export interface LibraryRecord {
+  eventSponsors?: import('../../../packages/shared/src/event-sponsors.js').StoredSponsors;
   studioProposal?: import('../../../packages/shared/src/studio-proposals.js').StudioProposal;
   proposalResponse?: import('../../../packages/shared/src/studio-proposals.js').ProposalResponse;
   proposalCommandDigest?: string;
@@ -170,6 +172,7 @@ export interface LibraryRecord {
     | 'proofing-submission'
     | 'retouching-task'
     | 'event-highlights'
+    | 'event-sponsors'
     | 'event-coverage'
     | 'event-invitation-page'
     | 'event-rsvp-settings'
@@ -775,6 +778,7 @@ export function createLibraryRouter(
     res.json(await processingUsage(store(), await owner(req)));
   });
   router.use(createUploadPreflight(store, owner, limits, requireAccounting));
+  router.use(createEventSponsors(store, owner));
   router.use(
     createCloudSources(
       auth,
