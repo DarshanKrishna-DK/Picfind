@@ -125,15 +125,17 @@ export function Workspace() {
     }
   }
   const current =
-    location.pathname === '/app/enquiry-report'
-      ? 'Enquiry report'
-      : ([...destinations]
-          .reverse()
-          .find(
-            (item) =>
-              location.pathname === item.to ||
-              location.pathname.startsWith(`${item.to}/`),
-          )?.title ?? 'Overview');
+    location.pathname === '/app/availability'
+      ? 'Unavailable time'
+      : location.pathname === '/app/enquiry-report'
+        ? 'Enquiry report'
+        : ([...destinations]
+            .reverse()
+            .find(
+              (item) =>
+                location.pathname === item.to ||
+                location.pathname.startsWith(`${item.to}/`),
+            )?.title ?? 'Overview');
   const eventId = location.pathname.startsWith('/app/events/')
     ? location.pathname.split('/')[3]
     : new URLSearchParams(location.search).get('eventId');

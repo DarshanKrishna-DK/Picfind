@@ -87,6 +87,7 @@ import { createEventSponsors } from './event-sponsors.js';
 import { createStudioProposals } from './studio-proposals.js';
 import { createStudioMilestones } from './studio-milestones.js';
 import { createStudioAppointments } from './studio-appointments.js';
+import { createStudioAvailability } from './studio-availability.js';
 import {
   ATTRIBUTION_HEADER,
   publishedAttribution,
@@ -196,6 +197,7 @@ export interface LibraryRecord {
     | 'studio-project'
     | 'studio-milestone'
     | 'studio-appointment'
+    | 'studio-availability'
     | 'studio-questionnaire'
     | 'questionnaire-response'
     | 'photographer-credit-preset'
@@ -243,6 +245,8 @@ export interface LibraryRecord {
   studioClient?: import('../../../packages/shared/src/studio-clients.js').SavedClient;
   appointmentCommandDigest?: string;
   studioAppointment?: import('../../../packages/shared/src/studio-appointments.js').SavedAppointment;
+  studioAvailability?: import('../../../packages/shared/src/studio-availability.js').SavedAvailability;
+  availabilityCommandDigest?: string;
   studioQuestionnaire?: import('../../../packages/shared/src/studio-questionnaires.js').SavedQuestionnaire;
   questionnaireResponse?: import('../../../packages/shared/src/studio-questionnaires.js').StoredQuestionnaireResponse;
   questionnaireCommandDigest?: string;
@@ -767,6 +771,7 @@ export function createLibraryRouter(
   router.use(createStudioProposals(auth, store, owner));
   router.use(createStudioMilestones(store, owner));
   router.use(createStudioAppointments(store, owner));
+  router.use(createStudioAvailability(store, owner));
   router.use(createEventReadiness(options, owner));
   router.use(createProofingCollections(store, owner));
   router.use(createCollectionInvitations(auth, store, owner, sendPhoto));

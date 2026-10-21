@@ -5,6 +5,7 @@ import { ApiError } from './auth.js';
 import { withAccountLock } from './locks.js';
 import type { LibraryRecord, LibraryStore } from './library.js';
 import { ownedProjectRecord } from './studio-project-access.js';
+import { assertAvailableTime } from './availability-access.js';
 import {
   APPOINTMENT_LIMIT,
   PROJECT_APPOINTMENT_LIMIT,
@@ -237,6 +238,8 @@ export function createStudioAppointments(
           'APPOINTMENT_OVERLAP',
           'This time overlaps another scheduled appointment. Change the time or cancel the other reservation.',
         );
+      if (fields.status === 'scheduled')
+        await assertAvailableTime(getStore(), accountId, fields);
       if (!cancellationOnly) await activeProject(fields.projectId, accountId);
       const fresh = await find(id, accountId);
       if ((fresh?.appointment.version ?? 0) !== version) throw changed();

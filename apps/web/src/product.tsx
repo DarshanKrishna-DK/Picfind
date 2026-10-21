@@ -146,6 +146,11 @@ const StudioSchedule = lazy(() =>
     default: m.StudioSchedule,
   })),
 );
+const StudioAvailability = lazy(() =>
+  import('./features/studio-availability').then((m) => ({
+    default: m.StudioAvailability,
+  })),
+);
 const DuplicateReview = lazy(() =>
   import('./features/duplicate-review').then((m) => ({
     default: m.DuplicateReview,
@@ -251,6 +256,7 @@ export function Product() {
         />
         <Route path="work" element={<StudioWork />} />
         <Route path="schedule" element={<StudioSchedule />} />
+        <Route path="availability" element={<StudioAvailability />} />
         <Route path="duplicates" element={<DuplicateReview />} />
         <Route path="events" element={<EventList />} />
         <Route path="events/new" element={<NewEvent />} />
